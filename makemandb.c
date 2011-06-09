@@ -18,7 +18,7 @@ main(int argc, char *argv[])
 	char line[MAXLINE];
 	
 	/* call man -p to get the list of man page dirs */
-	if ((file = popen("/home/abhinav/development/man_printmanpath_using_glob/man -p ", "r")) == NULL)
+	if ((file = popen("man -p ", "r")) == NULL)
 		err(EXIT_FAILURE, "fopen failed");
 	
 	while (fgets(line, MAXLINE, file) != NULL) {
