@@ -1,4 +1,4 @@
 *.o
 *.core
-.gbinit
+.gdbinit
 
