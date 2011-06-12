@@ -159,7 +159,7 @@ main(int argc, char *argv[])
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
 	/* call man -p to get the list of man page dirs */
-	if ((file = popen("/home/abhinav/development/man_printmanpath_using_glob/man -p", "r")) == NULL)
+	if ((file = popen("man -p", "r")) == NULL)
 		err(EXIT_FAILURE, "fopen failed");
 	
 	while (fgets(line, MAXLINE, file) != NULL) {
