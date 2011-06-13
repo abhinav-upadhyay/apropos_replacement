@@ -8,10 +8,12 @@
 
 #include "mandoc.h"
 #include "mdoc.h"
+#include "sqlite3.h"
 
 #define MAXLINE 1024	//buffer size for fgets
 
 static void cleanup(void);
+static int create_db(void);
 static int insert_into_db(void);
 static	void pmdoc(const char *);
 static void pmdoc_node(const struct mdoc_node *);
@@ -158,6 +160,9 @@ main(int argc, char *argv[])
 	char line[MAXLINE];
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
+	if (create_db() < 0) 
+		err(EXIT_FAILURE, "Unable to create database");
+			
 	/* call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL)
 		err(EXIT_FAILURE, "fopen failed");
@@ -375,14 +380,126 @@ cleanup(void)
 static int
 insert_into_db(void)
 {
+	sqlite3 *db = NULL;
+	int rc = 0;
+	int idx = -1;
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
+	
 	if (name == NULL || name_desc == NULL || desc == NULL) {
 		cleanup();
 		return -1;
 	}
 	else {
-		//TODO sqlite code goes here
-		printf("%s- %s\n", name, name_desc);
+		sqlite3_initialize();
+		rc = sqlite3_open_v2("./apropos.db", &db, SQLITE_OPEN_READWRITE | 
+			                 SQLITE_OPEN_CREATE, NULL);
+		if (rc != SQLITE_OK) {
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+	
+		sqlstr = "insert into mandb values (:name, :name_desc, :desc)";
+		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+		if (rc != SQLITE_OK) {
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+	
+		idx = sqlite3_bind_parameter_index(stmt, ":name");
+		rc = sqlite3_bind_text(stmt, idx, name, -1, NULL);
+		if (rc != SQLITE_OK) {
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+	
+		idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
+		rc = sqlite3_bind_text(stmt, idx, name_desc, -1, NULL);
+		if (rc != SQLITE_OK) {
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+		idx = sqlite3_bind_parameter_index(stmt, ":desc");
+		rc = sqlite3_bind_text(stmt, idx, desc, -1, NULL);
+		if (rc != SQLITE_OK) {
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+	
+		rc = sqlite3_step(stmt);
+		if (rc != SQLITE_DONE) {
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+		
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		cleanup();
 		return 0;
-	}	
+	}
+
 }
+
+static int
+create_db(void)
+{
+	sqlite3 *db = NULL;
+	int rc = 0;
+	int idx = -1;
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
+	
+	sqlite3_initialize();
+	rc = sqlite3_open_v2("apropos.db", &db, SQLITE_OPEN_READWRITE | 
+			                 SQLITE_OPEN_CREATE, NULL);
+	if (rc != SQLITE_OK) {
+		printf("open\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+
+	sqlstr = "create virtual table mandb using fts4(name, name_desc, desc, \
+	 tokenize=porter)";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		printf("prepare\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		printf("step\n");	
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+		
+	sqlite3_finalize(stmt);
+	sqlite3_close(db);
+	sqlite3_shutdown();
+	return 0;
+}
+	
+	
+
