@@ -202,6 +202,7 @@ traversedir(const char *file)
 	if (S_ISREG(sb.st_mode)) {
 		pmdoc(file);
 		printf("parsing %s\n", file);
+		//printf("%s\n", desc);
 		if (insert_into_db() < 0)
 			fprintf(stderr, "Error indexing: %s\n", file);
 		return;
@@ -299,6 +300,12 @@ pmdoc_Nm(const struct mdoc_node *n)
 			return;
 		}
 	}
+	else if (n->sec == SEC_DESCRIPTION && name != NULL) {
+		if (desc == NULL)
+			desc = strdup(name);
+		else
+			asprintf(&desc, "%s %s", desc, name);
+	}
 }
 
 /*
@@ -333,27 +340,28 @@ pmdoc_Nd(const struct mdoc_node *n)
 static void
 pmdoc_Sh(const struct mdoc_node *n)
 {
-	char *buf = NULL;
+	
 	
 	if (n->sec == SEC_DESCRIPTION) {
 		for(n = n->child; n; n = n->next) {
 			if (n->type == MDOC_TEXT) {
-				if (buf == NULL)
-					buf = strdup(n->string);
+				if (desc == NULL)
+					desc = strdup(n->string);
 				else
-					asprintf(&buf, "%s %s ", buf, n->string);
+					asprintf(&desc, "%s %s ", desc, n->string);
 			}
 			else { 
-				pmdoc_Sh(n);
+				/* On encountering a .Nm macro, substitute it with it's previously
+				* cached value of the argument
+				*/
+				if (mdocs[n->tok] == pmdoc_Nm && name != NULL)
+					(*mdocs[n->tok])(n);
+				else
+					/* call pmdoc_Sh again to handle the nested macros */
+					pmdoc_Sh(n);
 			}
 		}
 	}
-	
-	if (buf) {
-		desc = strdup(buf);
-		free(buf);
-	}
-	
 }
 
 /* cleanup --
@@ -470,7 +478,6 @@ create_db(void)
 	rc = sqlite3_open_v2("apropos.db", &db, SQLITE_OPEN_READWRITE | 
 			                 SQLITE_OPEN_CREATE, NULL);
 	if (rc != SQLITE_OK) {
-		printf("open\n");
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
@@ -480,7 +487,6 @@ create_db(void)
 	 tokenize=porter)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		printf("prepare\n");
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
@@ -488,7 +494,6 @@ create_db(void)
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		printf("step\n");	
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -500,6 +505,3 @@ create_db(void)
 	sqlite3_shutdown();
 	return 0;
 }
-	
-	
-
