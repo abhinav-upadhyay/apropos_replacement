@@ -3,4 +3,5 @@
 .gdbinit
 *.db
 makemandb
+apropos
 
