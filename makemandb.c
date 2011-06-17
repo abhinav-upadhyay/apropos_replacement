@@ -2,6 +2,7 @@
 
 #include <dirent.h>
 #include <err.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,7 @@
 #include "sqlite3.h"
 
 #define MAXLINE 1024	//buffer size for fgets
+#define DBPATH "./apropos.db"
 
 static void cleanup(void);
 static int create_db(void);
@@ -202,7 +204,6 @@ traversedir(const char *file)
 	if (S_ISREG(sb.st_mode)) {
 		pmdoc(file);
 		printf("parsing %s\n", file);
-		//printf("%s\n", desc);
 		if (insert_into_db() < 0)
 			fprintf(stderr, "Error indexing: %s\n", file);
 		return;
@@ -220,8 +221,10 @@ traversedir(const char *file)
 			if (strncmp(dirp->d_name, ".", 1)) {
 				if ((asprintf(&buf, "%s/%s", file, dirp->d_name) == -1)) {
 					closedir(dp);
-					fprintf(stderr, "memory allocation error");
-					return;
+					if (errno == ENOMEM)
+						fprintf(stderr, "ENOMEM\n");
+					free(buf);
+					continue;
 				}
 				traversedir(buf);
 				free(buf);
@@ -400,7 +403,7 @@ insert_into_db(void)
 	}
 	else {
 		sqlite3_initialize();
-		rc = sqlite3_open_v2("./apropos.db", &db, SQLITE_OPEN_READWRITE | 
+		rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
 			                 SQLITE_OPEN_CREATE, NULL);
 		if (rc != SQLITE_OK) {
 			sqlite3_close(db);
@@ -473,9 +476,15 @@ create_db(void)
 	int idx = -1;
 	char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
+	struct stat sb;
+	
+	if (stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)) {
+		if (remove(DBPATH) < 0)
+			return -1;
+	}
 	
 	sqlite3_initialize();
-	rc = sqlite3_open_v2("apropos.db", &db, SQLITE_OPEN_READWRITE | 
+	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
 			                 SQLITE_OPEN_CREATE, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
