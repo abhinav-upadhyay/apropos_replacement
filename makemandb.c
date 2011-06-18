@@ -15,6 +15,7 @@
 #define DBPATH "./apropos.db"
 
 static void cleanup(void);
+static int concat(char **, const char *);
 static int create_db(void);
 static int insert_into_db(void);
 static	void pmdoc(const char *);
@@ -55,12 +56,12 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Ev */ 
 	NULL, /* Ex */ 
 	NULL, /* Fa */ 
-	NULL,//pmdoc_Fd, /* Fd */
+	NULL, /* Fd */
 	NULL, /* Fl */
-	NULL,//pmdoc_Fn, /* Fn */ 
+	NULL, /* Fn */ 
 	NULL, /* Ft */ 
 	NULL, /* Ic */ 
-	NULL,//pmdoc_In, /* In */ 
+	NULL, /* In */ 
 	NULL, /* Li */
 	pmdoc_Nd, /* Nd */
 	pmdoc_Nm, /* Nm */
@@ -163,7 +164,7 @@ main(int argc, char *argv[])
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
 	if (create_db() < 0) 
-		err(EXIT_FAILURE, "Unable to create database");
+		errx(EXIT_FAILURE, "Unable to create database");
 			
 	/* call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL)
@@ -176,7 +177,7 @@ main(int argc, char *argv[])
 	}
 	
 	if (pclose(file) == -1)
-		err(EXIT_FAILURE, "pclose error");
+		errx(EXIT_FAILURE, "pclose error");
 	mparse_free(mp);
 	cleanup();
 	return 0;
@@ -223,7 +224,6 @@ traversedir(const char *file)
 					closedir(dp);
 					if (errno == ENOMEM)
 						fprintf(stderr, "ENOMEM\n");
-					free(buf);
 					continue;
 				}
 				traversedir(buf);
@@ -233,8 +233,6 @@ traversedir(const char *file)
 	
 		closedir(dp);
 	}
-	else
-		fprintf(stderr, "unknown file type: %s\n", file);
 }		
 
 /*
@@ -296,19 +294,22 @@ pmdoc_node(const struct mdoc_node *n)
 static void
 pmdoc_Nm(const struct mdoc_node *n)
 {
-	
 	if (n->sec == SEC_NAME && n->child->type == MDOC_TEXT) {
 		if ((name = strdup(n->child->string)) == NULL) {
 			fprintf(stderr, "Memory allocation error");
 			return;
 		}
 	}
+	
+	/* on encountering a .Nm macro in the DESCRIPTION section, copy the cached 
+	* value of name at the end of desc
+	*/
 	else if (n->sec == SEC_DESCRIPTION && name != NULL) {
 		if (desc == NULL)
 			desc = strdup(name);
 		else
-			asprintf(&desc, "%s %s", desc, name);
-	}
+			concat(&desc, name);
+		}
 }
 
 /*
@@ -318,22 +319,15 @@ pmdoc_Nm(const struct mdoc_node *n)
 static void
 pmdoc_Nd(const struct mdoc_node *n)
 {
-	char *buf = NULL;
-	
 	for (n = n->child; n; n = n->next) {
 		if (n->type != MDOC_TEXT)
 			continue;
 
-		if (buf == NULL) 
-			buf = strdup(n->string);
-		else
-			asprintf(&buf, "%s %s", buf, n->string);
+		if (name_desc == NULL) 
+			name_desc = strdup(n->string);
+		else 
+			concat(&name_desc, n->string);
 	}
-	if (buf) {
-		name_desc = strdup(buf);
-		free(buf);
-	}
-	
 }
 
 /*
@@ -343,15 +337,15 @@ pmdoc_Nd(const struct mdoc_node *n)
 static void
 pmdoc_Sh(const struct mdoc_node *n)
 {
-	
-	
 	if (n->sec == SEC_DESCRIPTION) {
 		for(n = n->child; n; n = n->next) {
 			if (n->type == MDOC_TEXT) {
 				if (desc == NULL)
 					desc = strdup(n->string);
-				else
-					asprintf(&desc, "%s %s ", desc, n->string);
+				else {
+					if (concat(&desc, n->string) < 0)
+						return;
+				}
 			}
 			else { 
 				/* On encountering a .Nm macro, substitute it with it's previously
@@ -359,8 +353,8 @@ pmdoc_Sh(const struct mdoc_node *n)
 				*/
 				if (mdocs[n->tok] == pmdoc_Nm && name != NULL)
 					(*mdocs[n->tok])(n);
+				/* otherwise call pmdoc_Sh again to handle the nested macros */
 				else
-					/* call pmdoc_Sh again to handle the nested macros */
 					pmdoc_Sh(n);
 			}
 		}
@@ -514,3 +508,39 @@ create_db(void)
 	sqlite3_shutdown();
 	return 0;
 }
+
+/*
+* concat--
+*  Utility function. Concatenates together: dst, a space character and src. 
+* dst + " " + src 
+*/
+static int
+concat(char **dst, const char *src)
+{
+	int total_len, dst_len;
+	if (src == NULL)
+		return -1;
+
+	/* we should allow the destination string to be NULL */
+	if (*dst == NULL)
+		dst_len = 0;
+	else	
+		dst_len = strlen(*dst);
+	
+	/* calculate total string length:
+	*one extra character for a space and one for the nul byte 
+	*/	
+	total_len = dst_len + strlen(src) + 2;
+		
+	if ((*dst = (char *) realloc(*dst, total_len)) == NULL)
+		return -1;
+		
+	if (*dst != NULL) {	
+		memcpy(*dst + dst_len, " ", 1);
+		dst_len++;
+	}
+	memcpy(*dst + dst_len, src, strlen(src) + 1);
+	
+	return 0;
+}
+
