@@ -1,8 +1,11 @@
 #include <sys/stat.h>
+#include <sys/types.h>
 
+#include <assert.h>
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
+#include <md5.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +17,7 @@
 #define MAXLINE 1024	//buffer size for fgets
 #define DBPATH "./apropos.db"
 
+static int check_md5(const char *);
 static void cleanup(void);
 static int concat(char **, const char *);
 static int create_db(void);
@@ -28,6 +32,7 @@ static void traversedir(const char *);
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
 static char *desc = NULL; // for storing the DESCRIPTION section
+static char *md5_hash = NULL;
 static struct mparse *mp = NULL;
 
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
@@ -203,6 +208,12 @@ traversedir(const char *file)
 	
 	/* if it is a regular file, pass it to the parser */
 	if (S_ISREG(sb.st_mode)) {
+		/* Avoid hardlinks to prevent duplicate entries in the database */
+		if (check_md5(file) != 0) {
+			cleanup();
+			return;
+		}
+		
 		pmdoc(file);
 		printf("parsing %s\n", file);
 		if (insert_into_db() < 0)
@@ -210,10 +221,10 @@ traversedir(const char *file)
 		return;
 	}
 	
-	/* if it is a directory, traverse it recursively */
+	/* if it is a directory`, traverse it recursively */
 	else if (S_ISDIR(sb.st_mode)) {
 		if ((dp = opendir(file)) == NULL) {
-			fprintf(stderr, "opendir error: %s", file);
+			fprintf(stderr, "opendir error: %s\n", file);
 			return;
 		}
 		
@@ -373,8 +384,10 @@ cleanup(void)
 		free(name_desc);
 	if (desc)
 		free(desc);
+	if (md5_hash)
+		free(md5_hash);
 	
-	name = name_desc = desc = NULL;
+	name = name_desc = desc = md5_hash = NULL;
 }
 
 /* insert_into_db --
@@ -391,22 +404,23 @@ insert_into_db(void)
 	char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	
-	if (name == NULL || name_desc == NULL || desc == NULL) {
+	if (name == NULL || name_desc == NULL || desc == NULL || md5_hash == NULL) {
 		cleanup();
 		return -1;
 	}
 	else {
+
 		sqlite3_initialize();
 		rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
-			                 SQLITE_OPEN_CREATE, NULL);
+				             SQLITE_OPEN_CREATE, NULL);
 		if (rc != SQLITE_OK) {
 			sqlite3_close(db);
 			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
-	
-		sqlstr = "insert into mandb values (:name, :name_desc, :desc)";
+
+		sqlstr = "insert into mandb values (:name, :name_desc, :desc, :md5_hash)";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
 			sqlite3_close(db);
@@ -414,7 +428,7 @@ insert_into_db(void)
 			cleanup();
 			return -1;
 		}
-	
+
 		idx = sqlite3_bind_parameter_index(stmt, ":name");
 		rc = sqlite3_bind_text(stmt, idx, name, -1, NULL);
 		if (rc != SQLITE_OK) {
@@ -424,7 +438,7 @@ insert_into_db(void)
 			cleanup();
 			return -1;
 		}
-	
+
 		idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
 		rc = sqlite3_bind_text(stmt, idx, name_desc, -1, NULL);
 		if (rc != SQLITE_OK) {
@@ -434,8 +448,19 @@ insert_into_db(void)
 			cleanup();
 			return -1;
 		}
+	
 		idx = sqlite3_bind_parameter_index(stmt, ":desc");
 		rc = sqlite3_bind_text(stmt, idx, desc, -1, NULL);
+		if (rc != SQLITE_OK) {
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+
+		idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
+		rc = sqlite3_bind_text(stmt, idx, md5_hash, -1, NULL);
 		if (rc != SQLITE_OK) {
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
@@ -452,7 +477,7 @@ insert_into_db(void)
 			cleanup();
 			return -1;
 		}
-		
+	
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -487,7 +512,7 @@ create_db(void)
 	}
 
 	sqlstr = "create virtual table mandb using fts4(name, name_desc, desc, \
-	 tokenize=porter)";
+	 md5_hash, tokenize=porter)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
@@ -544,3 +569,72 @@ concat(char **dst, const char *src)
 	return 0;
 }
 
+/*
+* check_md5--
+*  Generates the md5 hash of the file and checks if it already doesn't exist in 
+*  the database. This function is being used to avoid hardlinks.
+*  Return values: 0 if the md5 hash does not exist in the datbase
+*                 1 if the hash exists in the database
+*                 -1 if an error occured while generating the hash or checking
+*                 against the database
+*/
+static int 
+check_md5(const char *file)
+{
+	sqlite3 *db = NULL;
+	int rc = 0;
+	int idx = -1;
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
+
+	assert(file != NULL);
+	char *buf = MD5File(file, NULL);
+	if (buf == NULL) {
+		fprintf(stderr, "md5 failed: %s\n", file);
+		return -1;
+	}
+	
+	sqlite3_initialize();
+	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		free(buf);
+		return -1;
+	}
+
+	sqlstr = "select * from mandb where md5_hash = :md5_hash";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		free(buf);
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
+	rc = sqlite3_bind_text(stmt, idx, buf, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		free(buf);
+		return -1;
+	}
+	
+	if (sqlite3_step(stmt) == SQLITE_ROW) {
+		sqlite3_finalize(stmt);	
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		free(buf);
+		return 1;
+	}
+	
+	md5_hash = strdup(buf);
+	sqlite3_finalize(stmt);	
+	sqlite3_close(db);
+	sqlite3_shutdown();
+	free(buf);
+	return 0;
+}
