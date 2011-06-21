@@ -1,11 +1,11 @@
+#include <search.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "sqlite3.h"
 
-//#TODO implement a function for removing stopwords 
-//static void remove_stopwords(char *);
+static void remove_stopwords(char **);
 static int search(const char *);
 static void usage(void);
 
@@ -18,7 +18,18 @@ main(int argc, char *argv[])
 		usage();
 	
 	query = argv[1];
-	//remove_stopwords(query);
+	remove_stopwords(&query);
+	
+	/* if any error occured in remove_stopwords, we continue with the initial
+	*  query input by the user
+	*/
+	if (query == NULL)
+		query = argv[1];
+	else if (!strcmp(query, "")) {
+		fprintf(stderr, "Try specifying more relevant keywords to get some matches\n");
+		exit(1);
+	}
+		
 	if (search(query) < 0) 
 		return -1;
 	return 0;
@@ -86,8 +97,70 @@ search(const char *query)
 	return 0;
 	
 }
-	
+/*
+* remove_stopwords--
+*  Scans the query and removes any stop words from it.
+*  It scans the query word by word, and looks up a hash table of stop words
+*  to check if it is a stopword or a valid keyword. In the we only have the
+*  relevant keywords left in the query.
+*  Error Cases: 
+*   1. In case of any error, it will set the query to NULL.	
+*   2. In case the query is found to be consisting only of stop words, it will
+*      set the query to a blank string ""
+*/
+static void
+remove_stopwords(char **query)
+{
+	int i = 0;
+	char *temp, *buf = NULL;
+	char *stopwords[] = {"a", "about", "also", "an", "another", "and", "are", 
+	"how", "is", "or", "the", "how", "what", "when", "which", "why", NULL};
 
+	/* initialize the hash table for stop words */
+	if (!hcreate(sizeof(stopwords) * sizeof(char)))
+		return;
+	
+	/* store the stopwords in the hashtable */	
+	for (temp = stopwords[i]; temp != NULL; temp = stopwords[i++]) {
+		ENTRY ent;
+		ent.key = strdup(temp);
+		ent.data = (void *) "y";
+		hsearch(ent, ENTER);
+	}
+	
+	/* filter out the stop words from the query */
+	for (temp = strtok(*query, " "); temp; temp = strtok(NULL, " ")) {
+		 ENTRY ent;
+		 ent.key = temp;
+		 ent.data = NULL;
+		 if (hsearch(ent, FIND) == NULL) {
+		 	if (buf == NULL) {
+		 		if ((buf = strdup(temp)) == NULL) {
+		 			*query = NULL;
+		 			hdestroy();
+		 			return;
+	 			}
+ 			}
+		 	else {
+		 		if ((buf = realloc(buf, strlen(buf) + strlen(temp) + 2)) == NULL) {
+		 			*query = NULL;
+		 			hdestroy();
+		 			return;
+	 			}
+		 		strcat(buf, " ");
+		 		strcat(buf, temp);
+	 		}
+		 	
+ 		}
+	}
+	
+	hdestroy();
+	if (buf != NULL)
+		*query = strdup(buf);
+	else
+		*query = strdup("");
+	free(buf);
+}
 
 /*
  * usage --
