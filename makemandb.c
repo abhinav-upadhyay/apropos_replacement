@@ -214,8 +214,8 @@ traversedir(const char *file)
 			return;
 		}
 		
-		pmdoc(file);
 		printf("parsing %s\n", file);
+		pmdoc(file);
 		if (insert_into_db() < 0)
 			fprintf(stderr, "Error indexing: %s\n", file);
 		return;
