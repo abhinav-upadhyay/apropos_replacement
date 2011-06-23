@@ -50,6 +50,7 @@ search(const char *query)
 	int idx = -1;
 	char *sqlstr = NULL;
 	char *name = NULL;
+	char *section = NULL;
 	char *snippet = NULL;
 	sqlite3_stmt *stmt = NULL;
 	
@@ -74,7 +75,7 @@ search(const char *query)
 		exit(-1);
 	}
 	
-	sqlstr = "select name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" )"
+	sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" )"
 			 "from mandb where mandb match :query order by rank_func(matchinfo(mandb), 1.50, 1.25, .75) desc limit 10 OFFSET 0";
           
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -96,9 +97,10 @@ search(const char *query)
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		name = (char *) sqlite3_column_text(stmt, 0);
-		snippet = (char *) sqlite3_column_text(stmt, 1);
-		printf("%s\n%s\n\n", name, snippet);
+		section = (char *) sqlite3_column_text(stmt, 0);
+		name = (char *) sqlite3_column_text(stmt, 1);
+		snippet = (char *) sqlite3_column_text(stmt, 2);
+		printf("%s(%s)\n%s\n\n", name, section, snippet);
 	}
 			
 	sqlite3_finalize(stmt);	
@@ -245,7 +247,7 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
   nPhrase = aMatchinfo[0];
   nCol = aMatchinfo[1];
   
-  if( nVal!=(nCol) ) {
+  if( nVal!=(nCol - 1) ) {
    fprintf(stderr, "nval!=ncol\n");
    goto wrong_number_args;
    }
@@ -264,7 +266,7 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
     ** aPhraseinfo[iCol*3] and aPhraseinfo[iCol*3+1], respectively.
     */
     int *aPhraseinfo = &aMatchinfo[2 + iPhrase*nCol*3];
-    for(iCol=0; iCol<nCol; iCol++){
+    for(iCol=1; iCol<nCol-2; iCol++){
       int nHitCount = aPhraseinfo[3*iCol];
       int nGlobalHitCount = aPhraseinfo[3*iCol+1];
       double weight = sqlite3_value_double(apVal[iCol+1]);

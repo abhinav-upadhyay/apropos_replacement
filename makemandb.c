@@ -21,6 +21,7 @@ static int check_md5(const char *);
 static void cleanup(void);
 static int concat(char **, const char *);
 static int create_db(void);
+static void get_section(const char *);
 static int insert_into_db(void);
 static	void pmdoc(const char *);
 static void pmdoc_node(const struct mdoc_node *);
@@ -33,6 +34,7 @@ static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
 static char *desc = NULL; // for storing the DESCRIPTION section
 static char *md5_hash = NULL;
+static char *section = NULL;
 static struct mparse *mp = NULL;
 
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
@@ -214,6 +216,8 @@ traversedir(const char *file)
 			return;
 		}
 		
+		get_section(file);
+		
 		printf("parsing %s\n", file);
 		pmdoc(file);
 		if (insert_into_db() < 0)
@@ -372,6 +376,13 @@ pmdoc_Sh(const struct mdoc_node *n)
 	}
 }
 
+static void
+get_section(const char *file)
+{
+	char *c = rindex(file, '.');
+	section = strdup(++c);
+}
+
 /* cleanup --
 *   cleans up the global buffers
 */
@@ -386,8 +397,10 @@ cleanup(void)
 		free(desc);
 	if (md5_hash)
 		free(md5_hash);
+	if (section)
+		free(section);
 	
-	name = name_desc = desc = md5_hash = NULL;
+	name = name_desc = desc = md5_hash = section = NULL;
 }
 
 /* insert_into_db --
@@ -404,7 +417,8 @@ insert_into_db(void)
 	char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	
-	if (name == NULL || name_desc == NULL || desc == NULL || md5_hash == NULL) {
+	if (name == NULL || name_desc == NULL || desc == NULL || md5_hash == NULL 
+		|| section == NULL) {
 		cleanup();
 		return -1;
 	}
@@ -420,7 +434,7 @@ insert_into_db(void)
 			return -1;
 		}
 
-		sqlstr = "insert into mandb values (:name, :name_desc, :desc, :md5_hash)";
+		sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc, :md5_hash)";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
 			sqlite3_close(db);
@@ -431,6 +445,16 @@ insert_into_db(void)
 
 		idx = sqlite3_bind_parameter_index(stmt, ":name");
 		rc = sqlite3_bind_text(stmt, idx, name, -1, NULL);
+		if (rc != SQLITE_OK) {
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+		
+		idx = sqlite3_bind_parameter_index(stmt, ":section");
+		rc = sqlite3_bind_text(stmt, idx, section, -1, NULL);
 		if (rc != SQLITE_OK) {
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
@@ -511,7 +535,7 @@ create_db(void)
 		return -1;
 	}
 
-	sqlstr = "create virtual table mandb using fts4(name, name_desc, desc, \
+	sqlstr = "create virtual table mandb using fts4(section, name, name_desc, desc, \
 	 md5_hash, tokenize=porter)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
