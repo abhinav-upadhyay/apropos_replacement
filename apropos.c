@@ -6,6 +6,8 @@
 
 #include "sqlite3.h"
 
+#define DBPATH "./apropos.db"
+
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
 static int search(const char *);
@@ -55,7 +57,7 @@ search(const char *query)
 	sqlite3_stmt *stmt = NULL;
 	
 	sqlite3_initialize();
-	rc = sqlite3_open_v2("apropos.db", &db, SQLITE_OPEN_READONLY, NULL);
+	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "Database does not exist. Try running makemandb and "
 		"then try again\n");
