@@ -13,5 +13,5 @@ CPPFLAGS+=-DSQLITE_ENABLE_FTS3_PARENTHESIS
 
 DPADD.makemandb+= 	/usr/src/external/bsd/mdocml/lib/libmandoc/libmandoc.a
 LDADD.makemandb+= 	-L/usr/src/external/bsd/mdocml/lib/libmandoc -lmandoc
-
+LDADD+=	-lm
 .include <bsd.prog.mk>
