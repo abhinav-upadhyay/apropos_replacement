@@ -434,7 +434,7 @@ insert_into_db(void)
 			return -1;
 		}
 
-		sqlstr = "insert into mandb values (:name, :name_desc, :desc, :md5_hash, :section)";
+		sqlstr = "insert into mandb values (:md5_hash, :section, :name, :name_desc, :desc,)";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
 			sqlite3_close(db);
@@ -535,8 +535,8 @@ create_db(void)
 		return -1;
 	}
 
-	sqlstr = "create virtual table mandb using fts4(name, name_desc, desc, \
-	md5_hash, section, tokenize=porter)";
+	sqlstr = "create virtual table mandb using fts4(md5_hash, section, name, \
+	name_desc, desc, tokenize=porter)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);

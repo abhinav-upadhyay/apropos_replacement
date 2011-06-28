@@ -9,7 +9,6 @@
 
 #define DBPATH "./apropos.db"
 
-static int get_max_tf(void);
 static int get_ndoc(void);
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
@@ -238,8 +237,7 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
 	double idf = 0.0;
 	double score = 0.0;
 	int ndoc = get_ndoc();
-	int max_tf = get_max_tf();
-	  
+		  
 	assert( sizeof(int)==4 && ndoc != 0  );
 
 	/* Check that the number of arguments passed to this function is correct.
@@ -276,20 +274,20 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
 		** aPhraseinfo[iCol*3] and aPhraseinfo[iCol*3+1], respectively.
 		*/
 		int *aPhraseinfo = &aMatchinfo[2 + iPhrase * (nCol) * 3];
-		for(iCol = 0; iCol < nCol - 2 ; iCol++) {
+		for(iCol = 2; iCol < nCol - 2 ; iCol++) {
 	  		int nHitCount = aPhraseinfo[3*iCol];
 			int nGlobalHitCount = aPhraseinfo[3*iCol+1];
 			double weight = sqlite3_value_double(apVal[iCol+1]);
 			int nDocsHitCount = aPhraseinfo[3 * iCol + 2]; 
 			if ( nHitCount > 0 )
-				tf += ((double)nHitCount / (nGlobalHitCount * max_tf) ) * weight;
+				tf += ((double)nHitCount / nGlobalHitCount ) * weight;
 		  
 			if (nGlobalHitCount > 0)
 			  	idf += log(ndoc/nDocsHitCount)/ log(ndoc);
 		}
 
-		tf /= (double) nPhrase;
-		idf = (double) nPhrase;
+		//tf /= (double) nPhrase;
+		//idf /= (double) nPhrase;
 		score = tf * idf;
 	}
 
@@ -299,43 +297,6 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
 	/* Jump here if the wrong number of arguments are passed to this function */
 	wrong_number_args:
 		sqlite3_result_error(pCtx, "wrong number of arguments to function rank()", -1);
-}
-
-static int
-get_max_tf(void)
-{
-	sqlite3 *db = NULL;
-	int rc = 0;
-	int idx = -1;
-	int max_tf = 0;
-	char *sqlstr = NULL;
-	sqlite3_stmt *stmt = NULL;
-
-		
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0;
-	}
-
-	sqlstr = "select max(occurrences) from mandb_aux";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0;
-	}
-	
-	if (sqlite3_step(stmt) == SQLITE_ROW) {
-		max_tf = (int) sqlite3_column_int(stmt, 0);
-	}
-
-	sqlite3_finalize(stmt);	
-	sqlite3_close(db);
-	sqlite3_shutdown();
-	return max_tf;
 }
 
 static int
