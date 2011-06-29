@@ -255,7 +255,7 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
 	nPhrase = aMatchinfo[0];
 	nCol = aMatchinfo[1];
 	
-	if( nVal != (nCol - 1) ) {
+	if( nVal != (nCol ) ) {
 		fprintf(stderr, "nval != ncol\n");
 		goto wrong_number_args;
 	}
@@ -274,7 +274,7 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
 		** aPhraseinfo[iCol*3] and aPhraseinfo[iCol*3+1], respectively.
 		*/
 		int *aPhraseinfo = &aMatchinfo[2 + iPhrase * (nCol) * 3];
-		for(iCol = 2; iCol < nCol - 2 ; iCol++) {
+		for(iCol = 1; iCol < nCol - 1 ; iCol++) {
 	  		int nHitCount = aPhraseinfo[3*iCol];
 			int nGlobalHitCount = aPhraseinfo[3*iCol+1];
 			double weight = sqlite3_value_double(apVal[iCol+1]);

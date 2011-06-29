@@ -433,10 +433,13 @@ insert_into_db(void)
 			cleanup();
 			return -1;
 		}
+		
+		sqlite3_extended_result_codes(db, 1);
 
-		sqlstr = "insert into mandb values (:md5_hash, :section, :name, :name_desc, :desc,)";
+		sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc)";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_close(db);
 			sqlite3_shutdown();
 			cleanup();
@@ -446,6 +449,7 @@ insert_into_db(void)
 		idx = sqlite3_bind_parameter_index(stmt, ":name");
 		rc = sqlite3_bind_text(stmt, idx, name, -1, NULL);
 		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
 			sqlite3_shutdown();
@@ -456,6 +460,7 @@ insert_into_db(void)
 		idx = sqlite3_bind_parameter_index(stmt, ":section");
 		rc = sqlite3_bind_text(stmt, idx, section, -1, NULL);
 		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
 			sqlite3_shutdown();
@@ -466,6 +471,7 @@ insert_into_db(void)
 		idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
 		rc = sqlite3_bind_text(stmt, idx, name_desc, -1, NULL);
 		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
 			sqlite3_shutdown();
@@ -476,6 +482,7 @@ insert_into_db(void)
 		idx = sqlite3_bind_parameter_index(stmt, ":desc");
 		rc = sqlite3_bind_text(stmt, idx, desc, -1, NULL);
 		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
 			sqlite3_shutdown();
@@ -483,18 +490,41 @@ insert_into_db(void)
 			return -1;
 		}
 
-		idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
-		rc = sqlite3_bind_text(stmt, idx, md5_hash, -1, NULL);
-		if (rc != SQLITE_OK) {
+		rc = sqlite3_step(stmt);
+		if (rc != SQLITE_DONE) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
 			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
-	
+		
+		sqlite3_finalize(stmt);
+		sqlstr = "insert into mandb_md5 values (:md5_hash)";
+		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+		
+		idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
+		rc = sqlite3_bind_text(stmt, idx, md5_hash, -1, NULL);
+		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			cleanup();
+			return -1;
+		}
+		
 		rc = sqlite3_step(stmt);
 		if (rc != SQLITE_DONE) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
 			sqlite3_close(db);
 			sqlite3_shutdown();
@@ -535,7 +565,7 @@ create_db(void)
 		return -1;
 	}
 
-	sqlstr = "create virtual table mandb using fts4(md5_hash, section, name, \
+	sqlstr = "create virtual table mandb using fts4(section, name, \
 	name_desc, desc, tokenize=porter)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -570,6 +600,24 @@ create_db(void)
 		return -1;
 	}
 
+	sqlite3_finalize(stmt);
+	
+	sqlstr = "create table mandb_md5(md5_hash)";
+
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
 		
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
@@ -646,7 +694,7 @@ check_md5(const char *file)
 		return -1;
 	}
 
-	sqlstr = "select * from mandb where md5_hash = :md5_hash";
+	sqlstr = "select * from mandb_md5 where md5_hash = :md5_hash";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
