@@ -273,11 +273,11 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
 		** the hit count and global hit counts for each column are found in 
 		** aPhraseinfo[iCol*3] and aPhraseinfo[iCol*3+1], respectively.
 		*/
-		int *aPhraseinfo = &aMatchinfo[2 + iPhrase * (nCol) * 3];
-		for(iCol = 1; iCol < nCol - 1 ; iCol++) {
+		int *aPhraseinfo = &aMatchinfo[2 + iPhrase * nCol * 3];
+		for(iCol = 1; iCol < nCol; iCol++) {
 	  		int nHitCount = aPhraseinfo[3*iCol];
 			int nGlobalHitCount = aPhraseinfo[3*iCol+1];
-			double weight = sqlite3_value_double(apVal[iCol+1]);
+			double weight = sqlite3_value_double(apVal[iCol]);
 			int nDocsHitCount = aPhraseinfo[3 * iCol + 2]; 
 			if ( nHitCount > 0 )
 				tf += ((double)nHitCount / nGlobalHitCount ) * weight;
@@ -286,8 +286,8 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apVal)
 			  	idf += log(ndoc/nDocsHitCount)/ log(ndoc);
 		}
 
-		//tf /= (double) nPhrase;
-		//idf /= (double) nPhrase;
+		tf /= (double) nPhrase;
+		idf /= (double) nPhrase;
 		score = tf * idf;
 	}
 
