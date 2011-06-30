@@ -130,8 +130,8 @@ remove_stopwords(char **query)
 {
 	int i = 0;
 	char *temp, *buf = NULL;
-	char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", 
-	"how", "is", "or", "the", "how", "what", "when", "which", "why", NULL};
+	char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", "be",
+	"how", "is", "new", "or", "the", "to", "how", "what", "when", "which", "why", NULL};
 
 	/* initialize the hash table for stop words */
 	if (!hcreate(sizeof(stopwords) * sizeof(char)))

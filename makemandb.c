@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
+#include <math.h>
 #include <md5.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,18 +18,31 @@
 #define MAXLINE 1024	//buffer size for fgets
 #define DBPATH "./apropos.db"
 
+typedef struct {
+int docid;
+char *term;
+double tf;
+double idf;
+} term_weight;
+
+static int build_term_weights(void);
+static int compute_term_weight(sqlite3 *, term_weight *);
+static int store_term_weight(sqlite3 *, term_weight *);
 static int check_md5(const char *);
 static void cleanup(void);
 static int concat(char **, const char *);
 static int create_db(void);
+static int get_ndoc(void);
 static void get_section(const char *);
 static int insert_into_db(void);
+static int is_stopword(const char *);
 static	void pmdoc(const char *);
 static void pmdoc_node(const struct mdoc_node *);
 static void pmdoc_Nm(const struct mdoc_node *);
 static void pmdoc_Nd(const struct mdoc_node *);
 static void pmdoc_Sh(const struct mdoc_node *);
 static void traversedir(const char *);
+static int term_exists(sqlite3 *db, const char *);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
@@ -36,6 +50,8 @@ static char *desc = NULL; // for storing the DESCRIPTION section
 static char *md5_hash = NULL;
 static char *section = NULL;
 static struct mparse *mp = NULL;
+
+
 
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
 static	const pmdoc_nf mdocs[MDOC_MAX] = {
@@ -170,6 +186,7 @@ main(int argc, char *argv[])
 	char line[MAXLINE];
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
+	/* Build the databases */
 	if (create_db() < 0) 
 		errx(EXIT_FAILURE, "Unable to create database");
 			
@@ -180,12 +197,18 @@ main(int argc, char *argv[])
 	while (fgets(line, MAXLINE, file) != NULL) {
 		/* remove the new line character from the string */
 		line[strlen(line) - 1] = '\0';
+		/* Traverse the man page directories and parse the pages */
 		traversedir(line);
 	}
 	
 	if (pclose(file) == -1)
 		errx(EXIT_FAILURE, "pclose error");
 	mparse_free(mp);
+
+	/* Now, calculate the weights of each unique term in the index */
+	if (build_term_weights() < 0)
+		fprintf(stderr, "Could not compute the term weights. Please run makemandb again\n");
+		
 	cleanup();
 	return 0;
 }
@@ -436,6 +459,7 @@ insert_into_db(void)
 		
 		sqlite3_extended_result_codes(db, 1);
 
+/*------------------------ Populate the mandb table------------------------------ */
 		sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc)";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
@@ -501,6 +525,7 @@ insert_into_db(void)
 		}
 		
 		sqlite3_finalize(stmt);
+/*------------------------ Populate the mandb_md5 table-----------------------*/
 		sqlstr = "insert into mandb_md5 values (:md5_hash)";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
@@ -564,7 +589,7 @@ create_db(void)
 		sqlite3_shutdown();
 		return -1;
 	}
-
+/*------------------------ Build the mandb table------------------------------ */
 	sqlstr = "create virtual table mandb using fts4(section, name, \
 	name_desc, desc, tokenize=porter)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -582,7 +607,8 @@ create_db(void)
 		return -1;
 	}
 	sqlite3_finalize(stmt);
-	
+
+/*------------------------ Build the mandb_aux table------------------------------ */	
 	sqlstr = "create virtual table mandb_aux using fts4aux(mandb)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -601,7 +627,8 @@ create_db(void)
 	}
 
 	sqlite3_finalize(stmt);
-	
+
+/*------------------------ Build the mandb_md5 table------------------------------ */	
 	sqlstr = "create table mandb_md5(md5_hash)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -619,6 +646,46 @@ create_db(void)
 		return -1;
 	}
 		
+	sqlite3_finalize(stmt);
+
+/*------------------------ Build the mandb_tf table------------------------------ */	
+	sqlstr = "create table mandb_tf(docid, term, tf)";
+
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	sqlite3_finalize(stmt);
+
+/*------------------------Build the mandb_idf table------------------------------ */	
+	sqlstr = "create table mandb_idf(term, idf)";
+
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
 	sqlite3_shutdown();
@@ -729,3 +796,324 @@ check_md5(const char *file)
 	free(buf);
 	return 0;
 }
+
+/*
+* build_term_weights--
+*  Fetches a list of all unique terms from the mandb_aux table.
+*  Computes the term-frequency and inverse document frequency for each term
+*  and stores these weights in the mandb_tf and mandb_idf tables respectively
+*/
+static int
+build_term_weights(void)
+{
+	sqlite3 *db = NULL;
+	int rc = 0;
+	int idx = -1;
+	char *sqlstr = NULL;
+	char *term = NULL;
+	sqlite3_stmt *stmt = NULL;
+	
+	sqlite3_initialize();
+	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	sqlite3_extended_result_codes(db, 1);
+	
+	sqlstr = "select term from mandb_aux";
+          
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		term = (char *) sqlite3_column_text(stmt, 0);
+		if (term_exists(db, term) || is_stopword(term))
+			continue;
+		term_weight *tw = malloc(sizeof(term_weight));
+		tw->term = term;
+		printf("Computing weight of %s\n", term);
+		if (compute_term_weight(db, tw) < 0) {
+			free(tw);
+			continue;
+		}
+		store_term_weight(db, tw);
+		free(tw);
+	}
+	
+	sqlite3_finalize(stmt);	
+	sqlite3_close(db);
+	sqlite3_shutdown();
+	
+	return 0;
+}
+
+/*
+* compute_term_weight--
+*  Computes the term frequency and inverse document frequency of the individual
+*  terms in the corpus.
+*  tf = (hitcount/globalhitcount)* weight 
+*  hitcount = Number of times the term appears in a column in the current document
+*  globalhitcount = Number of times it appears in the same column in all the documents
+*  weight = a static weight assigned to a column
+*  The final tf is the sum over all the columns in the table
+*
+*  idf = log(ndoc/ndocshitcount)
+*  ndoc = Total number of documents in the corpus
+*  ndocshitcount = total number of documents in which the term appears
+*/
+static int
+compute_term_weight(sqlite3 *db, term_weight *tw)
+{
+	int rc = 0;
+	int idx = -1;
+	int *matchinfo;
+	int nphrase;	//Number of phrases
+	int ncol;		//Number of columns in the table
+	int iphrase;
+	int ndocshitcount;	//Number of documents in which a term appears
+	double weights[3] = {2.0, 1.5, 0.75};	//weights for the 3 columns of the table
+	double tf = 0.0;	//For the final tf
+	double idf = 0.0;	//For the final idf
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
+		
+	sqlstr = "select docid, matchinfo(mandb) from mandb where mandb match :term";
+          
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":term");
+	rc = sqlite3_bind_text(stmt, idx, tw->term, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		tw->docid = (int) sqlite3_column_int(stmt, 0);
+		matchinfo = (unsigned int *) sqlite3_column_blob(stmt, 1);
+		nphrase = matchinfo[0];
+		ncol = matchinfo[1];
+		int ndoc = get_ndoc();
+		if (ndoc == 0)
+			return -1;
+		
+		for(iphrase = 0; iphrase < nphrase; iphrase++) {
+			int icol;
+			int *phraseinfo = &matchinfo[2 + iphrase * ncol * 3];
+		
+			for(icol = 1; icol < ncol; icol++) {
+		  		int nhitcount = phraseinfo[3*icol];
+				int nglobalhitcount = phraseinfo[3*icol+1];
+				double weight = weights[icol - 1];
+				int ndocshitcount = phraseinfo[3 * icol + 2]; 
+				if (nglobalhitcount > 0)
+					tf += ((double)nhitcount / nglobalhitcount) * weight;
+			  
+				if (ndocshitcount > 0)
+				  	idf += log((double)ndoc / ndocshitcount) / log(ndoc);
+			}
+
+		}
+		tw->tf = tf;
+		tw->idf = idf;
+	}
+	sqlite3_finalize(stmt);
+	return 0;
+
+}
+
+static int
+store_term_weight(sqlite3 *db, term_weight *tw)
+{
+	int rc = 0;
+	int idx = -1;
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
+	
+/*-----------------------Populate the mandb_tf table-------------------------*/
+	sqlstr = "insert into mandb_tf values (:docid, :term, :tf)";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		return -1;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":docid");
+	rc = sqlite3_bind_int(stmt, idx, tw->docid);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":term");
+	rc = sqlite3_bind_text(stmt, idx, tw->term, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":tf");
+	rc = sqlite3_bind_double(stmt, idx, tw->tf);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	sqlite3_finalize(stmt);
+
+/*-----------------------Populate the mandb_idf table-------------------------*/
+	sqlstr = "insert into mandb_idf values(:term, :idf)";
+	
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":term");
+	rc = sqlite3_bind_text(stmt, idx, tw->term, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":idf");
+	rc = sqlite3_bind_double(stmt, idx, tw->idf);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	sqlite3_finalize(stmt);
+	return 0;
+}
+
+/*
+* get_ndoc--
+*  Utility function. Returns the total number of documents in the corpus
+*/
+static int
+get_ndoc(void)
+{
+	sqlite3 *db = NULL;
+	int rc = 0;
+	int ndoc = 0;
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
+
+		
+	sqlite3_initialize();
+	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return 0;
+	}
+
+	sqlstr = "select count(name) from mandb";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return 0;
+	}
+	
+	if (sqlite3_step(stmt) == SQLITE_ROW) {
+		ndoc = (int) sqlite3_column_int(stmt, 0);
+	}
+
+	sqlite3_finalize(stmt);	
+	sqlite3_close(db);
+	sqlite3_shutdown();
+	return ndoc;
+}
+
+/*
+* term_exists--
+*  Checks if the weight of this term has already been computed in the database.
+*  Returns: Positive value, if it has been computed or an error occured in checking.
+*			Else returns 0, which means, we need to compute it's weight.
+*/
+static int
+term_exists(sqlite3 *db, const char *term)
+{
+	int rc = 0;
+	int idx = -1;
+	int ret_val = 0;
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
+	
+	sqlstr = "select term from mandb_tf where term = :term";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":term");
+	rc = sqlite3_bind_text(stmt, idx, term, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	if (sqlite3_step(stmt) == SQLITE_ROW) 
+		ret_val = 1;
+	
+	sqlite3_finalize(stmt);
+	return ret_val;
+}
+
+/*
+* is_stopword--
+*  Returns 1 if term is a stopword, else returns 0
+*/
+static int
+is_stopword(const char *term)
+{
+	int i = 0;
+	char *temp;
+	char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", 
+	"be", "can", "how", "is", "or", "the", "this", "that", "to", "new", "what", "when", "which", 
+	"why", "will", NULL};
+
+	for (temp = stopwords[i]; temp != NULL; temp = stopwords[i++]) {
+		if (!strcmp(temp, term))
+		return 1;
+	}
+	
+	return 0;
+}	
