@@ -4,7 +4,7 @@ MDIST=	${NETBSDSRCDIR}/external/bsd/mdocml/dist
 
 PROGS=	makemandb apropos
 SRCS.makemandb=		makemandb.c sqlite3.c
-SRCS.apropos=	apropos.c sqlite3.c
+SRCS.apropos=	apropos.c sqlite3.c porter_stemmer.c
 
 .PATH:	${MDIST}
 CPPFLAGS+=-I${MDIST}

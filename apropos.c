@@ -14,6 +14,7 @@ static double get_idf(const char *);
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
 static int search(const char *);
+char *stemword(char *);
 static void usage(void);
 
 int
@@ -80,8 +81,8 @@ search(const char *query)
 		exit(-1);
 	}
 	
-	sqlstr = "select docid, section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ) "
-			 "from mandb where mandb match :query order by rank_func(docid, :query) limit 10 OFFSET 0";
+	sqlstr = "select docid as d, section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(docid, :query) as rank "
+			 "from mandb where mandb match :query order by rank desc limit 10 OFFSET 0";
           
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -115,7 +116,8 @@ search(const char *query)
 		section = (char *) sqlite3_column_text(stmt, 1);
 		name = (char *) sqlite3_column_text(stmt, 2);
 		snippet = (char *) sqlite3_column_text(stmt, 3);
-		printf("%s(%s)\n%s\n\n", name, section, snippet);
+		char *rank = (char *) sqlite3_column_text(stmt, 4);
+ 		printf("%s(%s)\t%s\n%s\n\n", name, section, rank, snippet);
 	}
 			
 	sqlite3_finalize(stmt);	
@@ -213,10 +215,11 @@ static void
 rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apval)
 {
 	int docid;
-	char *query, *temp;
+	char *query, *temp, *term;
 	double tf = 0.0;
 	double idf = 0.0;
 	double score = 0.0;
+	int i =0;
 	
 	/* Check that the number of arguments passed to this function is correct.
 	** If not, jump to wrong_number_args. 
@@ -226,14 +229,19 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apval)
 		goto wrong_number_args;
 	}
 	
-	docid = (int)sqlite3_value_blob(apval[0]);
-	query = strdup((char *) sqlite3_value_blob(apval[1]));
+	docid = (int) sqlite3_value_int(apval[0]);
+ 	query = strdup((char *) sqlite3_value_text(apval[1]));
 	
 	for (temp = strtok(query, " "); temp; temp = strtok(NULL, " ")) {
-		tf += get_tf(docid, temp);
-		idf += get_idf(temp);
+		term = stemword(temp);
+		tf += get_tf(docid, term);
+		idf += get_idf(term);
+		i++;
+		free(term);
 	}
 	
+	tf /= i;
+	idf /= i;
 	score = tf * idf;
 
 	sqlite3_result_double(pCtx, score);
@@ -260,15 +268,16 @@ get_tf(int docid, const char *term)
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return 0;
+		return 0.0;
 	}
 
+	sqlite3_extended_result_codes(db, 1);
 	sqlstr = "select tf from mandb_tf where docid = :docid and term = :term";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return 0;
+		return 0.0;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":docid");
@@ -278,7 +287,7 @@ get_tf(int docid, const char *term)
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return -1;
+		return 0.0;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":term");
@@ -319,6 +328,7 @@ get_idf(const char *term)
 		return 0.0;
 	}
 
+	sqlite3_extended_result_codes(db, 1);
 	sqlstr = "select idf from mandb_idf where term = :term";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {

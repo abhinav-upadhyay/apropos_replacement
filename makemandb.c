@@ -20,14 +20,20 @@
 
 typedef struct {
 int docid;
-char *term;
+const char *term;
 double tf;
+} term_frequency;
+
+typedef struct {
+const char *term;
 double idf;
-} term_weight;
+int status;
+} inverse_document_frequency;
 
 static int build_term_weights(void);
-static int compute_term_weight(sqlite3 *, term_weight *);
-static int store_term_weight(sqlite3 *, term_weight *);
+static int compute_term_weight(sqlite3 *, const char *);
+static int store_tf(sqlite3 *, term_frequency *);
+static int store_idf(sqlite3 *, inverse_document_frequency *);
 static int check_md5(const char *);
 static void cleanup(void);
 static int concat(char **, const char *);
@@ -824,7 +830,7 @@ build_term_weights(void)
 	
 	sqlite3_extended_result_codes(db, 1);
 	
-	sqlstr = "select term from mandb_aux";
+	sqlstr = "select distinct term from mandb_aux";
           
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -836,17 +842,13 @@ build_term_weights(void)
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		term = (char *) sqlite3_column_text(stmt, 0);
-		if (term_exists(db, term) || is_stopword(term))
+		if (is_stopword(term))
 			continue;
-		term_weight *tw = malloc(sizeof(term_weight));
-		tw->term = term;
+		
 		printf("Computing weight of %s\n", term);
-		if (compute_term_weight(db, tw) < 0) {
-			free(tw);
+		if (compute_term_weight(db, term) < 0) {
 			continue;
 		}
-		store_term_weight(db, tw);
-		free(tw);
 	}
 	
 	sqlite3_finalize(stmt);	
@@ -871,7 +873,7 @@ build_term_weights(void)
 *  ndocshitcount = total number of documents in which the term appears
 */
 static int
-compute_term_weight(sqlite3 *db, term_weight *tw)
+compute_term_weight(sqlite3 *db, const char *term)
 {
 	int rc = 0;
 	int idx = -1;
@@ -881,10 +883,12 @@ compute_term_weight(sqlite3 *db, term_weight *tw)
 	int iphrase;
 	int ndocshitcount;	//Number of documents in which a term appears
 	double weights[3] = {2.0, 1.5, 0.75};	//weights for the 3 columns of the table
-	double tf = 0.0;	//For the final tf
-	double idf = 0.0;	//For the final idf
+	double tf_weight = 0.0;	//For the final tf
+	double idf_weight = 0.0;	//For the final idf
 	char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
+	term_frequency *tf = NULL;
+	inverse_document_frequency *idf = NULL;
 		
 	sqlstr = "select docid, matchinfo(mandb) from mandb where mandb match :term";
           
@@ -895,7 +899,7 @@ compute_term_weight(sqlite3 *db, term_weight *tw)
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":term");
-	rc = sqlite3_bind_text(stmt, idx, tw->term, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, term, -1, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -903,7 +907,19 @@ compute_term_weight(sqlite3 *db, term_weight *tw)
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		tw->docid = (int) sqlite3_column_int(stmt, 0);
+		tf_weight = 0.0;
+		idf_weight = 0.0;
+		tf = malloc(sizeof(term_frequency));
+		if (tf == NULL)
+			errx(EXIT_FAILURE, "malloc failed\n");
+		tf->term = term;
+		tf->docid = (int) sqlite3_column_int(stmt, 0);
+		if (idf == NULL) {
+			idf = malloc(sizeof(inverse_document_frequency));
+			idf->term = (char *) term;
+			idf->status = 0;
+			idf->idf = 0.0;
+		}
 		matchinfo = (unsigned int *) sqlite3_column_blob(stmt, 1);
 		nphrase = matchinfo[0];
 		ncol = matchinfo[1];
@@ -921,23 +937,33 @@ compute_term_weight(sqlite3 *db, term_weight *tw)
 				double weight = weights[icol - 1];
 				int ndocshitcount = phraseinfo[3 * icol + 2]; 
 				if (nglobalhitcount > 0)
-					tf += ((double)nhitcount / nglobalhitcount) * weight;
+					tf_weight += ((double)nhitcount / nglobalhitcount) * weight;
 			  
-				if (ndocshitcount > 0)
-				  	idf += log((double)ndoc / ndocshitcount) / log(ndoc);
+				if (idf->status == 0 && ndocshitcount > 0)
+				  	idf_weight += log((double)ndoc / ndocshitcount) / log(ndoc);
 			}
-
+		
+			tf->tf = tf_weight;
+			idf->idf = idf_weight;
+			
+			if (idf != NULL && idf->status == 0) {
+				store_idf(db, idf);
+				idf->status = 1;
+			}
+					
+			store_tf(db, tf);
+			free(tf);
 		}
-		tw->tf = tf;
-		tw->idf = idf;
+		
 	}
+	free(idf);
 	sqlite3_finalize(stmt);
 	return 0;
 
 }
 
 static int
-store_term_weight(sqlite3 *db, term_weight *tw)
+store_tf(sqlite3 *db, term_frequency *tf)
 {
 	int rc = 0;
 	int idx = -1;
@@ -953,7 +979,7 @@ store_term_weight(sqlite3 *db, term_weight *tw)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":docid");
-	rc = sqlite3_bind_int(stmt, idx, tw->docid);
+	rc = sqlite3_bind_int(stmt, idx, tf->docid);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -961,7 +987,7 @@ store_term_weight(sqlite3 *db, term_weight *tw)
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":term");
-	rc = sqlite3_bind_text(stmt, idx, tw->term, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, tf->term, -1, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -969,7 +995,7 @@ store_term_weight(sqlite3 *db, term_weight *tw)
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":tf");
-	rc = sqlite3_bind_double(stmt, idx, tw->tf);
+	rc = sqlite3_bind_double(stmt, idx, tf->tf);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -984,6 +1010,16 @@ store_term_weight(sqlite3 *db, term_weight *tw)
 	}
 	
 	sqlite3_finalize(stmt);
+	return 0;
+}
+
+static int
+store_idf(sqlite3 *db, inverse_document_frequency *idf)
+{
+	int rc = 0;
+	int idx = -1;
+	char *sqlstr = NULL;
+	sqlite3_stmt *stmt = NULL;
 
 /*-----------------------Populate the mandb_idf table-------------------------*/
 	sqlstr = "insert into mandb_idf values(:term, :idf)";
@@ -995,7 +1031,7 @@ store_term_weight(sqlite3 *db, term_weight *tw)
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":term");
-	rc = sqlite3_bind_text(stmt, idx, tw->term, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, idf->term, -1, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -1003,7 +1039,7 @@ store_term_weight(sqlite3 *db, term_weight *tw)
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":idf");
-	rc = sqlite3_bind_double(stmt, idx, tw->idf);
+	rc = sqlite3_bind_double(stmt, idx, idf->idf);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -1106,10 +1142,30 @@ is_stopword(const char *term)
 {
 	int i = 0;
 	char *temp;
-	char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", 
-	"be", "can", "how", "is", "or", "the", "this", "that", "to", "new", "what", "when", "which", 
-	"why", "will", NULL};
-
+	assert(term != NULL);
+	char *stopwords[] = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
+	"m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1",
+	"2", "3", "4", "5", "6", "7", "8", "9", "again", "willing", "always", "any", 
+	"around", "ask", "back", "been", "case", "did", "does", "down", "each", "early","either",
+	"end", "enough", "even", "every", "fact", "far", "few", "four", "further", "general", "good",
+	"got", "great", "having", "high", "him", "his", "however", "if", "important", "in", "interest",
+	"into", "it", "just", "keep", "keeps", "kind", "knew", "know", "large", "larger", "last", "later",
+	"latter", "latest", "least", "let", "like", "likely", "long", "longer", "made", "many", "may", "me",
+	"might", "most", "mostly", "much", "must", "my", "necessari", "need", "never", "needs", "next", "no",
+	"non", "noone", "not", "nothing", "now", "number", "often", "old", "older", "once", "onli", "order", 
+	"our", "out", "over", "part", "per", "perhaps", "possible", "present", "problem", "quite", "rather",
+	"really", "right", "room", "said", "same", "saw", "say", "says", "second", "see", "seem", "seemed", "seems",
+	"sees", "several", "shall", "should", "side", "sides", "small", "smaller", "so", "some", "something", "state",
+	"states", "still", "such", "sure", "take", "taken", "then", "them", "their", "there", "therefore", "thing",
+	"think", "thinks", "though", "three", "thus", "together", "too", "took", "toward", "turn", "two", "until",
+	"upon", "us", "use", "used", "uses", "very", "want", "wanted", "wants", "was", "way", "ways", "we", "well",
+	"went", "were", "whether", "with", "within", "without", "work", "would", "year", "yet", "you",
+	 "about", "also", "all", "an", "another", "and", "are", "as",
+	"at", "be", "befor", "between", "below", "by", "bye", "but", "can", "consist",
+	"could", "follow", "from", "full", "give", "given", "have", "has", "had", "here", 
+	"how", "is", "names", "of", "off", "on", "or", "the", "this", "up",
+	"that", "to", "new", "what", "when", 
+	"why", "will", "because", "these", "those",  NULL};
 	for (temp = stopwords[i]; temp != NULL; temp = stopwords[i++]) {
 		if (!strcmp(temp, term))
 		return 1;
