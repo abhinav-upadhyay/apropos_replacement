@@ -9,7 +9,7 @@
 
 #define DBPATH "./apropos.db"
 
-static double get_tf(int, const char *);
+static double get_weight(int, const char *);
 static double get_idf(const char *);
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
@@ -145,7 +145,7 @@ remove_stopwords(char **query)
 	char *temp, *buf = NULL;
 	char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", "be",
 	"how", "is", "new", "or", "the", "to", "how", "what", "when", "which", "why", NULL};
-
+	
 	/* initialize the hash table for stop words */
 	if (!hcreate(sizeof(stopwords) * sizeof(char)))
 		return;
@@ -212,19 +212,17 @@ usage(void)
 *  It computes the final rank, by multiplying tf and idf together.
 */
 static void
-rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apval)
+rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
 	int docid;
 	char *query, *temp, *term;
-	double tf = 0.0;
-	double idf = 0.0;
-	double score = 0.0;
+	double weight = 0.0;
 	int i =0;
 	
 	/* Check that the number of arguments passed to this function is correct.
 	** If not, jump to wrong_number_args. 
 	*/
-	if( nVal != 2 ) {
+	if( nval != 2 ) {
 		fprintf(stderr, "nval != ncol\n");
 		goto wrong_number_args;
 	}
@@ -234,27 +232,24 @@ rank_func(sqlite3_context *pCtx, int nVal, sqlite3_value **apval)
 	
 	for (temp = strtok(query, " "); temp; temp = strtok(NULL, " ")) {
 		term = stemword(temp);
-		tf += get_tf(docid, term);
-		idf += get_idf(term);
+		weight += get_weight(docid, term);
 		i++;
 		free(term);
 	}
 	
-	tf /= i;
-	idf /= i;
-	score = tf * idf;
+	weight /= i;
 
-	sqlite3_result_double(pCtx, score);
+	sqlite3_result_double(pctx, weight);
 	free(query);
 	return;
 
 	/* Jump here if the wrong number of arguments are passed to this function */
 	wrong_number_args:
-		sqlite3_result_error(pCtx, "wrong number of arguments to function rank()", -1);
+		sqlite3_result_error(pctx, "wrong number of arguments to function rank()", -1);
 }
 
 static double
-get_tf(int docid, const char *term)
+get_weight(int docid, const char *term)
 {
 	sqlite3 *db = NULL;
 	int rc = 0;
@@ -272,7 +267,7 @@ get_tf(int docid, const char *term)
 	}
 
 	sqlite3_extended_result_codes(db, 1);
-	sqlstr = "select tf from mandb_tf where docid = :docid and term = :term";
+	sqlstr = "select weight from mandb_weights where docid = :docid and term = :term";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
@@ -300,53 +295,6 @@ get_tf(int docid, const char *term)
 		return 0.0;
 	}
 	
-	if (sqlite3_step(stmt) == SQLITE_ROW) {
-		ret_val = (double) sqlite3_column_double(stmt, 0);
-	}
-	
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
-	sqlite3_shutdown();
-	return ret_val;
-}
-
-static double
-get_idf(const char *term)
-{
-	sqlite3 *db = NULL;
-	int rc = 0;
-	int idx = -1;
-	char *sqlstr = NULL;
-	sqlite3_stmt *stmt = NULL;
-	double ret_val = 0.0;
-		
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-
-	sqlite3_extended_result_codes(db, 1);
-	sqlstr = "select idf from mandb_idf where term = :term";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":term");
-	rc = sqlite3_bind_text(stmt, idx, term, -1, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-
 	if (sqlite3_step(stmt) == SQLITE_ROW) {
 		ret_val = (double) sqlite3_column_double(stmt, 0);
 	}
