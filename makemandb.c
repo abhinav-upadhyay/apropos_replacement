@@ -23,7 +23,7 @@ static int check_md5(const char *);
 static void cleanup(void);
 static int concat(char **, const char *);
 static int create_db(void);
-static void get_section(const char *);
+static void get_section(const struct mdoc *);
 static int insert_into_db(void);
 static	void pmdoc(const char *);
 static void pmdoc_node(const struct mdoc_node *);
@@ -229,8 +229,6 @@ traversedir(const char *file)
 			return;
 		}
 		
-		get_section(file);
-		
 		printf("parsing %s\n", file);
 		pmdoc(file);
 		if (insert_into_db() < 0)
@@ -282,6 +280,7 @@ pmdoc(const char *file)
 	if (mdoc == NULL)
 		return;
 
+	get_section(mdoc);
 	pmdoc_node(mdoc_node(mdoc));
 }
 
@@ -390,10 +389,10 @@ pmdoc_Sh(const struct mdoc_node *n)
 }
 
 static void
-get_section(const char *file)
+get_section(const struct mdoc *md)
 {
-	char *c = rindex(file, '.');
-	section = strdup(++c);
+	const struct mdoc_meta *md_meta = mdoc_meta(md);
+	section = strdup(md_meta->msec);
 }
 
 /* cleanup --
