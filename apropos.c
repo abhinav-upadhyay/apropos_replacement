@@ -257,7 +257,6 @@ get_weight(int docid, const char *term)
 	char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	double ret_val = 0.0;
-		
 	sqlite3_initialize();
 	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
 	if (rc != SQLITE_OK) {
@@ -267,7 +266,8 @@ get_weight(int docid, const char *term)
 	}
 
 	sqlite3_extended_result_codes(db, 1);
-	sqlstr = "select weight from mandb_weights where docid = :docid and term = :term";
+	sqlstr = "select weight / (select SUM(weight) from mandb_weights where docid = :docid1) "
+			"from mandb_weights where docid = :docid2 and term = :term";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
@@ -275,7 +275,17 @@ get_weight(int docid, const char *term)
 		return 0.0;
 	}
 	
-	idx = sqlite3_bind_parameter_index(stmt, ":docid");
+	idx = sqlite3_bind_parameter_index(stmt, ":docid1");
+	rc = sqlite3_bind_int(stmt, idx, docid);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return 0.0;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":docid2");
 	rc = sqlite3_bind_int(stmt, idx, docid);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
