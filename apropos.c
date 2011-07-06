@@ -143,8 +143,35 @@ remove_stopwords(char **query)
 {
 	int i = 0;
 	char *temp, *buf = NULL;
-	char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", "be",
-	"how", "is", "new", "or", "the", "to", "how", "what", "when", "which", "why", NULL};
+	char *stopwords[] = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
+	 "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", 
+	 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "again", "willing", 
+	 "always", "any", "around", "ask", "back", "been", "case", "did", "does", 
+	 "down", "each", "early","either", "end", "enough", "even", "every", "fact",
+	 "far", "few", "four", "further", "general", "good", "got", "great", "having",
+	 "high", "him", "his", "however", "if", "important", "in", "interest", "into",
+	 "it", "just", "keep", "keeps", "kind", "knew", "know", "large", "larger", 
+	 "last", "later", "latter", "latest", "least", "let", "like", "likely", 
+	 "long", "longer", "made", "many", "may", "me",	"might", "most", "mostly", 
+	 "much", "must", "my", "necessary", "need", "never", "needs", "next", "no",
+	"non", "noone", "not", "nothing", "number", "often", "old", "older", "once",
+	"only", "order", "our", "out", "over", "part", "per", "perhaps", "possible", 
+	"present", "problem", "quite", "rather", "really", "right", "room", "said", 
+	"same", "saw", "say", "says", "second", "see", "seem", "seemed", "seems",
+	"sees", "several", "shall", "should", "side", "sides", "small", "smaller", 
+	"so", "some", "something", "state",	"states", "still", "such", "sure", "take", 
+	"taken", "then", "them", "their", "there", "therefore", "thing", "think", 
+	"thinks", "though", "three", "thus", "together", "too", "took", "toward", 
+	"turn", "two", "until",	"upon", "us", "use", "used", "uses", "very", "want", 
+	"wanted", "wants", "was", "way", "ways", "we", "well", "went", "were", 
+	"whether", "with", "within", "without", "work", "would", "year", "yet", "you",
+	"about", "also", "all", "an", "another", "and", "are", "as", "at", "be", 
+	"before", "between", "below", "by", "bye", "but", "can", "consist",	"could", 
+	"follow", "from", "full", "give", "given", "have", "has", "had", "here", 
+	"how", "is", "names", "of", "off", "on", "or", "the", "this", "up",	"that", 
+	"to", "new", "what", "when", "why", "will", "because", "these", "those",  
+	NULL
+	};
 	
 	/* initialize the hash table for stop words */
 	if (!hcreate(sizeof(stopwords) * sizeof(char)))
