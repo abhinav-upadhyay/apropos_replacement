@@ -39,7 +39,6 @@
 #define DBPATH "./apropos.db"
 
 static double get_weight(int, const char *);
-static double get_idf(const char *);
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
 static int search(const char *);
@@ -83,7 +82,7 @@ search(const char *query)
 	sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
-	char *sqlstr = NULL;
+	const char *sqlstr = NULL;
 	char *name = NULL;
 	char *section = NULL;
 	char *snippet = NULL;
@@ -171,8 +170,9 @@ static void
 remove_stopwords(char **query)
 {
 	int i = 0;
-	char *temp, *buf = NULL;
-	char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", "be",
+	const char *temp;
+	char *buf = NULL;
+	const char *stopwords[] = {"a", "about", "also", "all", "an", "another", "and", "are", "be",
 	"how", "is", "new", "or", "the", "to", "how", "what", "when", "which", "why", NULL};
 	
 	/* initialize the hash table for stop words */
@@ -190,7 +190,7 @@ remove_stopwords(char **query)
 	/* filter out the stop words from the query */
 	for (temp = strtok(*query, " "); temp; temp = strtok(NULL, " ")) {
 		 ENTRY ent;
-		 ent.key = temp;
+		 ent.key = (char *)temp;
 		 ent.data = NULL;
 		 if (hsearch(ent, FIND) == NULL) {
 		 	if (buf == NULL) {
@@ -283,7 +283,7 @@ get_weight(int docid, const char *term)
 	sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
-	char *sqlstr = NULL;
+	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	double ret_val = 0.0;
 		

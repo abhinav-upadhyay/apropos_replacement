@@ -455,7 +455,7 @@ insert_into_db(void)
 	sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
-	char *sqlstr = NULL;
+	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	
 	if (name == NULL || name_desc == NULL || desc == NULL || md5_hash == NULL 
@@ -589,8 +589,7 @@ create_db(void)
 {
 	sqlite3 *db = NULL;
 	int rc = 0;
-	int idx = -1;
-	char *sqlstr = NULL;
+	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	struct stat sb;
 	
@@ -741,7 +740,7 @@ check_md5(const char *file)
 	sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
-	char *sqlstr = NULL;
+	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 
 	assert(file != NULL);
@@ -813,9 +812,7 @@ build_term_weights(void)
 {
 	sqlite3 *db = NULL;
 	int rc = 0;
-	int idx = -1;
-	char *sqlstr = NULL;
-	char *term = NULL;
+	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	
 	sqlite3_initialize();
@@ -881,7 +878,7 @@ get_tf(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
 	double tf = 0.0;
 	double col_weights[] = {2.0, 1.5, 0.75};
-	int *matchinfo;
+	unsigned int *matchinfo;
 	int ncol;
 	
 	/* Check that the number of arguments passed to this function is correct.
@@ -897,7 +894,7 @@ get_tf(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 		
 		
 	int icol;
-	int *phraseinfo = &matchinfo[2];
+	unsigned int *phraseinfo = &matchinfo[2];
 	for(icol = 1; icol < ncol; icol++) {
   		int nhitcount = phraseinfo[3*icol];
 		int nglobalhitcount = phraseinfo[3*icol+1];

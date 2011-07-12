@@ -1,6 +1,7 @@
 .include <bsd.own.mk>
 
 MDIST=	${NETBSDSRCDIR}/external/bsd/mdocml/dist
+MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
 
 PROGS=	makemandb apropos
 SRCS.makemandb=		makemandb.c sqlite3.c
@@ -11,7 +12,13 @@ CPPFLAGS+=-I${MDIST}
 CPPFLAGS+=-DSQLITE_ENABLE_FTS3
 CPPFLAGS+=-DSQLITE_ENABLE_FTS3_PARENTHESIS
 
-DPADD.makemandb+= 	/usr/src/external/bsd/mdocml/lib/libmandoc/libmandoc.a
-LDADD.makemandb+= 	-L/usr/src/external/bsd/mdocml/lib/libmandoc -lmandoc
+MDOCMLOBJDIR!=	cd ${MDOCDIR}/lib/libmandoc && ${PRINTOBJDIR}
+MDOCMLLIB=	${MDOCMLOBJDIR}/libmandoc.a
+
+DPADD.makemandb+= 	${MDOCMLLIB}
+LDADD.makemandb+= 	-L${MDOCMLOBJDIR} -lmandoc
 LDADD+=	-lm
+
+MKMAN=	no
+
 .include <bsd.prog.mk>
