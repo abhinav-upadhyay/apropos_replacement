@@ -47,7 +47,7 @@
 #define MAXLINE 1024	//buffer size for fgets
 #define DBPATH "./apropos.db"
 
-static int build_term_weights(sqlite3 *db);
+static int build_term_weights(void);
 static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);
 static int concat(char **, const char *);
@@ -217,19 +217,19 @@ main(int argc, char *argv[])
 	if ((file = popen("man -p", "r")) == NULL)
 		err(EXIT_FAILURE, "fopen failed");
 	
-	if (db == NULL) {
-		sqlite3_initialize();
-		rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
-			             SQLITE_OPEN_CREATE, NULL);
-		if (rc != SQLITE_OK) {
-			fprintf(stderr, "traversedir: Could not open database\n");
-			sqlite3_close(db);
-			sqlite3_shutdown();
-			cleanup();
-			return -1;
-		}
+	
+	sqlite3_initialize();
+	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
+		             SQLITE_OPEN_CREATE, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "traversedir: Could not open database\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		cleanup();
+		return -1;
 	}
 	
+	// begin the transaction for indexing the pages	
 	const char *sqlstr = "BEGIN";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -244,6 +244,7 @@ main(int argc, char *argv[])
 		sqlite3_shutdown();
 		return -1;
 	}
+	sqlite3_finalize(stmt);
 	
 	while (fgets(line, MAXLINE, file) != NULL) {
 		/* remove the new line character from the string */
@@ -252,17 +253,11 @@ main(int argc, char *argv[])
 		traversedir(line, db);
 	}
 	
-	
-	
 	if (pclose(file) == -1)
 		errx(EXIT_FAILURE, "pclose error");
 	mparse_free(mp);
-
-	/* Now, calculate the weights of each unique term in the index */
-	printf("Computing term weights\n");
-	if (build_term_weights(db) < 0)
-		fprintf(stderr, "Could not compute the term weights. Please run makemandb again\n");
 	
+	// commit the transaction 
 	sqlstr = "COMMIT";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -277,10 +272,15 @@ main(int argc, char *argv[])
 		sqlite3_shutdown();
 		return -1;
 	}
-		
+	
+	sqlite3_finalize(stmt);
 	sqlite3_close(db);
-	sqlite3_shutdown();
-		
+	
+	/* Now, calculate the weights of each unique term in the index */
+	printf("Computing term weights\n");
+	if (build_term_weights() < 0)
+		fprintf(stderr, "Could not compute the term weights. Please run makemandb again\n");
+	
 	cleanup();
 	return 0;
 }
@@ -318,7 +318,7 @@ traversedir(const char *file, sqlite3 *db)
 		return;
 	}
 	
-	/* if it is a directory`, traverse it recursively */
+	/* if it is a directory, traverse it recursively */
 	else if (S_ISDIR(sb.st_mode)) {
 		if ((dp = opendir(file)) == NULL) {
 			fprintf(stderr, "opendir error: %s\n", file);
@@ -759,7 +759,6 @@ concat(char **dst, const char *src)
 static int 
 check_md5(const char *file, sqlite3 *db)
 {
-	//sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
 	const char *sqlstr = NULL;
@@ -772,20 +771,9 @@ check_md5(const char *file, sqlite3 *db)
 		return -1;
 	}
 	
-	/*sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		free(buf);
-		return -1;
-	}*/
-
 	sqlstr = "select * from mandb_md5 where md5_hash = :md5_hash";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		//sqlite3_close(db);
-		//sqlite3_shutdown();
 		free(buf);
 		return -1;
 	}
@@ -795,24 +783,18 @@ check_md5(const char *file, sqlite3 *db)
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		//sqlite3_close(db);
-		//sqlite3_shutdown();
 		free(buf);
 		return -1;
 	}
 	
 	if (sqlite3_step(stmt) == SQLITE_ROW) {
 		sqlite3_finalize(stmt);	
-		//sqlite3_close(db);
-		//sqlite3_shutdown();
 		free(buf);
 		return 1;
 	}
 	
 	md5_hash = strdup(buf);
 	sqlite3_finalize(stmt);	
-	//sqlite3_close(db);
-	//sqlite3_shutdown();
 	free(buf);
 	return 0;
 }
@@ -830,21 +812,21 @@ check_md5(const char *file, sqlite3 *db)
 *										Number of documents in which t occurs)
 */
 static int
-build_term_weights(sqlite3 *db)
+build_term_weights(void)
 {
-//	sqlite3 *db = NULL;
+	sqlite3 *db = NULL;
 	int rc = 0;
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	
-	/*sqlite3_initialize();
+	sqlite3_initialize();
 	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
-	}*/
+	}
 	
 	sqlite3_extended_result_codes(db, 1);
 	
@@ -852,8 +834,8 @@ build_term_weights(sqlite3 *db)
 	                             get_tf, NULL, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "Not able to register function\n");
-		//sqlite3_close(db);
-		//sqlite3_shutdown();
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		return -1;
 	}
 	
@@ -862,8 +844,8 @@ build_term_weights(sqlite3 *db)
 	                             get_idf, NULL, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "Not able to register function\n");
-		//sqlite3_close(db);
-		//sqlite3_shutdown();
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		return -1;
 	}
 	
@@ -874,8 +856,8 @@ build_term_weights(sqlite3 *db)
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		//sqlite3_close(db);
-		//sqlite3_shutdown();
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		return -1;
 	}
 	
@@ -883,14 +865,14 @@ build_term_weights(sqlite3 *db)
 	if (rc != SQLITE_DONE) {
 		fprintf(stderr, "Could not calculate term weights\n");
 		sqlite3_finalize(stmt);
-		//sqlite3_close(db);
-		//sqlite3_shutdown();
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		return -1;
 	}		
 		
 	sqlite3_finalize(stmt);	
-	//sqlite3_close(db);
-	//sqlite3_shutdown();
+	sqlite3_close(db);
+	sqlite3_shutdown();
 	
 	return 0;
 }
