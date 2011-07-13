@@ -48,18 +48,18 @@
 #define DBPATH "./apropos.db"
 
 static int build_term_weights(void);
-static int check_md5(const char *);
+static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);
 static int concat(char **, const char *);
 static int create_db(void);
 static void get_section(const struct mdoc *);
-static int insert_into_db(void);
+static int insert_into_db(sqlite3 *);
 static	void pmdoc(const char *);
 static void pmdoc_node(const struct mdoc_node *);
 static void pmdoc_Nm(const struct mdoc_node *);
 static void pmdoc_Nd(const struct mdoc_node *);
 static void pmdoc_Sh(const struct mdoc_node *);
-static void traversedir(const char *);
+static void traversedir(const char *, sqlite3 *db);
 static void get_tf(sqlite3_context *, int, sqlite3_value **);
 static void get_idf(sqlite3_context *, int, sqlite3_value **);
 
@@ -203,6 +203,10 @@ main(int argc, char *argv[])
 {
 	FILE *file;
 	char line[MAXLINE];
+	sqlite3 *db = NULL;
+	int rc;
+	sqlite3_stmt *stmt = NULL;
+	
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
 	/* Build the databases */
@@ -213,21 +217,70 @@ main(int argc, char *argv[])
 	if ((file = popen("man -p", "r")) == NULL)
 		err(EXIT_FAILURE, "fopen failed");
 	
+	
+	sqlite3_initialize();
+	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
+		             SQLITE_OPEN_CREATE, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "traversedir: Could not open database\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		cleanup();
+		return -1;
+	}
+	
+	// begin the transaction for indexing the pages	
+	const char *sqlstr = "BEGIN";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		cleanup();
+		return -1;
+	}
+	
+	if (sqlite3_step(stmt) != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	sqlite3_finalize(stmt);
+	
 	while (fgets(line, MAXLINE, file) != NULL) {
 		/* remove the new line character from the string */
 		line[strlen(line) - 1] = '\0';
 		/* Traverse the man page directories and parse the pages */
-		traversedir(line);
+		traversedir(line, db);
 	}
 	
 	if (pclose(file) == -1)
 		errx(EXIT_FAILURE, "pclose error");
 	mparse_free(mp);
-
+	
+	// commit the transaction 
+	sqlstr = "COMMIT";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		cleanup();
+		return -1;
+	}
+	
+	if (sqlite3_step(stmt) != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	sqlite3_finalize(stmt);
+	sqlite3_close(db);
+	
 	/* Now, calculate the weights of each unique term in the index */
+	printf("Computing term weights\n");
 	if (build_term_weights() < 0)
 		fprintf(stderr, "Could not compute the term weights. Please run makemandb again\n");
-		
+	
 	cleanup();
 	return 0;
 }
@@ -238,13 +291,13 @@ main(int argc, char *argv[])
 *  way to the parser.
 */
 static void
-traversedir(const char *file)
+traversedir(const char *file, sqlite3 *db)
 {
 	struct stat sb;
 	struct dirent *dirp;
 	DIR *dp;
 	char *buf;
-	
+		
 	if (stat(file, &sb) < 0) {
 		fprintf(stderr, "stat failed: %s", file);
 		return;
@@ -253,19 +306,19 @@ traversedir(const char *file)
 	/* if it is a regular file, pass it to the parser */
 	if (S_ISREG(sb.st_mode)) {
 		/* Avoid hardlinks to prevent duplicate entries in the database */
-		if (check_md5(file) != 0) {
+		if (check_md5(file, db) != 0) {
 			cleanup();
 			return;
 		}
 		
 		printf("parsing %s\n", file);
 		pmdoc(file);
-		if (insert_into_db() < 0)
+		if (insert_into_db(db) < 0)
 			fprintf(stderr, "Error indexing: %s\n", file);
 		return;
 	}
 	
-	/* if it is a directory`, traverse it recursively */
+	/* if it is a directory, traverse it recursively */
 	else if (S_ISDIR(sb.st_mode)) {
 		if ((dp = opendir(file)) == NULL) {
 			fprintf(stderr, "opendir error: %s\n", file);
@@ -281,7 +334,7 @@ traversedir(const char *file)
 						fprintf(stderr, "ENOMEM\n");
 					continue;
 				}
-				traversedir(buf);
+				traversedir(buf, db);
 				free(buf);
 			}
 		}
@@ -450,9 +503,8 @@ cleanup(void)
 *   error. Otherwise, store the data in the database and return 0
 */
 static int
-insert_into_db(void)
+insert_into_db(sqlite3 *db)
 {
-	sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
 	const char *sqlstr = NULL;
@@ -465,16 +517,6 @@ insert_into_db(void)
 	}
 	else {
 
-		sqlite3_initialize();
-		rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
-				             SQLITE_OPEN_CREATE, NULL);
-		if (rc != SQLITE_OK) {
-			sqlite3_close(db);
-			sqlite3_shutdown();
-			cleanup();
-			return -1;
-		}
-		
 		sqlite3_extended_result_codes(db, 1);
 
 /*------------------------ Populate the mandb table------------------------------ */
@@ -482,8 +524,6 @@ insert_into_db(void)
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -493,8 +533,6 @@ insert_into_db(void)
 		if (rc != SQLITE_OK) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -504,8 +542,6 @@ insert_into_db(void)
 		if (rc != SQLITE_OK) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -515,8 +551,6 @@ insert_into_db(void)
 		if (rc != SQLITE_OK) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -526,8 +560,6 @@ insert_into_db(void)
 		if (rc != SQLITE_OK) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -536,8 +568,6 @@ insert_into_db(void)
 		if (rc != SQLITE_DONE) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -548,8 +578,6 @@ insert_into_db(void)
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -559,8 +587,6 @@ insert_into_db(void)
 		if (rc != SQLITE_OK) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
@@ -569,15 +595,11 @@ insert_into_db(void)
 		if (rc != SQLITE_DONE) {
 			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
 			cleanup();
 			return -1;
 		}
 	
 		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
 		cleanup();
 		return 0;
 	}
@@ -735,9 +757,8 @@ concat(char **dst, const char *src)
 *                 against the database
 */
 static int 
-check_md5(const char *file)
+check_md5(const char *file, sqlite3 *db)
 {
-	sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
 	const char *sqlstr = NULL;
@@ -750,20 +771,9 @@ check_md5(const char *file)
 		return -1;
 	}
 	
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		free(buf);
-		return -1;
-	}
-
 	sqlstr = "select * from mandb_md5 where md5_hash = :md5_hash";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
 		free(buf);
 		return -1;
 	}
@@ -773,24 +783,18 @@ check_md5(const char *file)
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
 		free(buf);
 		return -1;
 	}
 	
 	if (sqlite3_step(stmt) == SQLITE_ROW) {
 		sqlite3_finalize(stmt);	
-		sqlite3_close(db);
-		sqlite3_shutdown();
 		free(buf);
 		return 1;
 	}
 	
 	md5_hash = strdup(buf);
 	sqlite3_finalize(stmt);	
-	sqlite3_close(db);
-	sqlite3_shutdown();
 	free(buf);
 	return 0;
 }
