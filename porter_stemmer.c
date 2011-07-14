@@ -30,6 +30,10 @@
 #define TRUE 1
 #define FALSE 0
 
+int stem(char *, int, int);
+void increase_s(void);
+char *stemword(char *);
+
 /* The main part of the stemming algorithm starts here. b is a buffer
    holding a word to be stemmed. The letters are in b[k0], b[k0+1] ...
    ending at b[k]. In fact k0 = 0 in this demo program. k is readjusted
@@ -98,10 +102,10 @@ static int vowelinstem()
 
 /* doublec(j) is TRUE <=> j,(j-1) contain a double consonant. */
 
-static int doublec(int j)
-{  if (j < k0+1) return FALSE;
-   if (b[j] != b[j-1]) return FALSE;
-   return cons(j);
+static int doublec(int x)
+{  if (x < k0+1) return FALSE;
+   if (b[x] != b[x-1]) return FALSE;
+   return cons(x);
 }
 
 /* cvc(i) is TRUE <=> i-2,i-1,i has the form consonant - vowel - consonant
@@ -123,7 +127,7 @@ static int cvc(int i)
 
 /* ends(s) is TRUE <=> k0,...k ends with the string s. */
 
-static int ends(char * s)
+static int ends(const char * s)
 {  int length = s[0];
    if (s[length] != b[k]) return FALSE; /* tiny speed-up */
    if (length > k-k0+1) return FALSE;
@@ -135,7 +139,7 @@ static int ends(char * s)
 /* setto(s) sets (j+1),...k to the characters in the string s, readjusting
    k. */
 
-static void setto(char * s)
+static void setto(const char * s)
 {  int length = s[0];
    memmove(b+j+1,s+1,length);
    k = j+length;
@@ -143,7 +147,7 @@ static void setto(char * s)
 
 /* r(s) is used further down. */
 
-static void r(char * s) { if (m() > 0) setto(s); }
+static void r(const char * s) { if (m() > 0) setto(s); }
 
 /* step1ab() gets rid of plurals and -ed or -ing. e.g.
 
@@ -290,7 +294,7 @@ static void step5()
 {  j = k;
    if (b[k] == 'e')
    {  int a = m();
-      if (a > 1 || a == 1 && !cvc(k-1)) k--;
+      if (a > 1 || (a == 1 && !cvc(k-1))) k--;
    }
    if (b[k] == 'l' && doublec(k) && m() > 1) k--;
 }
@@ -304,8 +308,8 @@ static void step5()
    file.
 */
 
-int stem(char * p, int i, int j)
-{  b = p; k = j; k0 = i; /* copy the parameters into statics */
+int stem(char * p, int i, int x)
+{  b = p; k = x; k0 = i; /* copy the parameters into statics */
    if (k <= k0+1) return k; /*-DEPARTURE-*/
 
    /* With this line, strings of length 1 or 2 don't go through the
@@ -328,7 +332,7 @@ static char * s;         /* a char * (=string) pointer; passed into b above */
 #define INC 50           /* size units in which s is increased */
 static int i_max = INC;  /* maximum offset in s */
 
-void increase_s()
+void increase_s(void)
 {  i_max += INC;
    {  char * new_s = (char *) malloc(i_max+1);
       { int i; for (i = 0; i < i_max; i++) new_s[i] = s[i]; } /* copy across */
@@ -341,9 +345,9 @@ void increase_s()
 char *stemword(char *term)
 {
 	s = (char *) malloc(i_max+1);
-  while(term)
-   {  int ch = *term;
-      if (ch == EOF) return;
+  while(*term)
+   {  int ch = *term++;
+      if (ch == 0) break;
       if (LETTER(ch))
       {  int i = 0;
          while(TRUE)
@@ -352,7 +356,7 @@ char *stemword(char *term)
             ch = tolower(ch); /* forces lower case */
 
             s[i] = ch; i++;
-            ch = *(++term);
+            ch = *(term++);
             if (!LETTER(ch)) { break; }
          }
          s[stem(s,0,i-1)+1] = 0;
@@ -362,16 +366,5 @@ char *stemword(char *term)
       }
       else putchar(ch);
    }
+   return s;
 }
-
-/*int main(int argc, char * argv[])
-{  int i;
-   s = (char *) malloc(i_max+1);
-   for (i = 1; i < argc; i++)
-   {  FILE * f = fopen(argv[i],"r");
-      if (f == 0) { fprintf(stderr,"File %s not found\n",argv[i]); exit(1); }
-      stemfile(f);
-   }
-   free(s);
-   return 0;
-}*/
