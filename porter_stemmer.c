@@ -368,15 +368,3 @@ char *stemword(char *term)
    }
    return s;
 }
-
-/*int main(int argc, char * argv[])
-{  int i;
-   s = (char *) malloc(i_max+1);
-   for (i = 1; i < argc; i++)
-   {  FILE * f = fopen(argv[i],"r");
-      if (f == 0) { fprintf(stderr,"File %s not found\n",argv[i]); exit(1); }
-      stemfile(f);
-   }
-   free(s);
-   return 0;
-}*/
