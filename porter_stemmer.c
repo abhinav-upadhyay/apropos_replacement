@@ -344,10 +344,10 @@ void increase_s(void)
 
 char *stemword(char *term)
 {
-  s = (char *) malloc(i_max+1);
-  while(TRUE)
+	s = (char *) malloc(i_max+1);
+  while(*term)
    {  int ch = *term++;
-      if (ch == 0) return s;
+      if (ch == 0) break;
       if (LETTER(ch))
       {  int i = 0;
          while(TRUE)
@@ -362,9 +362,11 @@ char *stemword(char *term)
          s[stem(s,0,i-1)+1] = 0;
          /* the previous line calls the stemmer and uses its result to
             zero-terminate the string in s */
+         return s;
       }
-      else *s++ = ch;
+      else putchar(ch);
    }
+   return s;
 }
 
 /*int main(int argc, char * argv[])
