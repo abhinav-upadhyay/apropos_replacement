@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zlib.h>
 
 #include "man.h"
 #include "mandoc.h"
@@ -68,6 +69,9 @@ static void traversedir(const char *, sqlite3 *db);
 static void get_tf(sqlite3_context *, int, sqlite3_value **);
 static void get_idf(sqlite3_context *, int, sqlite3_value **);
 static char *lower(char *);
+static void zip(sqlite3_context *, int, sqlite3_value **);
+static void unzip(sqlite3_context *, int, sqlite3_value **);
+
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
@@ -672,6 +676,24 @@ insert_into_db(sqlite3 *db)
 	else {
 
 		sqlite3_extended_result_codes(db, 1);
+		
+		rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
+	                             zip, NULL, NULL);
+		if (rc != SQLITE_OK) {
+			fprintf(stderr, "Not able to register function: compress\n");
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			return -1;
+		}
+	
+		rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
+			                         unzip, NULL, NULL);
+		if (rc != SQLITE_OK) {
+			fprintf(stderr, "Not able to register function: uncompress\n");
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			return -1;
+		}
 
 /*------------------------ Populate the mandb table------------------------------ */
 		sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc)";
@@ -782,9 +804,11 @@ create_db(void)
 		sqlite3_shutdown();
 		return -1;
 	}
+	
+	
 /*------------------------ Build the mandb table------------------------------ */
 	sqlstr = "create virtual table mandb using fts4(section, name, \
-	name_desc, desc, tokenize=porter)";
+	name_desc, desc, compress=zip, uncompress=unzip, tokenize=porter )";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
@@ -984,6 +1008,24 @@ build_term_weights(void)
 	
 	sqlite3_extended_result_codes(db, 1);
 	
+	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
+	                             zip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: compress\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
+	                             unzip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: uncompress\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
 	rc = sqlite3_create_function(db, "get_tf", 1, SQLITE_ANY, NULL, 
 	                             get_tf, NULL, NULL);
 	if (rc != SQLITE_OK) {
@@ -1107,4 +1149,35 @@ lower(char *str)
 		*str++ = c;
 	}
 	return str;
+}
+
+static void
+zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
+{	
+	const Bytef *source = sqlite3_value_text(apval[0]);
+	uLong sourcelen = strlen((const char *)source);
+	uLong destlen = (sourcelen + 12) + (int)(sourcelen + 12) * .01/100;
+	Bytef *dest = (Bytef *) malloc(sizeof(Bytef) * destlen);
+	int ret_val = compress(dest, &destlen, source, sourcelen);
+	if (ret_val != Z_OK) {
+		sqlite3_result_error(pctx, "Error in compression", -1);
+	}
+	sqlite3_result_text(pctx, (const char *)dest, -1, NULL);
+	return;
+}
+
+
+static void
+unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
+{	
+	const Bytef *source = (const Bytef *) sqlite3_value_text(apval[0]);
+	uLong sourcelen = strlen((const char *)source);
+	uLong destlen = (sourcelen + 12) + (int)(sourcelen + 12) * .01/100;
+	Bytef *dest = (Bytef *) malloc(sizeof(Bytef) * destlen);
+	int ret_val = uncompress(dest, &destlen, source, sourcelen);
+	if (ret_val != Z_OK) {
+		sqlite3_result_error(pctx, "Error in compression", -1);
+	}
+	sqlite3_result_text(pctx, (const char *)dest, -1, NULL);
+	return;
 }
