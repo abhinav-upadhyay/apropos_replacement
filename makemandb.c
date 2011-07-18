@@ -1101,10 +1101,11 @@ static char *
 lower(char *str)
 {
 	assert(str);
+	size_t i;
 	char c;
-	while (*str) {
-		c = tolower((unsigned char) *str);
-		*str++ = c;
+	for (i = 0; i < strlen(str); i++) {
+		c = tolower((unsigned char) str[i]);
+		str[i] = c;
 	}
 	return str;
 }
