@@ -49,7 +49,6 @@
 #define MAXLINE 1024	//buffer size for fgets
 #define DBPATH "./apropos.db"
 
-static int build_term_weights(void);
 static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);
 static int concat(char **, const char *);
@@ -65,8 +64,6 @@ static void pman_node(const struct man_node *n);
 static void pman_parse_node(const struct man_node *);
 static void pman_sh(const struct man_node *);
 static void traversedir(const char *, sqlite3 *db);
-static void get_tf(sqlite3_context *, int, sqlite3_value **);
-static void get_idf(sqlite3_context *, int, sqlite3_value **);
 static char *lower(char *);
 
 static char *name = NULL;	// for storing the name of the man page
@@ -318,12 +315,7 @@ main(int argc, char *argv[])
 	
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
-	
-	/* Now, calculate the weights of each unique term in the index */
-	printf("Computing term weights\n");
-	if (build_term_weights() < 0)
-		fprintf(stderr, "Could not compute the term weights. Please run makemandb again\n");
-	
+	sqlite3_shutdown();
 	cleanup();
 	return 0;
 }
@@ -495,26 +487,24 @@ pmdoc_Nd(const struct mdoc_node *n)
 static void
 pmdoc_Sh(const struct mdoc_node *n)
 {
-	if (n->sec == SEC_DESCRIPTION) {
-		for(n = n->child; n; n = n->next) {
-			if (n->type == MDOC_TEXT) {
-				if (desc == NULL)
-					desc = strdup(n->string);
-				else {
-					if (concat(&desc, n->string) < 0)
-						return;
-				}
+	for(n = n->child; n; n = n->next) {
+		if (n->type == MDOC_TEXT) {
+			if (desc == NULL)
+				desc = strdup(n->string);
+			else {
+				if (concat(&desc, n->string) < 0)
+					return;
 			}
-			else { 
-				/* On encountering a .Nm macro, substitute it with it's previously
-				* cached value of the argument
-				*/
-				if (mdocs[n->tok] == pmdoc_Nm && name != NULL)
-					(*mdocs[n->tok])(n);
-				/* otherwise call pmdoc_Sh again to handle the nested macros */
-				else
-					pmdoc_Sh(n);
-			}
+		}
+		else { 
+			/* On encountering a .Nm macro, substitute it with it's previously
+			* cached value of the argument
+			*/
+			if (mdocs[n->tok] == pmdoc_Nm && name != NULL)
+				(*mdocs[n->tok])(n);
+			/* otherwise call pmdoc_Sh again to handle the nested macros */
+			else
+				pmdoc_Sh(n);
 		}
 	}
 }
@@ -801,26 +791,6 @@ create_db(void)
 	}
 	sqlite3_finalize(stmt);
 
-/*------------------------ Build the mandb_aux table------------------------------ */	
-	sqlstr = "create virtual table mandb_aux using fts4aux(mandb)";
-
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-
-	sqlite3_finalize(stmt);
-
 /*------------------------ Build the mandb_md5 table------------------------------ */	
 	sqlstr = "create table mandb_md5(md5_hash)";
 
@@ -839,27 +809,6 @@ create_db(void)
 		return -1;
 	}
 		
-	sqlite3_finalize(stmt);
-
-/*------------------------ Build the mandb_weights table------------------------------ */	
-	sqlstr = "create table mandb_weights(docid, term, weight, "
-			"constraint pk_mandb_weights primary key(docid, term)) ";
-
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
 	sqlite3_shutdown();
@@ -951,150 +900,6 @@ check_md5(const char *file, sqlite3 *db)
 	sqlite3_finalize(stmt);	
 	free(buf);
 	return 0;
-}
-
-/*
-* build_term_weights--
-*  Compute the weight of all the terms in the corpus and store them in the mandb_weights table.
-*
-*  Weight of term t for document d = term frequency of t in d * inverse document frequency of t
-*
-*  Term Frequency of term t in document d = Number of times t occurs in d / 
-*                                        Number of times t appears in all documents
-*
-*  Inverse document frequenct of t = log(Total number of documents / 
-*										Number of documents in which t occurs)
-*/
-static int
-build_term_weights(void)
-{
-	sqlite3 *db = NULL;
-	int rc = 0;
-	const char *sqlstr = NULL;
-	sqlite3_stmt *stmt = NULL;
-	
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	sqlite3_extended_result_codes(db, 1);
-	
-	rc = sqlite3_create_function(db, "get_tf", 1, SQLITE_ANY, NULL, 
-	                             get_tf, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function\n");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	
-	rc = sqlite3_create_function(db, "get_idf", 2, SQLITE_ANY, NULL, 
-	                             get_idf, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function\n");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	sqlstr = "insert into mandb_weights select mandb.docid, mandb_aux.term, "
-	"get_tf(matchinfo(mandb)) * get_idf((select count(docid) from mandb), mandb_aux.documents)"
-	" from mandb, mandb_aux where mandb_aux.col=\'*\' and mandb match mandb_aux.term";
-          
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "Could not calculate term weights\n");
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}		
-		
-	sqlite3_finalize(stmt);	
-	sqlite3_close(db);
-	sqlite3_shutdown();
-	
-	return 0;
-}
-
-static void
-get_tf(sqlite3_context *pctx, int nval, sqlite3_value **apval)
-{
-	double tf = 0.0;
-	double col_weights[] = {2.0, 1.5, 0.75};
-	unsigned int *matchinfo;
-	int ncol;
-	
-	/* Check that the number of arguments passed to this function is correct.
-	** If not, jump to wrong_number_args. 
-	*/
-	if( nval != 1 ) {
-		fprintf(stderr, "nval != ncol\n");
-		goto wrong_number_args;
-	}
-	
-	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
-	ncol = matchinfo[1];
-		
-		
-	int icol;
-	unsigned int *phraseinfo = &matchinfo[2];
-	for(icol = 1; icol < ncol; icol++) {
-  		int nhitcount = phraseinfo[3*icol];
-		int nglobalhitcount = phraseinfo[3*icol+1];
-		double weight = col_weights[icol - 1];
-		
-		if (nglobalhitcount > 0)
-			tf += ((double)nhitcount / nglobalhitcount) * weight;
-	}
-	
-	sqlite3_result_double(pctx, tf);
-	return;
-
-	/* Jump here if the wrong number of arguments are passed to this function */
-	wrong_number_args:
-		sqlite3_result_error(pctx, "wrong number of arguments to function rank()", -1);
-}
-
-static void
-get_idf(sqlite3_context *pctx, int nval, sqlite3_value **apval)
-{
-	double idf = 0.0;
-		
-	/* Check that the number of arguments passed to this function is correct.
-	** If not, jump to wrong_number_args. 
-	*/
-	if( nval != 2 ) {
-		fprintf(stderr, "nval != ncol\n");
-		goto wrong_number_args;
-	}
-	
-	int ndoc = sqlite3_value_int(apval[0]);
-	int ndocshit = (int) sqlite3_value_int(apval[1]);
-	
-	if (ndocshit != 0)
-		idf = log((double)ndoc / ndocshit) / log(ndoc);
-		
-	sqlite3_result_double(pctx, idf);
-	return;
-
-	/* Jump here if the wrong number of arguments are passed to this function */
-	wrong_number_args:
-		sqlite3_result_error(pctx, "wrong number of arguments to function rank()", -1);
 }
 
 static char *
