@@ -38,12 +38,18 @@
 
 #define DBPATH "./apropos.db"
 
-static double get_weight(int, const char *);
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
 static int search(const char *);
 char *stemword(char *);
 static void usage(void);
+
+typedef struct  {
+double value;
+int status;
+} inverse_document_frequency;
+
+static inverse_document_frequency idf;
 
 int
 main(int argc, char *argv[])
@@ -52,6 +58,9 @@ main(int argc, char *argv[])
 	
 	if (argc < 2)
 		usage();
+	
+	idf.value = 0.0;
+	idf.status = 0;
 	
 	query = argv[1];
 	remove_stopwords(&query);
@@ -100,7 +109,7 @@ search(const char *query)
 	
 	sqlite3_extended_result_codes(db, 1);
 	
-	rc = sqlite3_create_function(db, "rank_func", 2, SQLITE_ANY, NULL, 
+	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, NULL, 
 	                             rank_func, NULL, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "Not able to register function\n");
@@ -109,7 +118,7 @@ search(const char *query)
 		exit(-1);
 	}
 	
-	sqlstr = "select docid as d, section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(docid, :query) as rank "
+	sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pcxn\")) as rank "
 			 "from mandb where mandb match :query order by rank desc limit 10 OFFSET 0";
           
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -141,10 +150,10 @@ search(const char *query)
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		section = (char *) sqlite3_column_text(stmt, 1);
-		name = (char *) sqlite3_column_text(stmt, 2);
-		snippet = (char *) sqlite3_column_text(stmt, 3);
-		char *rank = (char *) sqlite3_column_text(stmt, 4);
+		section = (char *) sqlite3_column_text(stmt, 0);
+		name = (char *) sqlite3_column_text(stmt, 1);
+		snippet = (char *) sqlite3_column_text(stmt, 2);
+		char *rank = (char *) sqlite3_column_text(stmt, 3);
  		printf("%s(%s)\t%s\n%s\n\n", name, section, rank, snippet);
 	}
 			
@@ -264,109 +273,59 @@ usage(void)
 /*
 * rank_func
 *  Sqlite user defined function for ranking the documents.
-*  For each phrase of the query, it fetches the tf and idf from the db and adds them over.
+*  For each phrase of the query, it computes the tf and idf adds them over.
 *  It computes the final rank, by multiplying tf and idf together.
+*  Weight of term t for document d = term frequency of t in d * inverse document frequency of t
+*
+*  Term Frequency of term t in document d = Number of times t occurs in d / 
+*                                        Number of times t appears in all documents
+*
+*  Inverse document frequenct of t = log(Total number of documents / 
+*										Number of documents in which t occurs)
 */
 static void
 rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
-	int docid;
-	char *query, *temp, *term;
-	double weight = 0.0;
-	int i =0;
-	
+	double tf = 0.0;
+	double col_weights[] = {2.0, 1.5, 0.25};
+	unsigned int *matchinfo;
+	int ncol;
+	int nphrase;
+	int iphrase;
+	int ndoc;
 	/* Check that the number of arguments passed to this function is correct.
 	** If not, jump to wrong_number_args. 
 	*/
-	if( nval != 2 ) {
+	if( nval != 1 ) {
 		fprintf(stderr, "nval != ncol\n");
 		goto wrong_number_args;
 	}
 	
-	docid = (int) sqlite3_value_int(apval[0]);
- 	query = strdup((char *) sqlite3_value_text(apval[1]));
+	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
+	nphrase = matchinfo[0];
+	ncol = matchinfo[1];
+	ndoc = matchinfo[2 + 3 * ncol * nphrase];
+	for (iphrase = 0; iphrase < nphrase; iphrase++) {
+		int icol;
+		unsigned int *phraseinfo = &matchinfo[2 + iphrase * ncol * 3];
+		for(icol = 1; icol < ncol; icol++) {
+  			int nhitcount = phraseinfo[3 * icol];
+			int nglobalhitcount = phraseinfo[3 * icol + 1];
+			int ndocshitcount = phraseinfo[3 * icol + 2];
+			double weight = col_weights[icol - 1];
+			if (idf.status == 0 && ndocshitcount)
+				idf.value += log(((double)ndoc  / ndocshitcount)) / log(ndoc);
 	
-	for (temp = strtok(query, " "); temp; temp = strtok(NULL, " ")) {
-		term = stemword(temp);
-		weight += get_weight(docid, term);
-		i++;
-		free(term);
+			if (nglobalhitcount > 0 && nhitcount)
+				tf += ((double)nhitcount / nglobalhitcount) * weight;
+		}
 	}
-	
-	weight /= i;
-
-	sqlite3_result_double(pctx, weight);
-	free(query);
+	idf.status = 1;
+	double score = (tf * idf.value );
+	sqlite3_result_double(pctx, score);
 	return;
 
 	/* Jump here if the wrong number of arguments are passed to this function */
 	wrong_number_args:
 		sqlite3_result_error(pctx, "wrong number of arguments to function rank()", -1);
-}
-
-static double
-get_weight(int docid, const char *term)
-{
-	sqlite3 *db = NULL;
-	int rc = 0;
-	int idx = -1;
-	const char *sqlstr = NULL;
-	sqlite3_stmt *stmt = NULL;
-	double ret_val = 0.0;
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-
-	sqlite3_extended_result_codes(db, 1);
-	sqlstr = "select weight / (select SUM(weight) from mandb_weights where docid = :docid1) "
-			"from mandb_weights where docid = :docid2 and term = :term";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":docid1");
-	rc = sqlite3_bind_int(stmt, idx, docid);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":docid2");
-	rc = sqlite3_bind_int(stmt, idx, docid);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":term");
-	rc = sqlite3_bind_text(stmt, idx, term, -1, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return 0.0;
-	}
-	
-	if (sqlite3_step(stmt) == SQLITE_ROW) {
-		ret_val = (double) sqlite3_column_double(stmt, 0);
-	}
-	
-	sqlite3_finalize(stmt);
-	sqlite3_close(db);
-	sqlite3_shutdown();
-	return ret_val;
 }
