@@ -18,7 +18,7 @@ MDOCMLLIB=	${MDOCMLOBJDIR}/libmandoc.a
 DPADD.makemandb+= 	${MDOCMLLIB}
 LDADD.makemandb+= 	-L${MDOCMLOBJDIR} -lmandoc
 LDADD+=	-lm
-
+LDADD+=	-lz
 MKMAN=	no
 
 .include <bsd.prog.mk>
