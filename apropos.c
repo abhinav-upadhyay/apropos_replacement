@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "apropos-utils.h"
 #include "sqlite3.h"
 
 #define DBPATH "./apropos.db"
