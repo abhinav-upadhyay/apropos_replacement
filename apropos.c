@@ -37,8 +37,6 @@
 #include "apropos-utils.h"
 #include "sqlite3.h"
 
-#define DBPATH "./apropos.db"
-
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
 static int search(const char *);
@@ -117,6 +115,24 @@ search(const char *query)
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		exit(-1);
+	}
+	
+	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
+	                             zip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: compress\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+
+	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
+		                         unzip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: uncompress\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
 	}
 	
 	sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pcxn\")) as rank "

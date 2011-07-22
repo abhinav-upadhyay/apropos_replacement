@@ -47,7 +47,6 @@
 #include "sqlite3.h"
 
 #define MAXLINE 1024	//buffer size for fgets
-#define DBPATH "./apropos.db"
 
 static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);

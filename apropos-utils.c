@@ -1,3 +1,32 @@
+/*-
+ * Copyright (c) 2011 The NetBSD Foundation, Inc.
+ * All rights reserved.
+ *
+ * This code is derived from software contributed to The NetBSD Foundation
+ * by Abhinav Upadhyay.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+ * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -10,15 +39,22 @@
 void
 zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {	
-	const Bytef *source = sqlite3_value_text(apval[0]);
-	uLong sourcelen = strlen((const char *)source);
-	uLong destlen = (sourcelen + 12) + (int)(sourcelen + 12) * .01/100;
-	Bytef *dest = (Bytef *) malloc(sizeof(Bytef) * destlen);
-	int ret_val = compress(dest, &destlen, source, sourcelen);
-	if (ret_val != Z_OK) {
-		sqlite3_result_error(pctx, "Error in compression", -1);
-	}
-	sqlite3_result_text(pctx, (const char *)dest, -1, NULL);
+	int nin, nout;
+	long int nout2;
+	const unsigned char * inbuf;
+	unsigned char *outbuf;
+	assert(nval == 1);
+	nin = sqlite3_value_bytes(apval[0]);
+	inbuf = (const unsigned char *) sqlite3_value_blob(apval[0]);
+	nout = nin + 13 + (nin + 999) / 1000;
+	outbuf = malloc(nout + 4);
+	outbuf[0] = nin >> 24 & 0xff;
+	outbuf[1] = nin >> 16 & 0xff;
+	outbuf[2] = nin >> 8 & 0xff;
+	outbuf[3] = nin & 0xff;
+	nout2 = (long int) nout;
+	compress(&outbuf[4], (unsigned long *) &nout2, inbuf, nin);
+	sqlite3_result_blob(pctx, outbuf, nout2 + 4, free);
 	return;
 }
 
@@ -26,15 +62,24 @@ zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 void
 unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {	
-	const Bytef *source = (const Bytef *) sqlite3_value_text(apval[0]);
-	uLong sourcelen = strlen((const char *)source);
-	uLong destlen = (sourcelen + 12) + (int)(sourcelen + 12) * .01/100;
-	Bytef *dest = (Bytef *) malloc(sizeof(Bytef) * destlen);
-	int ret_val = uncompress(dest, &destlen, source, sourcelen);
-	if (ret_val != Z_OK) {
-		sqlite3_result_error(pctx, "Error in compression", -1);
-	}
-	sqlite3_result_text(pctx, (const char *)dest, -1, NULL);
+	unsigned int nin, nout, rc;
+	const unsigned char * inbuf;
+	unsigned char *outbuf;
+	long int nout2;
+	
+	assert(nval == 1);
+	nin = sqlite3_value_bytes(apval[0]);
+	if (nin <= 4) 
+		return;
+	inbuf = sqlite3_value_blob(apval[0]);
+	nout = (inbuf[0] << 24) + (inbuf[1] << 16) + (inbuf[2] << 8) + inbuf[3];
+	outbuf = malloc(nout);
+	nout2 = (long int) nout;
+	rc = uncompress(outbuf, (unsigned long *) &nout2, &inbuf[4], nin);
+	if (rc != Z_OK)
+		free(outbuf);
+	else
+		sqlite3_result_blob(pctx, outbuf, nout2, free);
 	return;
 }
 
