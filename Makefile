@@ -5,7 +5,7 @@ MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
 
 PROGS=	makemandb apropos
 SRCS.makemandb=		makemandb.c sqlite3.c apropos-utils.c apropos-utils.h stopword_tokenizer.c stopword_tokenizer.h
-SRCS.apropos=	apropos.c sqlite3.c porter_stemmer.c apropos-utils.c apropos-utils.h stopword_tokenizer.c stopword_tokenizer.h
+SRCS.apropos=	apropos.c sqlite3.c apropos-utils.c apropos-utils.h stopword_tokenizer.c stopword_tokenizer.h
 
 .PATH:	${MDIST}
 CPPFLAGS+=-I${MDIST}
