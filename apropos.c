@@ -35,7 +35,9 @@
 #include <string.h>
 
 #include "apropos-utils.h"
+#include "fts3_tokenizer.h"
 #include "sqlite3.h"
+#include "stopword_tokenizer.h"
 
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
@@ -95,6 +97,7 @@ search(const char *query)
 	char *section = NULL;
 	char *snippet = NULL;
 	sqlite3_stmt *stmt = NULL;
+	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	
 	sqlite3_initialize();
 	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
@@ -107,7 +110,40 @@ search(const char *query)
 	}
 	
 	sqlite3_extended_result_codes(db, 1);
+	/* Register the tokenizer */
+	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
 	
+	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
+	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	
+	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)&stopword_tokenizer_module);
+	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
+	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, sizeof(stopword_tokenizer_module), SQLITE_STATIC);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		fprintf(stderr, "%s tokenizer error\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+	sqlite3_finalize(stmt);	
+	
+	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, NULL, 
 	                             rank_func, NULL, NULL);
 	if (rc != SQLITE_OK) {
@@ -117,6 +153,7 @@ search(const char *query)
 		exit(-1);
 	}
 	
+	/* Register the compress function: zip (apropos-utils.h) */
 	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
 	                             zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
@@ -126,6 +163,7 @@ search(const char *query)
 		return -1;
 	}
 
+	/* Register the uncompress function: unizp (apropos-utils.h) */
 	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
 		                         unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
@@ -135,6 +173,7 @@ search(const char *query)
 		return -1;
 	}
 	
+	/* Now, prepare the statement for doing the actual search query */
 	sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pcxn\")) as rank "
 			 "from mandb where mandb match :query order by rank desc limit 10 OFFSET 0";
           
