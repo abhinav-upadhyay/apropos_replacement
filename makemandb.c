@@ -55,7 +55,7 @@ static void cleanup(void);
 static int create_db(void);
 static void get_section(const struct mdoc *, const struct man *);
 static int insert_into_db(sqlite3 *);
-static	void begin_parse(const char *);
+static	void begin_parse(const char *, struct mparse *mp);
 static void pmdoc_node(const struct mdoc_node *);
 static void pmdoc_Nm(const struct mdoc_node *);
 static void pmdoc_Nd(const struct mdoc_node *);
@@ -63,15 +63,13 @@ static void pmdoc_Sh(const struct mdoc_node *);
 static void pman_node(const struct man_node *n);
 static void pman_parse_node(const struct man_node *);
 static void pman_sh(const struct man_node *);
-static void traversedir(const char *, sqlite3 *db);
+static void traversedir(const char *, sqlite3 *db, struct mparse *mp);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
 static char *desc = NULL; // for storing the DESCRIPTION section
 static char *md5_hash = NULL;
 static char *section = NULL;
-static struct mparse *mp = NULL;
-
 
 typedef	void (*pman_nf)(const struct man_node *n);
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
@@ -246,6 +244,7 @@ main(int argc, char *argv[])
 	sqlite3 *db = NULL;
 	int rc, idx;
 	sqlite3_stmt *stmt = NULL;
+	struct mparse *mp = NULL;
 	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
@@ -325,7 +324,7 @@ main(int argc, char *argv[])
 		/* remove the new line character from the string */
 		line[strlen(line) - 1] = '\0';
 		/* Traverse the man page directories and parse the pages */
-		traversedir(line, db);
+		traversedir(line, db, mp);
 	}
 	
 	if (pclose(file) == -1)
@@ -361,7 +360,7 @@ main(int argc, char *argv[])
 *  way to the parser.
 */
 static void
-traversedir(const char *file, sqlite3 *db)
+traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 {
 	struct stat sb;
 	struct dirent *dirp;
@@ -382,7 +381,7 @@ traversedir(const char *file, sqlite3 *db)
 		}
 		
 		printf("parsing %s\n", file);
-		begin_parse(file);
+		begin_parse(file, mp);
 		if (insert_into_db(db) < 0)
 			fprintf(stderr, "Error indexing: %s\n", file);
 		return;
@@ -404,7 +403,7 @@ traversedir(const char *file, sqlite3 *db)
 						fprintf(stderr, "ENOMEM\n");
 					continue;
 				}
-				traversedir(buf, db);
+				traversedir(buf, db, mp);
 				free(buf);
 			}
 		}
@@ -418,9 +417,9 @@ traversedir(const char *file, sqlite3 *db)
 *  parses the man page using libmandoc
 */
 static void
-begin_parse(const char *file)
+begin_parse(const char *file, struct mparse *mp)
 {
-	struct mdoc	*mdoc;
+	struct mdoc *mdoc;
 	struct man *man;
 	mparse_reset(mp);
 
