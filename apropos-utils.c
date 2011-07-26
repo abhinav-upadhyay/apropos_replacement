@@ -109,33 +109,29 @@ concat(char **dst, const char *src)
 	if (src == NULL)
 		return -1;
 
-	/* we should allow the destination string to be NULL */
+	/* if destination buffer dst is NULL, then simply strdup the source buffer */
 	if (*dst == NULL) {
-		null_status = 1;
-		dst_len = 0;
+		if ((*dst = strdup(src)) == NULL)
+			return -1;
+		else
+			return 0;
 	}
 	else	
 		dst_len = strlen(*dst);
 	
 	/* calculate total string length:
-	*one extra character for the nul byte 
+	*  one extra character for the nul byte 
+	*  and one for the space character 
 	*/	
-	total_len = dst_len + strlen(src) + 1;
+	total_len = dst_len + strlen(src) + 2;
 	
-	/* if *dst was not NULL, we need to append a space at its end. So incraese
-	*  the total_len accodingly
-	*/
-	if (null_status == 0)
-		total_len++;
-		
 	if ((*dst = (char *) realloc(*dst, total_len)) == NULL)
 		return -1;
 		
-	/* if *dst was not NULL initially, we need to append a space at it's end */
-	if (null_status == 0) {	
-		memcpy(*dst + dst_len, " ", 1);
-		dst_len++;
-	}
+	/* Append a space at the end of dst */
+	memcpy(*dst + dst_len, " ", 1);
+	dst_len++;
+	
 	
 	memcpy(*dst + dst_len, src, strlen(src) + 1);
 	

@@ -504,7 +504,8 @@ pmdoc_Nd(const struct mdoc_node *n)
 		if (n->type != MDOC_TEXT)
 			continue;
 
-		concat(&name_desc, n->string);
+		 if (concat(&name_desc, n->string) < 0)
+		 	return;
 	}
 }
 
@@ -566,9 +567,7 @@ pman_parse_node(const struct man_node *n)
 {
 	for (n = n->child; n; n = n->next) {
 		if (n->type == MAN_TEXT) {
-			if (desc == NULL)
-					desc = strdup(n->string);
-			else if (concat(&desc, n->string) < 0)
+			if (concat(&desc, n->string) < 0)
 				return;
 		}		
 		else
@@ -619,9 +618,7 @@ pman_sh(const struct man_node *n)
 		else {
 			for (n = n->child; n; n = n->next) {
 				if (n->type == MAN_TEXT && strcmp(n->string, head->string)) {
-					if (desc == NULL)
-						desc = strdup(n->string);
-					else if (concat(&desc, n->string) < 0)
+					if (concat(&desc, n->string) < 0)
 						return;
 				}					
 				else
