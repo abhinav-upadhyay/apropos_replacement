@@ -105,27 +105,38 @@ int
 concat(char **dst, const char *src)
 {
 	int total_len, dst_len;
+	int null_status = 0;	//whether *dst is NULL or not
 	if (src == NULL)
 		return -1;
 
 	/* we should allow the destination string to be NULL */
-	if (*dst == NULL)
+	if (*dst == NULL) {
+		null_status = 1;
 		dst_len = 0;
+	}
 	else	
 		dst_len = strlen(*dst);
 	
 	/* calculate total string length:
-	*one extra character for a space and one for the nul byte 
+	*one extra character for the nul byte 
 	*/	
-	total_len = dst_len + strlen(src) + 2;
+	total_len = dst_len + strlen(src) + 1;
+	
+	/* if *dst was not NULL, we need to append a space at its end. So incraese
+	*  the total_len accodingly
+	*/
+	if (null_status == 0)
+		total_len++;
 		
 	if ((*dst = (char *) realloc(*dst, total_len)) == NULL)
 		return -1;
 		
-	if (*dst != NULL) {	
+	/* if *dst was not NULL initially, we need to append a space at it's end */
+	if (null_status == 0) {	
 		memcpy(*dst + dst_len, " ", 1);
 		dst_len++;
 	}
+	
 	memcpy(*dst + dst_len, src, strlen(src) + 1);
 	
 	return 0;

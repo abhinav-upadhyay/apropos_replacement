@@ -489,12 +489,8 @@ pmdoc_Nm(const struct mdoc_node *n)
 	/* on encountering a .Nm macro in the DESCRIPTION section, copy the cached 
 	* value of name at the end of desc
 	*/
-	else if (n->sec == SEC_DESCRIPTION && name != NULL) {
-		if (desc == NULL)
-			desc = strdup(name);
-		else
-			concat(&desc, name);
-		}
+	else if (n->sec == SEC_DESCRIPTION && name != NULL)
+		concat(&desc, name);
 }
 
 /*
@@ -508,10 +504,7 @@ pmdoc_Nd(const struct mdoc_node *n)
 		if (n->type != MDOC_TEXT)
 			continue;
 
-		if (name_desc == NULL) 
-			name_desc = strdup(n->string);
-		else 
-			concat(&name_desc, n->string);
+		concat(&name_desc, n->string);
 	}
 }
 
@@ -524,12 +517,8 @@ pmdoc_Sh(const struct mdoc_node *n)
 {
 	for(n = n->child; n; n = n->next) {
 		if (n->type == MDOC_TEXT) {
-			if (desc == NULL)
-				desc = strdup(n->string);
-			else {
-				if (concat(&desc, n->string) < 0)
-					return;
-			}
+			if (concat(&desc, n->string) < 0)
+				return;
 		}
 		else { 
 			/* On encountering a .Nm macro, substitute it with it's previously
