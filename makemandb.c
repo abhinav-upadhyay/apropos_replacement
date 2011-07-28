@@ -64,10 +64,19 @@ static void pman_node(const struct man_node *n);
 static void pman_parse_node(const struct man_node *);
 static void pman_sh(const struct man_node *);
 static void traversedir(const char *, sqlite3 *db, struct mparse *mp);
+static void mdoc_parse_section(enum mdoc_sec, const char *string);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
 static char *desc = NULL; // for storing the DESCRIPTION section
+static char *lib = NULL; // for the LIBRARY section
+static char *synopsis = NULL; // for the SYNOPSIS section
+static char *return_vals = NULL; // RETURN VALUES
+static char *env = NULL; // ENVIRONMENT
+static char *files = NULL; // FILES
+static char *exit_status = NULL; // EXIT STATUS
+static char *diagnostics = NULL; // DIAGNOSTICS
+static char *errors = NULL; // ERRORS
 static char *md5_hash = NULL;
 static char *section = NULL;
 
@@ -449,13 +458,9 @@ pmdoc_node(const struct mdoc_node *n)
 		return;
 
 	switch (n->type) {
-	case (MDOC_HEAD):
-		/* FALLTHROUGH */
 	case (MDOC_BODY):
 		/* FALLTHROUGH */
 	case (MDOC_TAIL):
-		/* FALLTHROUGH */
-	case (MDOC_BLOCK):
 		/* FALLTHROUGH */
 	case (MDOC_ELEM):
 		if (mdocs[n->tok] == NULL)
@@ -484,12 +489,6 @@ pmdoc_Nm(const struct mdoc_node *n)
 			return;
 		}
 	}
-	
-	/* on encountering a .Nm macro in the DESCRIPTION section, copy the cached 
-	* value of name at the end of desc
-	*/
-	else if (n->sec == SEC_DESCRIPTION && name != NULL)
-		concat(&desc, name);
 }
 
 /*
@@ -517,18 +516,18 @@ pmdoc_Sh(const struct mdoc_node *n)
 {
 	for(n = n->child; n; n = n->next) {
 		if (n->type == MDOC_TEXT) {
-			if (concat(&desc, n->string) < 0)
-				return;
+			mdoc_parse_section(n->sec, n->string);
 		}
 		else { 
 			/* On encountering a .Nm macro, substitute it with it's previously
 			* cached value of the argument
 			*/
 			if (mdocs[n->tok] == pmdoc_Nm && name != NULL)
-				(*mdocs[n->tok])(n);
+				mdoc_parse_section(n->sec, name);
 			/* otherwise call pmdoc_Sh again to handle the nested macros */
 			else
 				pmdoc_Sh(n);
+			
 		}
 	}
 }
@@ -657,8 +656,25 @@ cleanup(void)
 		free(md5_hash);
 	if (section)
 		free(section);
-	
-	name = name_desc = desc = md5_hash = section = NULL;
+	if (lib)
+		free(lib);
+	if (synopsis)
+		free(synopsis);
+	if (return_vals)
+		free(return_vals);
+	if (env)
+		free(env);
+	if (files)
+		free(files);
+	if (exit_status)
+		free(exit_status);
+	if (diagnostics)
+		free(diagnostics);
+	if (errors)
+		free(errors);
+		
+	name = name_desc = desc = md5_hash = section = lib = synopsis = return_vals =
+	 env = files = exit_status = diagnostics = errors = NULL;
 }
 
 /* insert_into_db --
@@ -680,8 +696,6 @@ insert_into_db(sqlite3 *db)
 		return -1;
 	}
 	
-	
-	
 	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
                              zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
@@ -701,7 +715,9 @@ insert_into_db(sqlite3 *db)
 	}
 
 /*------------------------ Populate the mandb table------------------------------ */
-	sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc)";
+	sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc, :lib, "
+	":synopsis, :return_vals, :env, :files, :exit_status, :diagnostics, :errors)";
+	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -738,6 +754,78 @@ insert_into_db(sqlite3 *db)
 
 	idx = sqlite3_bind_parameter_index(stmt, ":desc");
 	rc = sqlite3_bind_text(stmt, idx, desc, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":lib");
+	rc = sqlite3_bind_text(stmt, idx, lib, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":synopsis");
+	rc = sqlite3_bind_text(stmt, idx, synopsis, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":return_vals");
+	rc = sqlite3_bind_text(stmt, idx, return_vals, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":env");
+	rc = sqlite3_bind_text(stmt, idx, env, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":files");
+	rc = sqlite3_bind_text(stmt, idx, files, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
+	rc = sqlite3_bind_text(stmt, idx, exit_status, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":diagnostics");
+	rc = sqlite3_bind_text(stmt, idx, diagnostics, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":errors");
+	rc = sqlite3_bind_text(stmt, idx, errors, -1, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -848,8 +936,12 @@ create_db(void)
 	
 /*------------------------ Build the mandb table------------------------------ */
 
-	sqlstr = "create virtual table mandb using fts4(section, name, \
-	name_desc, desc, compress=zip, uncompress=unzip, tokenize=stopword_tokenizer )";
+/*	sqlstr = "create virtual table mandb using fts4(section, name, "
+	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
+	" errors, compress=zip, uncompress=unzip, tokenize=stopword_tokenizer )";*/
+	sqlstr = "create virtual table mandb using fts4(section, name, "
+	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
+	" errors, tokenize=porter)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -945,4 +1037,52 @@ check_md5(const char *file, sqlite3 *db)
 	sqlite3_finalize(stmt);	
 	free(buf);
 	return 0;
+}
+
+/*
+* mdoc_parse_section--
+*  Utility function for parsing sections of the mdoc type pages.
+*  Takes two params:
+*   1. sec is an enum which indicates the section in which we are parsing presently
+*   2. string is the string which we need to append to the buffer for this particular
+*      section.
+*  The function appends string to the global section buffer and returns.
+*/
+static void
+mdoc_parse_section(enum mdoc_sec sec, const char *string)
+{
+	switch (sec) {
+		case SEC_LIBRARY:
+			concat(&lib, string);
+			break;
+		case SEC_SYNOPSIS:
+			concat(&synopsis, string);
+			//fprintf(stderr, "syn: %s\n", n->string);
+			break;
+		case SEC_RETURN_VALUES:
+			concat(&return_vals, string);
+			break;
+		case SEC_ENVIRONMENT:
+			concat(&env, string);
+			break;
+		case SEC_FILES:
+			concat(&files, string);
+			break;
+		case SEC_EXIT_STATUS:
+			concat(&exit_status, string);
+			break;
+		case SEC_DIAGNOSTICS:
+			concat(&diagnostics, string);
+			break;
+		case SEC_ERRORS:
+			concat(&errors, string);
+			break;
+		case SEC_NAME:
+			break;
+		case SEC_DESCRIPTION:
+			concat(&desc, string);
+			break;
+		default:
+			break;
+	}
 }
