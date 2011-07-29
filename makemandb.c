@@ -61,8 +61,9 @@ static void pmdoc_Nm(const struct mdoc_node *);
 static void pmdoc_Nd(const struct mdoc_node *);
 static void pmdoc_Sh(const struct mdoc_node *);
 static void pman_node(const struct man_node *n);
-static void pman_parse_node(const struct man_node *);
+static void pman_parse_node(const struct man_node *, char **);
 static void pman_sh(const struct man_node *);
+static void pman_block(const struct man_node *);
 static void traversedir(const char *, sqlite3 *db, struct mparse *mp);
 static void mdoc_parse_section(enum mdoc_sec, const char *string);
 
@@ -225,7 +226,7 @@ static	const pman_nf mans[MAN_MAX] = {
 	NULL,	//BR
 	NULL,	//RB
 	NULL,	//R
-	NULL,	//B
+	pman_block,	//B
 	NULL,	//I
 	NULL,	//IR
 	NULL,	//RI
@@ -539,8 +540,6 @@ pman_node(const struct man_node *n)
 		return;
 	
 	switch (n->type) {
-	case (MAN_HEAD):
-		/* FALLTHROUGH */
 	case (MAN_BODY):
 		/* FALLTHROUGH */
 	case (MAN_TAIL):
@@ -561,16 +560,25 @@ pman_node(const struct man_node *n)
 }
 
 static void
-pman_parse_node(const struct man_node *n)
+pman_parse_node(const struct man_node *n, char **s)
 {
 	for (n = n->child; n; n = n->next) {
 		if (n->type == MAN_TEXT) {
-			if (concat(&desc, n->string) < 0)
+			if (concat(s, n->string) < 0)
 				return;
-		}		
+		}	
 		else
-			pman_parse_node(n);
+			pman_parse_node(n, s);
 	}
+}
+
+/* A stub function to be able to parse the macros like .B embedded inside a
+*  section
+*/
+static void
+pman_block(const struct man_node *n)
+{
+// empty stub
 }
 
 static void
@@ -595,6 +603,23 @@ pman_sh(const struct man_node *n)
 			}
 	
 			start = n->string;
+			
+			/* Extract the name of the man page 
+			*   There might be multiple names comma separated, just take out 
+			*   the first name.
+			*   The name might be surrounded by escape sequences of the form:
+			*   \fBname\fR or similar. So remove those as well.
+			*/
+			if (name == NULL) {
+				name = strdup(n->string);
+				name = strtok(name, " ,");
+				if (name[0] == '\\') {
+					name = name + 3;
+					name[strlen(name) -3] = 0;
+				}
+			}
+			
+			/* Some hackery to go over the comma separated list of names */
 			for ( ;; ) {
 				sz = strcspn(start, " ,");
 				if (n->string[(int)sz] == '\0')
@@ -613,16 +638,39 @@ pman_sh(const struct man_node *n)
 			if (strcmp(n->string, head->string))
 				name_desc = strdup(start+3);
 		}
-		else {
-			for (n = n->child; n; n = n->next) {
-				if (n->type == MAN_TEXT && strcmp(n->string, head->string)) {
-					if (concat(&desc, n->string) < 0)
-						return;
-				}					
-				else
-					pman_parse_node(n);
-			}
-		}
+		
+		/* Check the section, and if it is of our concern, extract it's content */
+		else if (strcmp((const char *)head->string, "SYNOPSIS") == 0)
+			pman_parse_node(n, &synopsis);
+		
+		else if (strcmp((const char *)head->string, "LIBRARY") == 0)
+			pman_parse_node(n, &lib);
+		
+		else if (strcmp((const char *)head->string, "ERRORS") == 0)
+			pman_parse_node(n, &errors);
+		
+		else if (strcmp((const char *)head->string, "FILES") == 0)
+			pman_parse_node(n, &files);
+		
+		// The RETURN VALUE section might be specified in multiple ways 
+		else if (strcmp((const char *) head->string, "RETURN VALUE") == 0
+			|| strcmp((const char *)head->string, "RETURN VALUES") == 0
+			|| (strcmp((const char *)head->string, "RETURN") == 0 && 
+			head->next->type == MAN_TEXT && (strcmp((const char *)head->next->string, "VALUE") == 0 ||
+			strcmp((const char *)head->next->string, "VALUES") == 0)))
+				pman_parse_node(n, &return_vals);
+		
+		// EXIT STATUS section can also be specified all on one line or on two
+		// separate lines.
+		else if (strcmp((const char *)head->string, "EXIT STATUS") == 0
+			|| (strcmp((const char *) head->string, "EXIT") ==0 &&
+			head->next->type == MAN_TEXT &&
+			strcmp((const char *)head->next->string, "STATUS") == 0))
+			pman_parse_node(n, &exit_status);
+
+		// Store the rest of the content in desc
+		else
+			pman_parse_node(n, &desc);
 	}
 }
 
@@ -636,7 +684,6 @@ get_section(const struct mdoc *md, const struct man *m)
 	else if (m) {
 		const struct man_meta *m_meta = man_meta(m);
 		section = strdup(m_meta->msec);
-		name = lower(strdup(m_meta->title));
 	}
 }
 
@@ -689,8 +736,11 @@ insert_into_db(sqlite3 *db)
 	int idx = -1;
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
-		
-	if (name == NULL || name_desc == NULL || desc == NULL || md5_hash == NULL 
+
+	/* At the very minimum we want to make sure that we store the following data:
+	*  Name, One line description, the section number, and the md5 hash
+	*/		
+	if (name == NULL || name_desc == NULL || md5_hash == NULL 
 		|| section == NULL) {
 		cleanup();
 		return -1;
@@ -936,12 +986,10 @@ create_db(void)
 	
 /*------------------------ Build the mandb table------------------------------ */
 
-/*	sqlstr = "create virtual table mandb using fts4(section, name, "
-	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
-	" errors, compress=zip, uncompress=unzip, tokenize=stopword_tokenizer )";*/
 	sqlstr = "create virtual table mandb using fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
-	" errors, tokenize=porter)";
+	" errors, compress=zip, uncompress=unzip, tokenize=stopword_tokenizer )";
+	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
