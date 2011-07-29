@@ -347,14 +347,14 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	2.0,	// NAME
 	1.5,	// Name-description
 	0.25,	// DESCRIPTION
-	0.75,	// LIBRARY
-	0.75,	//SYNOPSIS
-	0.50,	//RETURN VALUES
-	0.75,	//ENVIRONMENT
-	0.40,	//FILES
-	0.50,	//EXIT STATUS
+	0.25,	// LIBRARY
+	0.10,	//SYNOPSIS
+	0.10,	//RETURN VALUES
+	0.20,	//ENVIRONMENT
+	0.20,	//FILES
+	0.10,	//EXIT STATUS
 	1.00,	//DIAGNOSTICS
-	0.75	//ERRORS
+	0.05	//ERRORS
 	};
 	unsigned int *matchinfo;
 	int ncol;

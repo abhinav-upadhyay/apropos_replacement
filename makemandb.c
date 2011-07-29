@@ -1127,9 +1127,6 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string)
 			break;
 		case SEC_NAME:
 			break;
-		//case SEC_DESCRIPTION:
-			//concat(&desc, string);
-			//break;
 		default:
 			concat(&desc, string);
 			break;
