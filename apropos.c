@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "apropos-utils.h"
 #include "fts3_tokenizer.h"
@@ -41,7 +42,7 @@
 
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
-static int search(const char *);
+static int search(const char *, const char *);
 char *stemword(char *);
 static void usage(void);
 
@@ -56,30 +57,55 @@ int
 main(int argc, char *argv[])
 {
 	char *query = NULL;	// the user query
-	
+	const char *section_number = NULL;
+	char ch;
+	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
 	
+	while ((ch = getopt(argc, argv, "s:")) != -1) {
+		switch (ch) {
+		case 's':
+			section_number = optarg;
+			break;
+		case '?':
+		case ':':
+			usage();
+			break;
+		}
+	}
+	
+	if (section_number && (strlen(section_number) > 1 || section_number[0] > '9' ||
+		section_number[0] < '1')) {
+		fprintf(stderr, "Invalid section number\n");
+		usage();
+	}
+	argc -= optind;
+	argv += optind;		
+		
+	query = argv[argc -1];
 	idf.value = 0.0;
 	idf.status = 0;
 	
-	query = argv[1];
+	/* Eliminate any stopwords from the query */
 	remove_stopwords(&query);
 	
 	/* if any error occured in remove_stopwords, we continue with the initial
 	*  query input by the user
 	*/
 	if (query == NULL)
-		query = argv[1];
+		query = argv[argc - 1];
 	else if (!strcmp(query, "")) {
 		fprintf(stderr, "Try specifying more relevant keywords to get some matches\n");
 		exit(1);
 	}
 		
-	if (search(query) < 0) 
+	if (search(query, section_number) < 0) {
+		fprintf(stderr, "Sorry, no relevant results could be obtained\n");
 		return -1;
+	}
+	
 	return 0;
-		
 }
 
 /*
@@ -87,7 +113,7 @@ main(int argc, char *argv[])
 *  Opens apropos.db and performs the search for the keywords entered by the user
 */
 static int
-search(const char *query)
+search(const char *query, const char *section_number)
 {
 	sqlite3 *db = NULL;
 	int rc = 0;
@@ -174,7 +200,11 @@ search(const char *query)
 	}
 	
 	/* Now, prepare the statement for doing the actual search query */
-	sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pclxn\")) as rank "
+	if (section_number)
+		sqlstr= "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pclxn\")) as rank "
+			 "from mandb \'m2\' where mandb match :query AND section like :sec_num order by rank desc limit 10 OFFSET 0";	
+	else
+		sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pclxn\")) as rank "
 			 "from mandb where mandb match :query order by rank desc limit 10 OFFSET 0";
           
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -203,6 +233,18 @@ search(const char *query)
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
+	}
+		
+	if (section_number) {
+		idx = sqlite3_bind_parameter_index(stmt, ":sec_num");
+		rc = sqlite3_bind_blob(stmt, idx, section_number, -1, NULL);
+		if (rc != SQLITE_OK) {
+			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+			sqlite3_finalize(stmt);
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			return -1;
+		}
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
