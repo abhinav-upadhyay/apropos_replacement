@@ -225,16 +225,6 @@ search(const char *query, const char *section_number)
 		return -1;
 	}
 	
-	idx = sqlite3_bind_parameter_index(stmt, ":query");
-	rc = sqlite3_bind_text(stmt, idx, query, -1, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-		
 	if (section_number) {
 		idx = sqlite3_bind_parameter_index(stmt, ":sec_num");
 		rc = sqlite3_bind_blob(stmt, idx, section_number, -1, NULL);
