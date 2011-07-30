@@ -174,7 +174,7 @@ search(const char *query)
 	}
 	
 	/* Now, prepare the statement for doing the actual search query */
-	sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pcxln\")) as rank "
+	sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pclxn\")) as rank "
 			 "from mandb where mandb match :query order by rank desc limit 10 OFFSET 0";
           
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -345,15 +345,15 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	double tf = 0.0;
 	double col_weights[] = {
 	2.0,	// NAME
-	1.5,	// Name-description
-	0.25,	// DESCRIPTION
+	2.00,	// Name-description
+	0.55,	// DESCRIPTION
 	0.25,	// LIBRARY
 	0.10,	//SYNOPSIS
-	0.10,	//RETURN VALUES
+	0.001,	//RETURN VALUES
 	0.20,	//ENVIRONMENT
-	0.20,	//FILES
-	0.10,	//EXIT STATUS
-	1.00,	//DIAGNOSTICS
+	0.01,	//FILES
+	0.001,	//EXIT STATUS
+	2.00,	//DIAGNOSTICS
 	0.05	//ERRORS
 	};
 	unsigned int *matchinfo;
@@ -362,6 +362,7 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	int iphrase;
 	int ndoc;
 	int doclen = 0;
+	const double k = 3.75;
 	/* Check that the number of arguments passed to this function is correct.
 	** If not, jump to wrong_number_args. 
 	*/
@@ -376,22 +377,22 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	ndoc = matchinfo[2 + 3 * ncol * nphrase + ncol];
 	for (iphrase = 0; iphrase < nphrase; iphrase++) {
 		int icol;
-		unsigned int *phraseinfo = &matchinfo[2 + iphrase * ncol * 3];
+		unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
 		for(icol = 1; icol < ncol; icol++) {
   			int nhitcount = phraseinfo[3 * icol];
 			int nglobalhitcount = phraseinfo[3 * icol + 1];
 			int ndocshitcount = phraseinfo[3 * icol + 2];
-			doclen += matchinfo[2 + 3 * ncol * nphrase + icol];
+			doclen = matchinfo[2 + icol ];
 			double weight = col_weights[icol - 1];
 			if (idf.status == 0 && ndocshitcount)
-				idf.value += log(((double)ndoc  / ndocshitcount)) / log(ndoc);
+				idf.value += log(((double)ndoc / ndocshitcount))* weight ;
 	
 			if (nglobalhitcount > 0 && nhitcount)
-				tf += ((double)nhitcount / nglobalhitcount) * weight;
+				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
 		}
 	}
 	idf.status = 1;
-	double score = (tf * idf.value / doclen );
+	double score = (tf * idf.value/ ( k + tf)) ;
 	sqlite3_result_double(pctx, score);
 	return;
 
