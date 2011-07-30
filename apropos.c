@@ -195,16 +195,6 @@ search(const char *query)
 		return -1;
 	}
 	
-	idx = sqlite3_bind_parameter_index(stmt, ":query");
-	rc = sqlite3_bind_text(stmt, idx, query, -1, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (char *) sqlite3_column_text(stmt, 0);
 		name = (char *) sqlite3_column_text(stmt, 1);
