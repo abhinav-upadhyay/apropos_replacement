@@ -105,7 +105,6 @@ int
 concat(char **dst, const char *src)
 {
 	int total_len, dst_len;
-	int null_status = 0;	//whether *dst is NULL or not
 	if (src == NULL)
 		return -1;
 
