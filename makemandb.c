@@ -52,7 +52,7 @@
 
 static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);
-static int create_db(void);
+static int create_db(sqlite3 *);
 static void get_section(const struct mdoc *, const struct man *);
 static int insert_into_db(sqlite3 *);
 static	void begin_parse(const char *, struct mparse *mp);
@@ -66,6 +66,7 @@ static void pman_sh(const struct man_node *);
 static void pman_block(const struct man_node *);
 static void traversedir(const char *, sqlite3 *db, struct mparse *mp);
 static void mdoc_parse_section(enum mdoc_sec, const char *string);
+static int prepare_db(sqlite3 **db);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
@@ -251,93 +252,35 @@ main(int argc, char *argv[])
 	FILE *file;
 	char line[MAXLINE];
 	const char *sqlstr;
-	sqlite3 *db = NULL;
-	int rc, idx;
+	int rc;
 	sqlite3_stmt *stmt = NULL;
 	struct mparse *mp = NULL;
-	const sqlite3_tokenizer_module *stopword_tokenizer_module;
+	sqlite3 *db;
 	
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
+	if (prepare_db(&db) < 0)
+		errx(EXIT_FAILURE, "Error in initializing the database");
+		
 	/* Build the databases */
-	if (create_db() < 0) 
+	if (create_db(db) < 0) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		errx(EXIT_FAILURE, "Unable to create database");
+	}
 			
 	/* call man -p to get the list of man page dirs */
-	if ((file = popen("man -p", "r")) == NULL)
+	if ((file = popen("man -p", "r")) == NULL) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		err(EXIT_FAILURE, "fopen failed");
-	
-	
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
-		             SQLITE_OPEN_CREATE, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "traversedir: Could not open database\n");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		cleanup();
-		return -1;
 	}
 	
-	sqlite3_extended_result_codes(db, 1);
-	
-	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
-                             zip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: compress\n");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-
-	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
-		                         unzip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: uncompress\n");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
-	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		return -1;
-	}
-	
-	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)&stopword_tokenizer_module);
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
-	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, sizeof(stopword_tokenizer_module), SQLITE_STATIC);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		return -1;
-	}
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_ROW) {
-		fprintf(stderr, "%s tokenizer error\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		return -1;
-	}
-	sqlite3_finalize(stmt);	
-	
-	
-	// begin the transaction for indexing the pages	
+	/* begin the transaction for indexing the pages	*/
 	sqlstr = "BEGIN";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		cleanup();
 		return -1;
 	}
 	
@@ -356,16 +299,22 @@ main(int argc, char *argv[])
 		traversedir(line, db, mp);
 	}
 	
-	if (pclose(file) == -1)
+	if (pclose(file) == -1) {
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		cleanup();
 		errx(EXIT_FAILURE, "pclose error");
+	}
 	mparse_free(mp);
 	
-	// commit the transaction 
+	/* commit the transaction */
 	sqlstr = "COMMIT";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		cleanup();
+		sqlite3_close(db);
+		sqlite3_shutdown();
 		return -1;
 	}
 	
@@ -373,6 +322,7 @@ main(int argc, char *argv[])
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
+		cleanup();
 		return -1;
 	}
 	
@@ -380,6 +330,102 @@ main(int argc, char *argv[])
 	sqlite3_close(db);
 	sqlite3_shutdown();
 	cleanup();
+	return 0;
+}
+
+/* prepare_db --
+*   Prepare the database. Register the compress/uncompress functions and the
+*   stopword tokenizer.
+*/
+static int
+prepare_db(sqlite3 **db)
+{
+	struct stat sb;
+	const sqlite3_tokenizer_module *stopword_tokenizer_module;
+	const char *sqlstr;
+	int rc;
+	int idx;
+	sqlite3_stmt *stmt = NULL;
+
+	/* If the db file already exists, nuke it*/	
+	if (stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)) {
+		if (remove(DBPATH) < 0)
+			return -1;
+	}
+	
+	/* Now initialize the database connection */
+	sqlite3_initialize();
+	rc = sqlite3_open_v2(DBPATH, db, SQLITE_OPEN_READWRITE | 
+		             SQLITE_OPEN_CREATE, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Could not open database\n");
+		sqlite3_close(*db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	sqlite3_extended_result_codes(*db, 1);
+	
+	/* Register the zip and unzip functions for FTS compression */
+	rc = sqlite3_create_function(*db, "zip", 1, SQLITE_ANY, NULL, 
+                             zip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: compress\n");
+		sqlite3_close(*db);
+		sqlite3_shutdown();
+		return -1;
+	}
+
+	rc = sqlite3_create_function(*db, "unzip", 1, SQLITE_ANY, NULL, 
+		                         unzip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: uncompress\n");
+		sqlite3_close(*db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	/* Register the stopword tokenizer */
+	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
+	rc = sqlite3_prepare_v2(*db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(*db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
+	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(*db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(*db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **) 
+		&stopword_tokenizer_module);
+	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
+	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
+		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(*db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(*db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		fprintf(stderr, "%s tokenizer error\n", sqlite3_errmsg(*db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(*db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	sqlite3_finalize(stmt);	
 	return 0;
 }
 
@@ -555,7 +601,7 @@ pmdoc_Sh(const struct mdoc_node *n)
 static void
 pman_node(const struct man_node *n)
 {
-	if (NULL == n)
+	if (n == NULL)
 		return;
 	
 	switch (n->type) {
@@ -765,8 +811,6 @@ insert_into_db(sqlite3 *db)
 		return -1;
 	}
 	
-	
-
 /*------------------------ Populate the mandb table------------------------------ */
 	sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc, :lib, "
 	":synopsis, :return_vals, :env, :files, :exit_status, :diagnostics, :errors)";
@@ -895,6 +939,7 @@ insert_into_db(sqlite3 *db)
 	}
 	
 	sqlite3_finalize(stmt);
+	
 /*------------------------ Populate the mandb_md5 table-----------------------*/
 	sqlstr = "insert into mandb_md5 values (:md5_hash)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -924,75 +969,21 @@ insert_into_db(sqlite3 *db)
 	sqlite3_finalize(stmt);
 	cleanup();
 	return 0;
-
-
 }
 
 static int
-create_db(void)
+create_db(sqlite3 *db)
 {
-	sqlite3 *db = NULL;
 	int rc = 0;
-	int idx;
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
-	struct stat sb;
-	const sqlite3_tokenizer_module *stopword_tokenizer_module;
-	
-	if (stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)) {
-		if (remove(DBPATH) < 0)
-			return -1;
-	}
-	
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READWRITE | 
-			                 SQLITE_OPEN_CREATE, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
-	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		return -1;
-	}
-	
-	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)&stopword_tokenizer_module);
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
-	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, sizeof(stopword_tokenizer_module), SQLITE_STATIC);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		return -1;
-	}
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_ROW) {
-		fprintf(stderr, "%s tokenizer error\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		return -1;
-	}
-	sqlite3_finalize(stmt);
 	
 /*------------------------ Build the mandb table------------------------------ */
 
 	sqlstr = "create virtual table mandb using fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
 	" errors, compress=zip, uncompress=unzip, tokenize=porter )";
-	
+		
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1032,9 +1023,6 @@ create_db(void)
 	}
 		
 	sqlite3_finalize(stmt);
-	
-	sqlite3_close(db);
-	sqlite3_shutdown();
 	return 0;
 }
 
@@ -1108,7 +1096,6 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string)
 			break;
 		case SEC_SYNOPSIS:
 			concat(&synopsis, string);
-			//fprintf(stderr, "syn: %s\n", n->string);
 			break;
 		case SEC_RETURN_VALUES:
 			concat(&return_vals, string);
