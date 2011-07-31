@@ -280,6 +280,25 @@ main(int argc, char *argv[])
 	}
 	
 	sqlite3_extended_result_codes(db, 1);
+	
+	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
+                             zip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: compress\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+
+	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
+		                         unzip, NULL, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "Not able to register function: uncompress\n");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
 	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -746,23 +765,7 @@ insert_into_db(sqlite3 *db)
 		return -1;
 	}
 	
-	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
-                             zip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: compress\n");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-
-	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
-		                         unzip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: uncompress\n");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
+	
 
 /*------------------------ Populate the mandb table------------------------------ */
 	sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc, :lib, "
