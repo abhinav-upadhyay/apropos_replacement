@@ -122,6 +122,7 @@ search(const char *query, const char *section_number)
 	char *name = NULL;
 	char *section = NULL;
 	char *snippet = NULL;
+	char *name_desc = NULL;
 	sqlite3_stmt *stmt = NULL;
 	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	
@@ -201,11 +202,17 @@ search(const char *query, const char *section_number)
 	
 	/* Now, prepare the statement for doing the actual search query */
 	if (section_number)
-		sqlstr= "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pclxn\")) as rank "
-			 "from mandb \'m2\' where mandb match :query AND section like :sec_num order by rank desc limit 10 OFFSET 0";	
+		sqlstr= "select section, name, name_desc, "
+			"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
+			"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
+			 "from mandb \'m2\' where mandb match :query AND section like "
+			 ":sec_num order by rank desc limit 10 OFFSET 0";	
 	else
-		sqlstr = "select section, name, snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), rank_func(matchinfo(mandb, \"pclxn\")) as rank "
-			 "from mandb where mandb match :query order by rank desc limit 10 OFFSET 0";
+		sqlstr = "select section, name, name_desc, "
+			"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
+			"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
+			 "from mandb where mandb match :query order by rank desc limit 10 "
+			 "OFFSET 0";
           
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -240,9 +247,9 @@ search(const char *query, const char *section_number)
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (char *) sqlite3_column_text(stmt, 0);
 		name = (char *) sqlite3_column_text(stmt, 1);
-		snippet = (char *) sqlite3_column_text(stmt, 2);
-		char *rank = (char *) sqlite3_column_text(stmt, 3);
- 		printf("%s(%s)\t%s\n%s\n\n", name, section, rank, snippet);
+		name_desc = (char *) sqlite3_column_text(stmt, 2);
+		snippet = (char *) sqlite3_column_text(stmt, 3);
+		printf("%s(%s)\t%s\n%s\n\n", name, section, name_desc, snippet);
 	}
 			
 	sqlite3_finalize(stmt);	
@@ -354,7 +361,9 @@ usage(void)
 {
 
 	(void)fprintf(stderr,
-	    "usage: %s query\n", getprogname());
+	    "usage: %s query\n"
+	    " %s [-s <section-number>] query\n"
+	    , getprogname(), getprogname());
 	exit(1);
 }
 
