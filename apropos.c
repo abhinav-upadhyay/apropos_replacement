@@ -40,11 +40,14 @@
 #include "sqlite3.h"
 #include "stopword_tokenizer.h"
 
+#define SEC_MAX 9
+
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
-static int search(const char *, const char *);
+static int search(const char *, const char **);
 char *stemword(char *);
 static void usage(void);
+
 
 typedef struct  {
 double value;
@@ -57,33 +60,56 @@ int
 main(int argc, char *argv[])
 {
 	char *query = NULL;	// the user query
-	const char *section_number = NULL;
 	char ch;
+	const char *sec_nums[SEC_MAX] = {0}; 
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
 	
-	while ((ch = getopt(argc, argv, "s:")) != -1) {
-		switch (ch) {
-		case 's':
-			section_number = optarg;
+	/*If the user specifies a section number as an option, the correspondingly indexed 
+	* element in sec_nums is set to the string representing that section number.
+	*/
+	while ((ch = getopt(argc, argv, "123456789")) != -1) {
+	switch (ch) {
+		case '1':
+			sec_nums[0] = (char *)"1";
+			break;
+		case '2':
+			sec_nums[1] = (char *)"2";
+			break;
+		case '3':
+			sec_nums[2] = (char *)"3";
+			break;
+		case '4':
+			sec_nums[3] = (char *)"4";
+			break;
+		case '5':
+			sec_nums[4] = (char *)"5";
+			break;
+		case '6':
+			sec_nums[5] = (char *)"6";
+			break;
+		case '7':
+			sec_nums[6] = (char *)"7";
+			break;
+		case '8':
+			sec_nums[7] = (char *)"8";
+			break;
+		case '9':
+			sec_nums[8] = (char *)"9";
 			break;
 		case '?':
-		case ':':
 			usage();
 			break;
-		}
+		default:
+			break;
+		}		
 	}
 	
-	if (section_number && (strlen(section_number) > 1 || section_number[0] > '9' ||
-		section_number[0] < '1')) {
-		fprintf(stderr, "Invalid section number\n");
-		usage();
-	}
 	argc -= optind;
 	argv += optind;		
-		
-	query = argv[argc -1];
+	query = argv[argc-1];
+	
 	idf.value = 0.0;
 	idf.status = 0;
 	
@@ -100,7 +126,7 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 		
-	if (search(query, section_number) < 0) {
+	if (search(query, sec_nums) < 0) {
 		fprintf(stderr, "Sorry, no relevant results could be obtained\n");
 		return -1;
 	}
@@ -110,15 +136,17 @@ main(int argc, char *argv[])
 
 /*
 * search --
-*  Opens apropos.db and performs the search for the keywords entered by the user
+*  Opens apropos.db and performs the searches for the keywords entered by the user
+*  The 2nd param: sec_nums indicates if the user has specified any specific sections
+*  to search in. We build the query string accordingly.
 */
 static int
-search(const char *query, const char *section_number)
+search(const char *query, const char **sec_nums)
 {
 	sqlite3 *db = NULL;
 	int rc = 0;
 	int idx = -1;
-	const char *sqlstr = NULL;
+	char *sqlstr = NULL;
 	char *name = NULL;
 	char *section = NULL;
 	char *snippet = NULL;
@@ -138,7 +166,7 @@ search(const char *query, const char *section_number)
 	
 	sqlite3_extended_result_codes(db, 1);
 	/* Register the tokenizer */
-	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
+	sqlstr = (char *) "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
@@ -154,9 +182,11 @@ search(const char *query, const char *section_number)
 		return -1;
 	}
 	
-	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)&stopword_tokenizer_module);
+	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)
+		&stopword_tokenizer_module);
 	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
-	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, sizeof(stopword_tokenizer_module), SQLITE_STATIC);
+	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
+		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -201,19 +231,38 @@ search(const char *query, const char *section_number)
 	}
 	
 	/* Now, prepare the statement for doing the actual search query */
-	if (section_number)
-		sqlstr= "select section, name, name_desc, "
+	int i, flag = 0;
+	
+	/* We want to build a query of the form: "select x,y,z from mandb where
+	*  mandb match :query [AND (section like '1' OR section like '2' OR...)]
+	*  ORDER BY rank desc..."
+	* NOTES: 1. The portion in square brackets is optional, it will be there if the
+	* user has specified an option on the command line to search in one or more
+	* sections.
+	* 2. I am using LIKE operator because '=' or IN operators do not seem to be
+	* working with the compression option
+	*/
+	asprintf(&sqlstr, "SELECT section, name, name_desc, "
 			"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
 			"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
-			 "from mandb \'m2\' where mandb match :query AND section like "
-			 ":sec_num order by rank desc limit 10 OFFSET 0";	
+			 "from mandb WHERE mandb MATCH :query");
+	
+	for (i = 0; i < SEC_MAX; i++) {
+		if (sec_nums[i]) {
+			if (flag == 0) {
+				concat(&sqlstr, "AND (section LIKE");
+				flag = 1;
+			}
+			else
+				concat(&sqlstr, "OR section LIKE");
+			concat(&sqlstr, sec_nums[i]);
+		}
+	}
+	if (flag)
+		concat(&sqlstr, ") ORDER BY rank desc LIMIT 10 OFFSET 0");
 	else
-		sqlstr = "select section, name, name_desc, "
-			"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
-			"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
-			 "from mandb where mandb match :query order by rank desc limit 10 "
-			 "OFFSET 0";
-          
+		concat(&sqlstr, "ORDER BY rank desc LIMIT 10 OFFSET 0");
+	          
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -230,18 +279,6 @@ search(const char *query, const char *section_number)
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
-	}
-	
-	if (section_number) {
-		idx = sqlite3_bind_parameter_index(stmt, ":sec_num");
-		rc = sqlite3_bind_blob(stmt, idx, section_number, -1, NULL);
-		if (rc != SQLITE_OK) {
-			fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-			sqlite3_finalize(stmt);
-			sqlite3_close(db);
-			sqlite3_shutdown();
-			return -1;
-		}
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
