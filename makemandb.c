@@ -633,6 +633,9 @@ pman_block(const struct man_node *n)
 // empty stub
 }
 
+/* This function has some part of it's code taken from the mandocdb utility from
+*  the mdocml project. Thanks to Kristaps Dzonsons.
+*/
 static void
 pman_sh(const struct man_node *n)
 {
