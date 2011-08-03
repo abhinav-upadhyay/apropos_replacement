@@ -660,7 +660,6 @@ pman_sh(const struct man_node *n)
 {
 	const struct man_node *head;
 	int sz;
-	char *start;
 
 	if ((head = n->parent->head) != NULL &&	(head = head->child) != NULL &&
 		head->type ==  MAN_TEXT) {
@@ -690,7 +689,7 @@ pman_sh(const struct man_node *n)
 			/* Assuming the name of a man page is a single word, we can easily
 			* take out the first word out of the string
 			*/	
-			int sz = strcspn(name_desc, " ,\0");
+			sz = strcspn(name_desc, " ,\0");
 			name = malloc(sz+1);
 			int i;
 			for(i=0; i<sz; i++)
