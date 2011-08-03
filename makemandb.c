@@ -13,7 +13,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
- 
+
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -49,6 +49,7 @@ static void pmdoc_Nd(const struct mdoc_node *);
 static void pmdoc_Sh(const struct mdoc_node *);
 static void pman_node(const struct man_node *n);
 static void pman_parse_node(const struct man_node *, char **);
+static void pman_parse_name(const struct man_node *);
 static void pman_sh(const struct man_node *);
 static void pman_block(const struct man_node *);
 static void traversedir(const char *, sqlite3 *db, struct mparse *mp);
@@ -624,6 +625,24 @@ pman_parse_node(const struct man_node *n, char **s)
 	}
 }
 
+/* pman_parse_name --
+*   Parses the NAME section and puts the complete content in the name_desc 
+*   variable.
+*/
+static void
+pman_parse_name(const struct man_node *n)
+{
+	if (n == NULL)
+		return;
+	if (n->type == MAN_TEXT) 
+		concat(&name_desc, n->string);
+	
+	if (n->child)
+		pman_parse_name(n->child);
+	if(n->next)
+		pman_parse_name(n->next);
+}
+
 /* A stub function to be able to parse the macros like .B embedded inside a
 *  section
 */
@@ -646,52 +665,79 @@ pman_sh(const struct man_node *n)
 	if ((head = n->parent->head) != NULL &&	(head = head->child) != NULL &&
 		head->type ==  MAN_TEXT) {
 		if (strcmp(head->string, "NAME") == 0) {
-			while (n->type != MAN_TEXT) {
-				if (n->child)
-					n = n->child;
-				else if (n->next)
-					n = n->next;
-				else {
-					name_desc = NULL;
-					return;
-				}
-			}
-	
-			start = n->string;
+			/* We are in the NAME section. pman_parse_name will put the complete
+			* content in name_desc
+			*/			
+			pman_parse_name(n);
+
+			/* Take out the name of the man page. name_desc contains complete
+			* NAME section content, e.g: "gcc \- GNU project C and C++ compiler"
+			* It might be a comma separated list of multiple names, for now to 
+			* keep things simple just take the first name out before the comma.
+			*/
 			
-			/* Extract the name of the man page 
-			*   There might be multiple names comma separated, just take out 
-			*   the first name.
-			*   The name might be surrounded by escape sequences of the form:
+			/* Remove any leading spaces */
+			while (*name_desc == ' ') 
+				name_desc++;
+			
+			/* If the line begins with a "\&", avoid it */
+			if (name_desc[0] == '\\' && name_desc[1] == '&')
+				name_desc += 2;
+			/* Again remove any leading spaces left */
+			while (*name_desc == ' ') 
+				name_desc++;
+			
+			/* Assuming the name of a man page is a single word, we can easily
+			* take out the first word out of the string
+			*/	
+			int sz = strcspn(name_desc, " ,\0");
+			name = malloc(sz+1);
+			int i;
+			for(i=0; i<sz; i++)
+				name[i] = name_desc[i];
+			name[i] = 0;
+			
+			/*   The name might be surrounded by escape sequences of the form:
 			*   \fBname\fR or similar. So remove those as well.
 			*/
-			if (name == NULL) {
-				name = strdup(n->string);
-				name = strtok(name, " ,");
-				if (name[0] == '\\') {
-					name = name + 3;
-					name[strlen(name) -3] = 0;
-				}
+			if (name[0] == '\\' && name[1] != '&') {
+				name += 3;
+				name[strlen(name) -3] = 0;
 			}
 			
-			/* Some hackery to go over the comma separated list of names */
-			for ( ;; ) {
-				sz = strcspn(start, " ,");
-				if (n->string[(int)sz] == '\0')
-					break;
-
-				if (start[(int)sz] == ' ') {
-					start += (int)sz + 1;
+			
+			/* Now remove the name(s) of the man page(s) so that we are left with
+			* the one line description.
+			* So we know we have passed over the NAME if we:
+			* 1. encounter a space not preceeded by a comma and not succeeded by a \\
+			*    e.g.: foo-bar This is a simple foo-bar utility.
+			* 2. enconter a '-' which is preceeded by a '\' and succeeded by a space
+			*    e.g.: foo-bar \- This is a simple foo-bar utility
+			*          foo-bar, blah-blah \- foo-bar with blah-blah
+			*          foo-bar \-\- another foo-bar
+			* 3. encounter a '-' preceeded by a space and succeeded by a space
+			*     e.g.: foo-bar - This is a simple foo-bar utility
+			* (I hope this covers all possible sane combinations)
+			*/
+			char prev = *name_desc++;
+			while (*name_desc) {
+				/* case 1 */
+				if (*name_desc == ' ' && prev != ',' && *(name_desc + 1) != '\\') {
+					name_desc++;
+					/* Well, there might be a '-' without a leading '\\', get over it */
+					if (*name_desc == '-')
+						name_desc += 2;
 					break;
 				}
-
-				assert(start[(int)sz] == ',' || start[(int)sz] == 0);
-				start += (int)sz + 1;
-				while (*start == ' ')
-					start++;
+				/* case 2 */
+				else if (*name_desc == '-' && prev == '\\' 
+					&& *(name_desc + 1) == ' ') {
+					name_desc += 2;
+					break;
+				}
+				prev = *name_desc;
+				name_desc++;
 			}
-			if (strcmp(n->string, head->string))
-				name_desc = strdup(start+3);
 		}
 		
 		/* Check the section, and if it is of our concern, extract it's content */
@@ -973,7 +1019,7 @@ create_db(sqlite3 *db)
 	sqlstr = "create virtual table mandb using fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
 	" errors, compress=zip, uncompress=unzip, tokenize=porter )";
-		
+
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -981,7 +1027,7 @@ create_db(sqlite3 *db)
 		sqlite3_shutdown();
 		return -1;
 	}
-	
+
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
 		fprintf(stderr, "%s yo\n", sqlite3_errmsg(db));
