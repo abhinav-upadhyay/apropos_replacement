@@ -552,13 +552,15 @@ pmdoc_Nm(const struct mdoc_node *n)
 static void
 pmdoc_Nd(const struct mdoc_node *n)
 {
-	for (n = n->child; n; n = n->next) {
-		if (n->type != MDOC_TEXT)
-			continue;
-
-		 if (concat(&name_desc, n->string) < 0)
-		 	return;
-	}
+	if (n == NULL)
+		return;
+	if (n->type == MDOC_TEXT) 
+		concat(&name_desc, n->string);
+	
+	if (n->child)
+		pmdoc_Nd(n->child);
+	if(n->next)
+		pmdoc_Nd(n->next);
 }
 
 /*
@@ -1017,7 +1019,7 @@ create_db(sqlite3 *db)
 
 	sqlstr = "create virtual table mandb using fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
-	" errors, compress=zip, uncompress=unzip, tokenize=porter )";
+	" errors, tokenize=porter )";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
