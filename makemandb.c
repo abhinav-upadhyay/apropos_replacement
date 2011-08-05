@@ -36,6 +36,8 @@
 #include "stopword_tokenizer.h"
 
 #define MAXLINE 1024	//buffer size for fgets
+#define MDOC 0	//If the page is of mdoc(7) type
+#define MAN 1	//If the page  is of man(7) type
 
 static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);
@@ -69,6 +71,8 @@ static char *diagnostics = NULL; // DIAGNOSTICS
 static char *errors = NULL; // ERRORS
 static char *md5_hash = NULL;
 static char *section = NULL;
+static char *links = NULL; //stores all the links to a page in a space separated form
+static int page_type = MDOC; //Indicates the type of page: mdoc or man	
 
 typedef	void (*pman_nf)(const struct man_node *n);
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
@@ -435,6 +439,10 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 		return;
 	}
 	
+	/* Avoid symlinks */
+	if (S_ISLNK(sb.st_mode)) 
+		return;
+	
 	/* if it is a regular file, pass it to the parser */
 	if (S_ISREG(sb.st_mode)) {
 		/* Avoid hardlinks to prevent duplicate entries in the database */
@@ -498,10 +506,14 @@ begin_parse(const char *file, struct mparse *mp)
 	}
 
 	get_section(mdoc, man);
-	if (mdoc)
+	if (mdoc) {
+		page_type = MDOC;
 		pmdoc_node(mdoc_node(mdoc));
-	else
+	}
+	else {
+		page_type = MAN;
 		pman_node(man_node(man));
+	}
 }
 
 static void
@@ -537,10 +549,10 @@ pmdoc_node(const struct mdoc_node *n)
 static void
 pmdoc_Nm(const struct mdoc_node *n)
 {
-	if (n->sec == SEC_NAME && n->child->type == MDOC_TEXT) {
-		if ((name = strdup(n->child->string)) == NULL) {
-			fprintf(stderr, "Memory allocation error");
-			return;
+	if (n->sec == SEC_NAME) {
+		for (n = n->child; n; n = n->next) {
+			if (n->type == MDOC_TEXT)
+				concat(&name, n->string);
 		}
 	}
 }
@@ -690,14 +702,25 @@ pman_sh(const struct man_node *n)
 			
 			/* Assuming the name of a man page is a single word, we can easily
 			* take out the first word out of the string
-			*/	
-			sz = strcspn(name_desc, " ,\0");
+			*/
+			char *temp = strdup(name_desc);
+			char *link;
+			sz = strcspn(temp, " ,\0");
 			name = malloc(sz+1);
 			int i;
 			for(i=0; i<sz; i++)
-				name[i] = name_desc[i];
+				name[i] = *temp++;
 			name[i] = 0;
 			
+			for(link = strtok(temp, " "); link; link = strtok(NULL, " ")) {
+				if (link[strlen(link)] == ',') {
+					link[strlen(link)] = 0;
+					concat(&links, link);
+				}
+				else
+					break;
+			}
+			free(temp);
 			/*   The name might be surrounded by escape sequences of the form:
 			*   \fBname\fR or similar. So remove those as well.
 			*/
@@ -821,9 +844,11 @@ cleanup(void)
 		free(diagnostics);
 	if (errors)
 		free(errors);
+	if (links)
+		free(links);
 		
 	name = name_desc = desc = md5_hash = section = lib = synopsis = return_vals =
-	 env = files = exit_status = diagnostics = errors = NULL;
+	 env = files = exit_status = diagnostics = errors = links = NULL;
 }
 
 /* insert_into_db --
@@ -838,7 +863,8 @@ insert_into_db(sqlite3 *db)
 	int idx = -1;
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
-
+	char *link = NULL;
+	
 	/* At the very minimum we want to make sure that we store the following data:
 	*  Name, One line description, the section number, and the md5 hash
 	*/		
@@ -846,6 +872,27 @@ insert_into_db(sqlite3 *db)
 		|| section == NULL) {
 		cleanup();
 		return -1;
+	}
+
+	/* In case of a mdoc page: (sorry, no better place to put this block of code)
+	*  parse the comma separated list of names of man pages, the first name will
+	*  be stored in the mandb table, rest will be treated as links and put in the
+	*  mandb_links table
+	*/	
+	if (page_type == MDOC) {
+		links = strdup(name);
+		free(name);
+		//fprintf(stderr, "%s\n", name);
+		int sz = strcspn(links, " \0");
+		name = malloc(sz + 1);
+		memcpy(name, links, sz);
+		if(name[sz - 1] == ',')
+			name[sz - 1] = 0;
+		else
+			name[sz] = 0;
+		links += sz;
+		if (*links == ' ')
+			links++;
 	}
 	
 /*------------------------ Populate the mandb table------------------------------ */
@@ -1004,7 +1051,45 @@ insert_into_db(sqlite3 *db)
 	}
 
 	sqlite3_finalize(stmt);
+	
+/*------------------------ Populate the mandb_links table-----------------------*/
+	char *str = NULL;
+	if (links && strlen(links) == 0) {
+		free(links);
+		links = NULL;
+	}
+		
+	if (links) {
+		fprintf(stderr, "%s\n", links);
+		for(link = strtok(links, " "); link; link = strtok(NULL, " ")) {
+			if (link[0] == ',')
+				link++;
+			if(link[strlen(link) - 1] == ',')
+				link[strlen(link) - 1] = 0;
+			
+			asprintf(&str, "insert into man_links values (\'%s\', \'%s\')", link, name);
+			rc = sqlite3_prepare_v2(db, str, -1, &stmt, NULL);
+			if (rc != SQLITE_OK) {
+				fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+				cleanup();
+				free(str);
+				return -1;
+			}
+			rc = sqlite3_step(stmt);
+			if (rc != SQLITE_DONE) {
+				fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+				sqlite3_finalize(stmt);
+				cleanup();
+				free(str);
+				return -1;
+			sqlite3_finalize(stmt);
+			free(str);
+			}
+		}
+	}
+	
 	cleanup();
+	free(links);
 	return 0;
 }
 
@@ -1019,7 +1104,7 @@ create_db(sqlite3 *db)
 
 	sqlstr = "create virtual table mandb using fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
-	" errors, compress=zip, uncompress=unzip, tokenize=porter )";
+	" errors, tokenize=porter )";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1042,6 +1127,26 @@ create_db(sqlite3 *db)
 /*------------------------ Build the mandb_md5 table------------------------------ */	
 	sqlstr = "create table mandb_md5(md5_hash)";
 
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+		
+	sqlite3_finalize(stmt);
+	
+	sqlstr = "create table man_links(link, target)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
