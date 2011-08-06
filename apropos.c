@@ -409,7 +409,8 @@ usage(void)
 *  Sqlite user defined function for ranking the documents.
 *  For each phrase of the query, it computes the tf and idf adds them over.
 *  It computes the final rank, by multiplying tf and idf together.
-*  Weight of term t for document d = term frequency of t in d * inverse document frequency of t
+*  Weight of term t for document d = (term frequency of t in d * 
+*                                      inverse document frequency of t) 
 *
 *  Term Frequency of term t in document d = Number of times t occurs in d / 
 *                                        Number of times t appears in all documents
@@ -457,6 +458,14 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 		int icol;
 		unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
 		for(icol = 1; icol < ncol; icol++) {
+			
+			/* nhitcount: number of times the current phrase occurs in the current
+			 *            column in the current document.
+			 * nglobalhitcount: number of times current phrase occurs in the current
+			 *                  column in all documents.
+			 * ndocshitcount:   number of documents in which the current phrase 
+			 *                  occurs in the current column at least once.
+			 */
   			int nhitcount = phraseinfo[3 * icol];
 			int nglobalhitcount = phraseinfo[3 * icol + 1];
 			int ndocshitcount = phraseinfo[3 * icol + 2];
@@ -465,11 +474,19 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 			if (idf.status == 0 && ndocshitcount)
 				idf.value += log(((double)ndoc / ndocshitcount))* weight ;
 	
+			/* Dividing the tf by document length to normalize the effect of longer
+			*  documents.
+			*/
 			if (nglobalhitcount > 0 && nhitcount)
 				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
 		}
 	}
 	idf.status = 1;
+	
+	/* Final score = (tf * idf)/ ( k + tf)
+	*	Dividing by k+ tf further normalizes the weight leading to better results.
+	*   The value of k is experimental
+	*/
 	double score = (tf * idf.value/ ( k + tf)) ;
 	sqlite3_result_double(pctx, score);
 	return;
