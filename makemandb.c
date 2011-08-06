@@ -16,6 +16,7 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 
 #include <assert.h>
 #include <dirent.h>
@@ -43,7 +44,7 @@ static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);
 static int create_db(sqlite3 *);
 static void get_section(const struct mdoc *, const struct man *);
-static int insert_into_db(sqlite3 *);
+static int insert_into_db(sqlite3 *, char *);
 static	void begin_parse(const char *, struct mparse *mp);
 static void pmdoc_node(const struct mdoc_node *);
 static void pmdoc_Nm(const struct mdoc_node *);
@@ -57,6 +58,7 @@ static void pman_block(const struct man_node *);
 static void traversedir(const char *, sqlite3 *db, struct mparse *mp);
 static void mdoc_parse_section(enum mdoc_sec, const char *string);
 static int prepare_db(sqlite3 **db);
+static void get_machine(const struct mdoc *);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
@@ -71,6 +73,7 @@ static char *diagnostics = NULL; // DIAGNOSTICS
 static char *errors = NULL; // ERRORS
 static char *md5_hash = NULL;
 static char *section = NULL;
+static char *machine = NULL;
 static char *links = NULL; //stores all the links to a page in a space separated form
 static int page_type = MDOC; //Indicates the type of page: mdoc or man	
 
@@ -453,7 +456,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 		
 		printf("parsing %s\n", file);
 		begin_parse(file, mp);
-		if (insert_into_db(db) < 0)
+		if (insert_into_db(db, (char *)file) < 0)
 			fprintf(stderr, "Error indexing: %s\n", file);
 		return;
 	}
@@ -505,6 +508,7 @@ begin_parse(const char *file, struct mparse *mp)
 		return;
 	}
 
+	get_machine(mdoc);
 	get_section(mdoc, man);
 	if (mdoc) {
 		page_type = MDOC;
@@ -812,6 +816,16 @@ get_section(const struct mdoc *md, const struct man *m)
 	}
 }
 
+static void
+get_machine(const struct mdoc *md)
+{
+	if (md == NULL)
+		return;
+	const struct mdoc_meta *md_meta = mdoc_meta(md);
+	if (md_meta->arch)
+		machine = strdup(md_meta->arch);
+}
+
 /* cleanup --
 *   cleans up the global buffers
 */
@@ -846,9 +860,11 @@ cleanup(void)
 		free(errors);
 	if (links)
 		free(links);
+	if (machine)
+		free(machine);
 		
 	name = name_desc = desc = md5_hash = section = lib = synopsis = return_vals =
-	 env = files = exit_status = diagnostics = errors = links = NULL;
+	 env = files = exit_status = diagnostics = errors = links = machine = NULL;
 }
 
 /* insert_into_db --
@@ -857,7 +873,7 @@ cleanup(void)
 *   error. Otherwise, store the data in the database and return 0
 */
 static int
-insert_into_db(sqlite3 *db)
+insert_into_db(sqlite3 *db, char *file)
 {
 	int rc = 0;
 	int idx = -1;
@@ -1060,6 +1076,8 @@ insert_into_db(sqlite3 *db)
 	}
 		
 	if (links) {
+		if (machine == NULL)
+			asprintf(&machine, "%s", "NULL");
 		fprintf(stderr, "%s\n", links);
 		for(link = strtok(links, " "); link; link = strtok(NULL, " ")) {
 			if (link[0] == ',')
@@ -1067,7 +1085,8 @@ insert_into_db(sqlite3 *db)
 			if(link[strlen(link) - 1] == ',')
 				link[strlen(link) - 1] = 0;
 			
-			asprintf(&str, "insert into man_links values (\'%s\', \'%s\')", link, name);
+			asprintf(&str, "insert into mandb_links values (\'%s\', \'%s\', \'%s\',"
+				" \'%s\', \'%s\')", link, name, section, machine, file);
 			rc = sqlite3_prepare_v2(db, str, -1, &stmt, NULL);
 			if (rc != SQLITE_OK) {
 				fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1146,7 +1165,7 @@ create_db(sqlite3 *db)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "create table man_links(link, target)";
+	sqlstr = "create table mandb_links(link, target, section, machine, path)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
