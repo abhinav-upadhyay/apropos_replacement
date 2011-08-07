@@ -1077,7 +1077,7 @@ insert_into_db(sqlite3 *db, char *file)
 		
 	if (links) {
 		if (machine == NULL)
-			asprintf(&machine, "%s", "NULL");
+			asprintf(&machine, "%s", "");
 		fprintf(stderr, "%s\n", links);
 		for(link = strtok(links, " "); link; link = strtok(NULL, " ")) {
 			if (link[0] == ',')
