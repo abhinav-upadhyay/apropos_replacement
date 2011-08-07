@@ -44,7 +44,7 @@ static int check_md5(const char *, sqlite3 *);
 static void cleanup(void);
 static int create_db(sqlite3 *);
 static void get_section(const struct mdoc *, const struct man *);
-static int insert_into_db(sqlite3 *, char *);
+static int insert_into_db(sqlite3 *);
 static	void begin_parse(const char *, struct mparse *mp);
 static void pmdoc_node(const struct mdoc_node *);
 static void pmdoc_Nm(const struct mdoc_node *);
@@ -456,7 +456,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 		
 		printf("parsing %s\n", file);
 		begin_parse(file, mp);
-		if (insert_into_db(db, (char *)file) < 0)
+		if (insert_into_db(db) < 0)
 			fprintf(stderr, "Error indexing: %s\n", file);
 		return;
 	}
@@ -873,7 +873,7 @@ cleanup(void)
 *   error. Otherwise, store the data in the database and return 0
 */
 static int
-insert_into_db(sqlite3 *db, char *file)
+insert_into_db(sqlite3 *db)
 {
 	int rc = 0;
 	int idx = -1;
@@ -1086,7 +1086,7 @@ insert_into_db(sqlite3 *db, char *file)
 				link[strlen(link) - 1] = 0;
 			
 			asprintf(&str, "insert into mandb_links values (\'%s\', \'%s\', \'%s\',"
-				" \'%s\', \'%s\')", link, name, section, machine, file);
+				" \'%s\')", link, name, section, machine);
 			rc = sqlite3_prepare_v2(db, str, -1, &stmt, NULL);
 			if (rc != SQLITE_OK) {
 				fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1165,7 +1165,7 @@ create_db(sqlite3 *db)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "create table mandb_links(link, target, section, machine, path)";
+	sqlstr = "create table mandb_links(link, target, section, machine)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
