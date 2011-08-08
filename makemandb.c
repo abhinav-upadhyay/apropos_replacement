@@ -320,6 +320,26 @@ main(int argc, char *argv[])
 		cleanup();
 		return -1;
 	}
+	sqlite3_finalize(stmt);
+	
+	/* Optimize the index for faster search */
+	sqlstr = "insert into mandb(mandb) values(\'optimize\')";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		cleanup();
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	if (sqlite3_step(stmt) != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		cleanup();
+		return -1;
+	}
 	
 	sqlite3_finalize(stmt);
 	sqlite3_close(db);
