@@ -41,18 +41,23 @@
 #include "stopword_tokenizer.h"
 
 #define SEC_MAX 9
-
-static void rank_func(sqlite3_context *, int, sqlite3_value **);
-static void remove_stopwords(char **);
-static int search(const char *, const char **);
-char *stemword(char *);
-static void usage(void);
-
+typedef struct apropos_flags {
+const char *sec_nums[SEC_MAX];
+int pager;
+} apropos_flags;
 
 typedef struct  {
 double value;
 int status;
 } inverse_document_frequency;
+
+static void rank_func(sqlite3_context *, int, sqlite3_value **);
+static void remove_stopwords(char **);
+static int search(const char *, apropos_flags *);
+char *stemword(char *);
+static void usage(void);
+
+
 
 static inverse_document_frequency idf;
 
@@ -61,7 +66,7 @@ main(int argc, char *argv[])
 {
 	char *query = NULL;	// the user query
 	char ch;
-	const char *sec_nums[SEC_MAX] = {0}; 
+	apropos_flags aflags = {0};
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
@@ -69,34 +74,37 @@ main(int argc, char *argv[])
 	/*If the user specifies a section number as an option, the correspondingly indexed 
 	* element in sec_nums is set to the string representing that section number.
 	*/
-	while ((ch = getopt(argc, argv, "123456789")) != -1) {
+	while ((ch = getopt(argc, argv, "123456789p")) != -1) {
 	switch (ch) {
 		case '1':
-			sec_nums[0] = (char *)"1";
+			aflags.sec_nums[0] = (char *)"1";
 			break;
 		case '2':
-			sec_nums[1] = (char *)"2";
+			aflags.sec_nums[1] = (char *)"2";
 			break;
 		case '3':
-			sec_nums[2] = (char *)"3";
+			aflags.sec_nums[2] = (char *)"3";
 			break;
 		case '4':
-			sec_nums[3] = (char *)"4";
+			aflags.sec_nums[3] = (char *)"4";
 			break;
 		case '5':
-			sec_nums[4] = (char *)"5";
+			aflags.sec_nums[4] = (char *)"5";
 			break;
 		case '6':
-			sec_nums[5] = (char *)"6";
+			aflags.sec_nums[5] = (char *)"6";
 			break;
 		case '7':
-			sec_nums[6] = (char *)"7";
+			aflags.sec_nums[6] = (char *)"7";
 			break;
 		case '8':
-			sec_nums[7] = (char *)"8";
+			aflags.sec_nums[7] = (char *)"8";
 			break;
 		case '9':
-			sec_nums[8] = (char *)"9";
+			aflags.sec_nums[8] = (char *)"9";
+			break;
+		case 'p':	//user wants to view more than 10 results and page them
+			aflags.pager = 1;
 			break;
 		case '?':
 			usage();
@@ -126,7 +134,7 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 		
-	if (search(query, sec_nums) < 0) {
+	if (search(query, &aflags) < 0) {
 		fprintf(stderr, "Sorry, no relevant results could be obtained\n");
 		return -1;
 	}
@@ -141,7 +149,7 @@ main(int argc, char *argv[])
 *  to search in. We build the query string accordingly.
 */
 static int
-search(const char *query, const char **sec_nums)
+search(const char *query, apropos_flags *aflags)
 {
 	sqlite3 *db = NULL;
 	int rc = 0;
@@ -242,26 +250,37 @@ search(const char *query, const char **sec_nums)
 	* 2. I am using LIKE operator because '=' or IN operators do not seem to be
 	* working with the compression option
 	*/
-	asprintf(&sqlstr, "SELECT section, name, name_desc, "
-			"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
-			"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
-			 "from mandb WHERE mandb MATCH :query");
+	if (!aflags->pager)
+		
+		asprintf(&sqlstr, "SELECT section, name, name_desc, "
+				"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
+				"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
+				 "from mandb WHERE mandb MATCH :query");
+	else
+		/* We are using a pager, so avoid the code sequences for bold text in 
+		*	snippet.  
+		*/
+		asprintf(&sqlstr, "SELECT section, name, name_desc, "
+				"snippet(mandb, \"\", \"\", \"...\" ), "
+				"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
+				 "from mandb WHERE mandb MATCH :query");
 	
 	for (i = 0; i < SEC_MAX; i++) {
-		if (sec_nums[i]) {
+		if (aflags->sec_nums[i]) {
 			if (flag == 0) {
 				concat(&sqlstr, "AND (section LIKE");
 				flag = 1;
 			}
 			else
 				concat(&sqlstr, "OR section LIKE");
-			concat(&sqlstr, sec_nums[i]);
+			concat(&sqlstr, aflags->sec_nums[i]);
 		}
 	}
 	if (flag)
-		concat(&sqlstr, ") ORDER BY rank desc LIMIT 10 OFFSET 0");
-	else
-		concat(&sqlstr, "ORDER BY rank desc LIMIT 10 OFFSET 0");
+		concat(&sqlstr, ") ORDER BY rank desc");
+	if (!aflags->pager)
+		concat(&sqlstr, "LIMIT 10 OFFSET 0");
+		
 	          
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -281,20 +300,40 @@ search(const char *query, const char **sec_nums)
 		return -1;
 	}
 	
-	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		section = (char *) sqlite3_column_text(stmt, 0);
-		name = (char *) sqlite3_column_text(stmt, 1);
-		name_desc = (char *) sqlite3_column_text(stmt, 2);
-		snippet = (char *) sqlite3_column_text(stmt, 3);
-		printf("%s(%s)\t%s\n%s\n\n", name, section, name_desc, snippet);
+	if (!aflags->pager) {	
+		while (sqlite3_step(stmt) == SQLITE_ROW) {
+			section = (char *) sqlite3_column_text(stmt, 0);
+			name = (char *) sqlite3_column_text(stmt, 1);
+			name_desc = (char *) sqlite3_column_text(stmt, 2);
+			snippet = (char *) sqlite3_column_text(stmt, 3);
+			printf("%s(%s)\t%s\n%s\n\n", name, section, name_desc, snippet);
+		}
+	}
+	
+	/* using a pager, open a pipe to more and push the output to it */
+	else {
+		FILE *less = popen("more", "w");
+		if (less == NULL) {
+			sqlite3_finalize(stmt);	
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			errx(EXIT_FAILURE, "pipe failed\n");
+		}
+		
+		while (sqlite3_step(stmt) == SQLITE_ROW) {
+			section = (char *) sqlite3_column_text(stmt, 0);
+			name = (char *) sqlite3_column_text(stmt, 1);
+			name_desc = (char *) sqlite3_column_text(stmt, 2);
+			snippet = (char *) sqlite3_column_text(stmt, 3);
+			fprintf(less, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, snippet);
+		}
+		pclose(less);
 	}
 			
 	sqlite3_finalize(stmt);	
 	sqlite3_close(db);
 	sqlite3_shutdown();
-	
 	return 0;
-	
 }
 /*
 * remove_stopwords--
