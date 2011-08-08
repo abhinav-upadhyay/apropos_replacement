@@ -277,7 +277,8 @@ search(const char *query, apropos_flags *aflags)
 		}
 	}
 	if (flag)
-		concat(&sqlstr, ") ORDER BY rank desc");
+		concat(&sqlstr, ")");
+	concat(&sqlstr, "ORDER BY rank desc");
 	if (!aflags->pager)
 		concat(&sqlstr, "LIMIT 10 OFFSET 0");
 		
