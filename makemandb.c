@@ -1123,7 +1123,7 @@ create_db(sqlite3 *db)
 
 	sqlstr = "create virtual table mandb using fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
-	" errors, compress=zip, uncompress=unzip tokenize=porter )";
+	" errors, compress=zip, uncompress=unzip, tokenize=porter )";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
