@@ -1078,7 +1078,7 @@ insert_into_db(sqlite3 *db)
 	if (links) {
 		if (machine == NULL)
 			asprintf(&machine, "%s", "");
-		fprintf(stderr, "%s\n", links);
+		
 		for(link = strtok(links, " "); link; link = strtok(NULL, " ")) {
 			if (link[0] == ',')
 				link++;
@@ -1123,7 +1123,7 @@ create_db(sqlite3 *db)
 
 	sqlstr = "create virtual table mandb using fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
-	" errors, tokenize=porter )";
+	" errors, compress=zip, uncompress=unzip tokenize=porter )";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1144,7 +1144,7 @@ create_db(sqlite3 *db)
 	sqlite3_finalize(stmt);
 
 /*------------------------ Build the mandb_md5 table------------------------------ */	
-	sqlstr = "create table mandb_md5(md5_hash)";
+	sqlstr = "create table mandb_md5(md5_hash primary key)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1184,6 +1184,27 @@ create_db(sqlite3 *db)
 	}
 		
 	sqlite3_finalize(stmt);
+	
+	sqlstr = "create index index_mandb_links ON mandb_links (link)";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+		
+	sqlite3_finalize(stmt);
+
 	return 0;
 }
 
