@@ -438,8 +438,8 @@ usage(void)
 {
 
 	(void)fprintf(stderr,
-	    "usage: %s query\n"
-	    " %s [-s <section-number>] query\n"
+	    "usage: %s [-p] query\n"
+	    " %s [-p] [-s <section-number>] query\n"
 	    , getprogname(), getprogname());
 	exit(1);
 }
