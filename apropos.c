@@ -28,6 +28,7 @@
  */
 
 #include <assert.h>
+#include <err.h>
 #include <math.h>
 #include <search.h>
 #include <stdio.h>

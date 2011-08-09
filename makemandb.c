@@ -40,12 +40,12 @@
 #define MDOC 0	//If the page is of mdoc(7) type
 #define MAN 1	//If the page  is of man(7) type
 
-static int check_md5(const char *, sqlite3 *);
+static char *check_md5(const char *, sqlite3 *, const char *);
 static void cleanup(void);
 static int create_db(sqlite3 *);
 static void get_section(const struct mdoc *, const struct man *);
 static int insert_into_db(sqlite3 *);
-static	void begin_parse(const char *, struct mparse *mp);
+static	void begin_parse(const char *, struct mparse *);
 static void pmdoc_node(const struct mdoc_node *);
 static void pmdoc_Nm(const struct mdoc_node *);
 static void pmdoc_Nd(const struct mdoc_node *);
@@ -55,10 +55,12 @@ static void pman_parse_node(const struct man_node *, char **);
 static void pman_parse_name(const struct man_node *);
 static void pman_sh(const struct man_node *);
 static void pman_block(const struct man_node *);
-static void traversedir(const char *, sqlite3 *db, struct mparse *mp);
+static void traversedir(const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *string);
-static int prepare_db(sqlite3 **db);
+static int prepare_db(sqlite3 **);
 static void get_machine(const struct mdoc *);
+static void build_file_cache(sqlite3 *, const char *);
+static void update_db(sqlite3 *, struct mparse *);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
@@ -257,13 +259,6 @@ main(int argc, char *argv[])
 	if (prepare_db(&db) < 0)
 		errx(EXIT_FAILURE, "Error in initializing the database");
 		
-	/* Build the databases */
-	if (create_db(db) < 0) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Unable to create database");
-	}
-			
 	/* call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL) {
 		sqlite3_close(db);
@@ -286,7 +281,8 @@ main(int argc, char *argv[])
 		return -1;
 	}
 	sqlite3_finalize(stmt);
-	
+
+	printf("Building temporary file cache\n");	
 	while (fgets(line, MAXLINE, file) != NULL) {
 		/* remove the new line character from the string */
 		line[strlen(line) - 1] = '\0';
@@ -300,6 +296,8 @@ main(int argc, char *argv[])
 		cleanup();
 		errx(EXIT_FAILURE, "pclose error");
 	}
+	
+	update_db(db, mp);
 	mparse_free(mp);
 	
 	/* commit the transaction */
@@ -360,14 +358,15 @@ prepare_db(sqlite3 **db)
 	const char *sqlstr;
 	int rc;
 	int idx;
+	int create_db_flag = 0;
 	sqlite3_stmt *stmt = NULL;
 
-	/* If the db file already exists, nuke it*/	
-	if (stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)) {
-		if (remove(DBPATH) < 0)
-			return -1;
-	}
-	
+	/* If the db file does not alreadt exists, we need to create the tables, set
+	*	the flag to remember this
+	*/
+	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)))
+		create_db_flag = 1;
+		
 	/* Now initialize the database connection */
 	sqlite3_initialize();
 	rc = sqlite3_open_v2(DBPATH, db, SQLITE_OPEN_READWRITE | 
@@ -440,14 +439,18 @@ prepare_db(sqlite3 **db)
 		sqlite3_shutdown();
 		return -1;
 	}
-	sqlite3_finalize(stmt);	
+	sqlite3_finalize(stmt);
+	
+	/* if the flag was set true, then we need to call create_db to create the tables */
+	if (create_db_flag)
+		create_db(*db);	
 	return 0;
 }
 
 /*
 * traversedir --
-*  traverses the given directory recursively and passes all the files in the
-*  way to the parser.
+*  traverses the given directory recursively and passes all the man page files 
+*  in the way to build_cache()
 */
 static void
 traversedir(const char *file, sqlite3 *db, struct mparse *mp)
@@ -466,18 +469,9 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	if (S_ISLNK(sb.st_mode)) 
 		return;
 	
-	/* if it is a regular file, pass it to the parser */
+	/* if it is a regular file, pass it to build_cache() */
 	if (S_ISREG(sb.st_mode)) {
-		/* Avoid hardlinks to prevent duplicate entries in the database */
-		if (check_md5(file, db) != 0) {
-			cleanup();
-			return;
-		}
-		
-		printf("parsing %s\n", file);
-		begin_parse(file, mp);
-		if (insert_into_db(db) < 0)
-			fprintf(stderr, "Error indexing: %s\n", file);
+		build_file_cache(db, file);
 		return;
 	}
 	
@@ -504,8 +498,194 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	
 		closedir(dp);
 	}
-}		
+}
 
+/* build_file_cache--
+*	This function generates an md5 hash of the file passed as it's 2nd parameter
+*	and stores it in a temporary table file_cache along with the full file path.
+*	This is done to support incremental updation of the database.
+*	The temporary table file_cache is dropped thereafter in the function 
+*	update_db(), once the database has been updated.
+*/
+static void
+build_file_cache(sqlite3 *db, const char *file)
+{
+	const char *sqlstr;
+	sqlite3_stmt *stmt = NULL;
+	int rc, idx;
+	char *md5 = NULL;
+	assert(file != NULL);
+	
+	sqlstr = "create table IF NOT EXISTS file_cache(md5_hash, file primary key)";
+
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return ;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return ;
+	}
+		
+	sqlite3_finalize(stmt);
+	
+	sqlstr = "create index IF NOT EXISTS index_file_cahce_md5 ON file_cache (md5_hash)";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return;
+	}
+	
+	rc = sqlite3_step(stmt);
+	sqlite3_finalize(stmt);
+	
+	if ((md5 = check_md5(file, db, "file_cache")) == NULL) 
+		return;
+	sqlstr = "insert into file_cache values(:md5, :file)";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		free(md5);
+		return;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":md5");
+	rc = sqlite3_bind_text(stmt, idx, md5, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		free(md5);
+		return;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":file");
+	rc = sqlite3_bind_text(stmt, idx, file, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		free(md5);
+		return;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		free(md5);
+		return;
+	}
+	sqlite3_finalize(stmt);
+	free(md5);
+}
+
+/* update_db--
+*	Does an incremental updation of the database by checking the file_cache.
+*	It parses and adds the pages which are present in file_cache but not in the
+*	database.
+*	It also removes the pages which are present in the databse but not in the 
+*	file_cache.
+*/
+static void
+update_db(sqlite3 *db, struct mparse *mp)
+{
+	const char *sqlstr;
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+	char *file;
+	int count = 0;
+	
+	sqlstr = "select file, md5_hash from file_cache where md5_hash not in "
+		"(select md5_hash from mandb_md5)";
+	
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		errx(EXIT_FAILURE, "Could not query file cache\n");
+	}
+	
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		file = (char *) sqlite3_column_text(stmt, 0);
+		md5_hash = strdup((char *) sqlite3_column_text(stmt, 1));
+		printf("Parsing: %s\n", file);
+		begin_parse(file, mp);
+		if (insert_into_db(db) < 0) {
+			fprintf(stderr, "Error in indexing %s\n", file);
+			cleanup();
+		}
+		else
+			count++;
+	}
+	
+	sqlite3_finalize(stmt);
+	
+	printf("%d new manual pages added\n", count);
+	
+	sqlstr = "delete from mandb where rowid not in (select id from mandb_md5 "
+		"where md5_hash not in (select md5_hash from file_cache))";
+	
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch\n");
+		return;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch\n");
+		return;
+	}
+	sqlite3_finalize(stmt);
+	
+	sqlstr = "delete from mandb_md5 where md5_hash not in (select md5_hash from"
+		" file_cache)";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch\n");
+		return;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch\n");
+		sqlite3_finalize(stmt);
+		return;
+	}
+	sqlite3_finalize(stmt);
+	
+	sqlstr = "drop table file_cache";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		return;
+	}
+	
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		return;
+	}
+	sqlite3_finalize(stmt);
+
+}
+	
 /*
 * begin_parse --
 *  parses the man page using libmandoc
@@ -900,6 +1080,7 @@ insert_into_db(sqlite3 *db)
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	char *link = NULL;
+	long int mandb_rowid;
 	
 	/* At the very minimum we want to make sure that we store the following data:
 	*  Name, One line description, the section number, and the md5 hash
@@ -918,7 +1099,6 @@ insert_into_db(sqlite3 *db)
 	if (page_type == MDOC) {
 		links = strdup(name);
 		free(name);
-		//fprintf(stderr, "%s\n", name);
 		int sz = strcspn(links, " \0");
 		name = malloc(sz + 1);
 		memcpy(name, links, sz);
@@ -1060,8 +1240,11 @@ insert_into_db(sqlite3 *db)
 	
 	sqlite3_finalize(stmt);
 	
+	/*Get the row id of the last inserted row */
+	mandb_rowid = sqlite3_last_insert_rowid(db);
+		
 /*------------------------ Populate the mandb_md5 table-----------------------*/
-	sqlstr = "insert into mandb_md5 values (:md5_hash)";
+	sqlstr = "insert into mandb_md5 values (:md5_hash, :id)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1071,6 +1254,15 @@ insert_into_db(sqlite3 *db)
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, md5_hash, -1, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":id");
+	rc = sqlite3_bind_int64(stmt, idx, mandb_rowid);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -1164,7 +1356,7 @@ create_db(sqlite3 *db)
 	sqlite3_finalize(stmt);
 
 /*------------------------ Build the mandb_md5 table------------------------------ */	
-	sqlstr = "create table mandb_md5(md5_hash primary key)";
+	sqlstr = "create table IF NOT EXISTS mandb_md5(md5_hash unique, id  INTEGER primary key)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1185,7 +1377,7 @@ create_db(sqlite3 *db)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "create table mandb_links(link, target, section, machine)";
+	sqlstr = "create table IF NOT EXISTS mandb_links(link, target, section, machine)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1205,7 +1397,7 @@ create_db(sqlite3 *db)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "create index index_mandb_links ON mandb_links (link)";
+	sqlstr = "create index IF NOT EXISTS index_mandb_links ON mandb_links (link)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1215,48 +1407,37 @@ create_db(sqlite3 *db)
 	}
 	
 	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-		
 	sqlite3_finalize(stmt);
-
 	return 0;
 }
 
 /*
 * check_md5--
 *  Generates the md5 hash of the file and checks if it already doesn't exist in 
-*  the database. This function is being used to avoid hardlinks.
-*  Return values: 0 if the md5 hash does not exist in the datbase
-*                 1 if the hash exists in the database
-*                 -1 if an error occured while generating the hash or checking
-*                 against the database
+*  the table passed as the 3rd parameter. This function is being used to avoid hardlinks.
+*  Return values: md5 hash of the file if the md5 hash does not exist in the given table
+*                 NULL if the hash exists in the database or in case of an error
 */
-static int 
-check_md5(const char *file, sqlite3 *db)
+static char * 
+check_md5(const char *file, sqlite3 *db, const char *table)
 {
 	int rc = 0;
 	int idx = -1;
-	const char *sqlstr = NULL;
+	char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 
 	assert(file != NULL);
 	char *buf = MD5File(file, NULL);
 	if (buf == NULL) {
 		fprintf(stderr, "md5 failed: %s\n", file);
-		return -1;
+		return NULL;
 	}
 	
-	sqlstr = "select * from mandb_md5 where md5_hash = :md5_hash";
+	asprintf(&sqlstr, "select * from %s where md5_hash = :md5_hash", table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		free(buf);
-		return -1;
+		return NULL;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
@@ -1265,19 +1446,17 @@ check_md5(const char *file, sqlite3 *db)
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		free(buf);
-		return -1;
+		return NULL;
 	}
 	
 	if (sqlite3_step(stmt) == SQLITE_ROW) {
 		sqlite3_finalize(stmt);	
 		free(buf);
-		return 1;
+		return NULL;
 	}
 	
-	md5_hash = strdup(buf);
 	sqlite3_finalize(stmt);	
-	free(buf);
-	return 0;
+	return buf;
 }
 
 /*
