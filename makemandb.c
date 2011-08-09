@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "apropos-utils.h"
 #include "fts3_tokenizer.h"
@@ -61,6 +62,7 @@ static int prepare_db(sqlite3 **);
 static void get_machine(const struct mdoc *);
 static void build_file_cache(sqlite3 *, const char *);
 static void update_db(sqlite3 *, struct mparse *);
+static void usage(void);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
@@ -250,9 +252,21 @@ main(int argc, char *argv[])
 	char line[MAXLINE];
 	const char *sqlstr;
 	int rc;
+	char ch;
 	sqlite3_stmt *stmt = NULL;
 	struct mparse *mp = NULL;
 	sqlite3 *db;
+	
+	while ((ch = getopt(argc, argv, "f")) != -1) {
+		switch (ch) {
+		case 'f':
+			remove(DBPATH);
+			break;
+		case '?':
+			usage();
+			break;
+		}
+	}
 	
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
@@ -1502,4 +1516,12 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string)
 			concat(&desc, string);
 			break;
 	}
+}
+
+static void
+usage(void)
+{
+	(void)fprintf(stderr,
+	    "usage: %s [-f]\n", getprogname());
+	exit(1);
 }
