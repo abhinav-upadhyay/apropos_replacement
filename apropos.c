@@ -67,7 +67,7 @@ main(int argc, char *argv[])
 {
 	char *query = NULL;	// the user query
 	char ch;
-	apropos_flags aflags = {0};
+	apropos_flags aflags = {{0}, 0};
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();

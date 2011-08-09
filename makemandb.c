@@ -631,7 +631,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	
 	printf("%d new manual pages added\n", count);
 	
-	sqlstr = "delete from mandb where rowid not in (select id from mandb_md5 "
+	sqlstr = "delete from mandb where rowid in (select id from mandb_md5 "
 		"where md5_hash not in (select md5_hash from file_cache))";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
