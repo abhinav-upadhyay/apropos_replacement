@@ -38,5 +38,5 @@
 void zip(sqlite3_context *, int, sqlite3_value **);
 void unzip(sqlite3_context *, int, sqlite3_value **);
 char *lower(char *);
-int concat(char **, const char *);
+int concat(char **, const char *, int);
 #endif 

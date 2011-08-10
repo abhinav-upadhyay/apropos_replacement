@@ -229,7 +229,7 @@ search(const char *query, apropos_flags *aflags)
 		return -1;
 	}
 
-	/* Register the uncompress function: unizp (apropos-utils.h) */
+	/* Register the uncompress function: unzip (apropos-utils.h) */
 	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
 		                         unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
@@ -269,19 +269,19 @@ search(const char *query, apropos_flags *aflags)
 	for (i = 0; i < SEC_MAX; i++) {
 		if (aflags->sec_nums[i]) {
 			if (flag == 0) {
-				concat(&sqlstr, "AND (section LIKE");
+				concat(&sqlstr, "AND (section LIKE", -1);
 				flag = 1;
 			}
 			else
-				concat(&sqlstr, "OR section LIKE");
-			concat(&sqlstr, aflags->sec_nums[i]);
+				concat(&sqlstr, "OR section LIKE", -1);
+			concat(&sqlstr, aflags->sec_nums[i], strlen(aflags->sec_nums[i]));
 		}
 	}
 	if (flag)
-		concat(&sqlstr, ")");
-	concat(&sqlstr, "ORDER BY rank desc");
+		concat(&sqlstr, ")", 1);
+	concat(&sqlstr, "ORDER BY rank desc", -1);
 	if (!aflags->pager)
-		concat(&sqlstr, "LIMIT 10 OFFSET 0");
+		concat(&sqlstr, "LIMIT 10 OFFSET 0", -1);
 		
 	          
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);

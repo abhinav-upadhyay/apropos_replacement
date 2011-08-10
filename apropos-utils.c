@@ -102,11 +102,12 @@ lower(char *str)
 * dst + " " + src 
 */
 int
-concat(char **dst, const char *src)
+concat(char **dst, const char *src, int srclen)
 {
 	int total_len, dst_len;
-	if (src == NULL)
-		return -1;
+	assert(src != NULL);
+	if (srclen == -1)
+		srclen = strlen(src);
 
 	/* if destination buffer dst is NULL, then simply strdup the source buffer */
 	if (*dst == NULL) {
@@ -122,7 +123,7 @@ concat(char **dst, const char *src)
 	*  one extra character for the nul byte 
 	*  and one for the space character 
 	*/	
-	total_len = dst_len + strlen(src) + 2;
+	total_len = dst_len + srclen + 2;
 	
 	if ((*dst = (char *) realloc(*dst, total_len)) == NULL)
 		return -1;
@@ -131,9 +132,8 @@ concat(char **dst, const char *src)
 	memcpy(*dst + dst_len, " ", 1);
 	dst_len++;
 	
-	
-	memcpy(*dst + dst_len, src, strlen(src) + 1);
-	
+	/* Now, copy src at the end of dst */	
+	memcpy(*dst + dst_len, src, srclen + 1);
 	return 0;
 }
 

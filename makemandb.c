@@ -762,7 +762,7 @@ pmdoc_Nm(const struct mdoc_node *n)
 	if (n->sec == SEC_NAME) {
 		for (n = n->child; n; n = n->next) {
 			if (n->type == MDOC_TEXT)
-				concat(&name, n->string);
+				concat(&name, n->string, strlen(n->string));
 		}
 	}
 }
@@ -777,7 +777,7 @@ pmdoc_Nd(const struct mdoc_node *n)
 	if (n == NULL)
 		return;
 	if (n->type == MDOC_TEXT) 
-		concat(&name_desc, n->string);
+		concat(&name_desc, n->string, strlen(n->string));
 	
 	if (n->child)
 		pmdoc_Nd(n->child);
@@ -841,7 +841,7 @@ pman_parse_node(const struct man_node *n, char **s)
 {
 	for (n = n->child; n; n = n->next) {
 		if (n->type == MAN_TEXT) {
-			if (concat(s, n->string) < 0)
+			if (concat(s, n->string, strlen(n->string)) < 0)
 				return;
 		}	
 		else
@@ -859,7 +859,7 @@ pman_parse_name(const struct man_node *n)
 	if (n == NULL)
 		return;
 	if (n->type == MAN_TEXT) 
-		concat(&name_desc, n->string);
+		concat(&name_desc, n->string, strlen(n->string));
 	
 	if (n->child)
 		pman_parse_name(n->child);
@@ -925,7 +925,7 @@ pman_sh(const struct man_node *n)
 			for(link = strtok(temp, " "); link; link = strtok(NULL, " ")) {
 				if (link[strlen(link)] == ',') {
 					link[strlen(link)] = 0;
-					concat(&links, link);
+					concat(&links, link, strlen(link));
 				}
 				else
 					break;
@@ -1483,33 +1483,33 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string)
 {
 	switch (sec) {
 		case SEC_LIBRARY:
-			concat(&lib, string);
+			concat(&lib, string, strlen(string));
 			break;
 		case SEC_SYNOPSIS:
-			concat(&synopsis, string);
+			concat(&synopsis, string, strlen(string));
 			break;
 		case SEC_RETURN_VALUES:
-			concat(&return_vals, string);
+			concat(&return_vals, string, strlen(string));
 			break;
 		case SEC_ENVIRONMENT:
-			concat(&env, string);
+			concat(&env, string, strlen(string));
 			break;
 		case SEC_FILES:
-			concat(&files, string);
+			concat(&files, string, strlen(string));
 			break;
 		case SEC_EXIT_STATUS:
-			concat(&exit_status, string);
+			concat(&exit_status, string, strlen(string));
 			break;
 		case SEC_DIAGNOSTICS:
-			concat(&diagnostics, string);
+			concat(&diagnostics, string, strlen(string));
 			break;
 		case SEC_ERRORS:
-			concat(&errors, string);
+			concat(&errors, string, strlen(string));
 			break;
 		case SEC_NAME:
 			break;
 		default:
-			concat(&desc, string);
+			concat(&desc, string, strlen(string));
 			break;
 	}
 }
