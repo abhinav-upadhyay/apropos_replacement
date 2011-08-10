@@ -63,6 +63,7 @@ static void get_machine(const struct mdoc *);
 static void build_file_cache(sqlite3 *, const char *);
 static void update_db(sqlite3 *, struct mparse *);
 static void usage(void);
+static void optimize(sqlite3 *);
 
 static char *name = NULL;	// for storing the name of the man page
 static char *name_desc = NULL; // for storing the one line description (.Nd)
@@ -79,7 +80,11 @@ static char *md5_hash = NULL;
 static char *section = NULL;
 static char *machine = NULL;
 static char *links = NULL; //stores all the links to a page in a space separated form
-static int page_type = MDOC; //Indicates the type of page: mdoc or man	
+static int page_type = MDOC; //Indicates the type of page: mdoc or man
+
+typedef struct makemandb_flags {
+	int optimize;
+} makemandb_flags;
 
 typedef	void (*pman_nf)(const struct man_node *n);
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
@@ -256,11 +261,15 @@ main(int argc, char *argv[])
 	sqlite3_stmt *stmt = NULL;
 	struct mparse *mp = NULL;
 	sqlite3 *db;
+	makemandb_flags mflags = {0};
 	
-	while ((ch = getopt(argc, argv, "f")) != -1) {
+	while ((ch = getopt(argc, argv, "fo")) != -1) {
 		switch (ch) {
 		case 'f':
 			remove(DBPATH);
+			break;
+		case 'o':
+			mflags.optimize = 1;
 			break;
 		case '?':
 			usage();
@@ -334,26 +343,9 @@ main(int argc, char *argv[])
 	}
 	sqlite3_finalize(stmt);
 	
-	/* Optimize the index for faster search */
-	sqlstr = "insert into mandb(mandb) values(\'optimize\')";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		cleanup();
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
+	if (mflags.optimize)
+		optimize(db);
 	
-	if (sqlite3_step(stmt) != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		cleanup();
-		return -1;
-	}
-	
-	sqlite3_finalize(stmt);
 	sqlite3_close(db);
 	sqlite3_shutdown();
 	cleanup();
@@ -1520,6 +1512,30 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string)
 			concat(&desc, string);
 			break;
 	}
+}
+
+/* Optimize the index for faster search */
+static void
+optimize(sqlite3 *db)
+{
+	const char *sqlstr;
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+	printf("Optimizing the database index\n");
+	
+	sqlstr = "insert into mandb(mandb) values(\'optimize\')";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		return;
+	}
+	
+	if (sqlite3_step(stmt) != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		return;
+	}
+	
+	sqlite3_finalize(stmt);
 }
 
 static void
