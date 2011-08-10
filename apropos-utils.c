@@ -87,11 +87,11 @@ char *
 lower(char *str)
 {
 	assert(str);
-	size_t i;
+	int i = 0;
 	char c;
-	for (i = 0; i < strlen(str); i++) {
+	while (str[i] != '\0') {
 		c = tolower((unsigned char) str[i]);
-		str[i] = c;
+		str[i++] = c;
 	}
 	return str;
 }
