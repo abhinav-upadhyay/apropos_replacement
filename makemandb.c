@@ -1450,6 +1450,7 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 	asprintf(&sqlstr, "select * from %s where md5_hash = :md5_hash", table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
+		free(sqlstr);
 		free(buf);
 		return NULL;
 	}
@@ -1459,17 +1460,20 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
+		free(sqlstr);
 		free(buf);
 		return NULL;
 	}
 	
 	if (sqlite3_step(stmt) == SQLITE_ROW) {
 		sqlite3_finalize(stmt);	
+		free(sqlstr);
 		free(buf);
 		return NULL;
 	}
 	
-	sqlite3_finalize(stmt);	
+	sqlite3_finalize(stmt);
+	free(sqlstr);
 	return buf;
 }
 
