@@ -108,9 +108,8 @@ main(int argc, char *argv[])
 			aflags.pager = 1;
 			break;
 		case '?':
-			usage();
-			break;
 		default:
+			usage();
 			break;
 		}		
 	}
@@ -439,9 +438,8 @@ usage(void)
 {
 
 	(void)fprintf(stderr,
-	    "usage: %s [-p] query\n"
-	    " %s [-p] [-s <section-number>] query\n"
-	    , getprogname(), getprogname());
+	    "Usage: %s [-p] [-s <section-number>] query\n"
+	    , getprogname());
 	exit(1);
 }
 
