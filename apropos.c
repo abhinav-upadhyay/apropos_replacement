@@ -116,7 +116,7 @@ main(int argc, char *argv[])
 	
 	argc -= optind;
 	argv += optind;		
-	query = argv[argc-1];
+	query = *argv;
 	
 	idf.value = 0.0;
 	idf.status = 0;
@@ -128,7 +128,7 @@ main(int argc, char *argv[])
 	*  query input by the user
 	*/
 	if (query == NULL)
-		query = argv[argc - 1];
+		query = *argv;
 	else if (!strcmp(query, "")) {
 		fprintf(stderr, "Try specifying more relevant keywords to get some matches\n");
 		exit(1);
@@ -340,7 +340,7 @@ search(const char *query, apropos_flags *aflags)
 * remove_stopwords--
 *  Scans the query and removes any stop words from it.
 *  It scans the query word by word, and looks up a hash table of stop words
-*  to check if it is a stopword or a valid keyword. In the we only have the
+*  to check if it is a stopword or a valid keyword. In the end we only have the
 *  relevant keywords left in the query.
 *  Error Cases: 
 *   1. In case of any error, it will set the query to NULL.	
