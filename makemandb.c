@@ -367,7 +367,7 @@ prepare_db(sqlite3 **db)
 	int create_db_flag = 0;
 	sqlite3_stmt *stmt = NULL;
 
-	/* If the db file does not alreadt exists, we need to create the tables, set
+	/* If the db file does not already exists, we need to create the tables, set
 	 *	the flag to remember this
 	 */
 	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)))
