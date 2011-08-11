@@ -58,16 +58,13 @@ static int search(const char *, apropos_flags *);
 char *stemword(char *);
 static void usage(void);
 
-
-
-static inverse_document_frequency idf;
-
 int
 main(int argc, char *argv[])
 {
 	char *query = NULL;	// the user query
 	char ch;
 	apropos_flags aflags = {{0}, 0};
+		
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
@@ -118,9 +115,6 @@ main(int argc, char *argv[])
 	argv += optind;		
 	query = *argv;
 	
-	idf.value = 0.0;
-	idf.status = 0;
-	
 	/* Eliminate any stopwords from the query */
 	remove_stopwords(&query);
 	
@@ -160,6 +154,7 @@ search(const char *query, apropos_flags *aflags)
 	char *snippet = NULL;
 	char *name_desc = NULL;
 	sqlite3_stmt *stmt = NULL;
+	inverse_document_frequency idf = {0, 0};
 	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	
 	sqlite3_initialize();
@@ -209,7 +204,7 @@ search(const char *query, apropos_flags *aflags)
 	sqlite3_finalize(stmt);	
 	
 	/* Register the rank function */
-	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, NULL, 
+	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "Not able to register function\n");
@@ -460,6 +455,8 @@ usage(void)
 static void
 rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
+	inverse_document_frequency *idf = (inverse_document_frequency *)
+										sqlite3_user_data(pctx);
 	double tf = 0.0;
 	double col_weights[] = {
 	2.0,	// NAME
@@ -510,9 +507,9 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 			int ndocshitcount = phraseinfo[3 * icol + 2];
 			doclen = matchinfo[2 + icol ];
 			double weight = col_weights[icol - 1];
-			if (idf.status == 0 && ndocshitcount)
-				idf.value += log(((double)ndoc / ndocshitcount))* weight ;
-	
+			if (idf->status == 0 && ndocshitcount)
+				idf->value += log(((double)ndoc / ndocshitcount))* weight;
+
 			/* Dividing the tf by document length to normalize the effect of longer
 			*  documents.
 			*/
@@ -520,13 +517,13 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
 		}
 	}
-	idf.status = 1;
+	idf->status = 1;
 	
 	/* Final score = (tf * idf)/ ( k + tf)
 	*	Dividing by k+ tf further normalizes the weight leading to better results.
 	*   The value of k is experimental
 	*/
-	double score = (tf * idf.value/ ( k + tf)) ;
+	double score = (tf * idf->value/ ( k + tf)) ;
 	sqlite3_result_double(pctx, score);
 	return;
 
