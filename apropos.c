@@ -58,6 +58,21 @@ static int search(const char *, apropos_flags *);
 char *stemword(char *);
 static void usage(void);
 
+/* weights for individual columns */
+static const double col_weights[] = {
+	2.0,	// NAME
+	2.00,	// Name-description
+	0.55,	// DESCRIPTION
+	0.25,	// LIBRARY
+	0.10,	//SYNOPSIS
+	0.001,	//RETURN VALUES
+	0.20,	//ENVIRONMENT
+	0.01,	//FILES
+	0.001,	//EXIT STATUS
+	2.00,	//DIAGNOSTICS
+	0.05	//ERRORS
+};
+
 int
 main(int argc, char *argv[])
 {
@@ -456,19 +471,6 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	inverse_document_frequency *idf = (inverse_document_frequency *)
 										sqlite3_user_data(pctx);
 	double tf = 0.0;
-	double col_weights[] = {
-	2.0,	// NAME
-	2.00,	// Name-description
-	0.55,	// DESCRIPTION
-	0.25,	// LIBRARY
-	0.10,	//SYNOPSIS
-	0.001,	//RETURN VALUES
-	0.20,	//ENVIRONMENT
-	0.01,	//FILES
-	0.001,	//EXIT STATUS
-	2.00,	//DIAGNOSTICS
-	0.05	//ERRORS
-	};
 	unsigned int *matchinfo;
 	int ncol;
 	int nphrase;
