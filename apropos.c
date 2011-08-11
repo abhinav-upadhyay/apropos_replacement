@@ -478,11 +478,8 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	int ndoc;
 	int doclen = 0;
 	const double k = 3.75;
-	/* Check that the number of arguments passed to this function is correct.
-	 * If not, jump to wrong_number_args. 
-	 */
-	if( nval != 1 )
-		goto wrong_number_args;
+	/* Check that the number of arguments passed to this function is correct. */
+	assert(nval == 1);
 
 	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
 	nphrase = matchinfo[0];
@@ -525,8 +522,4 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	double score = (tf * idf->value/ ( k + tf)) ;
 	sqlite3_result_double(pctx, score);
 	return;
-
-	/* Jump here if the wrong number of arguments are passed to this function */
-	wrong_number_args:
-		sqlite3_result_error(pctx, "wrong number of arguments to function rank()", -1);
 }
