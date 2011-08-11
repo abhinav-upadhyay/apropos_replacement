@@ -84,8 +84,8 @@ main(int argc, char *argv[])
 	if (argc < 2)
 		usage();
 	
-	/*If the user specifies a section number as an option, the correspondingly 
-	 * indexed element in sec_nums is set to the string representing that 
+	/*If the user specifies a section number as an option, the corresponding 
+	 * index element in sec_nums is set to the string representing that 
 	 * section number.
 	 */
 	while ((ch = getopt(argc, argv, "123456789p")) != -1) {
@@ -255,7 +255,7 @@ search(const char *query, apropos_flags *aflags)
 	
 	/* We want to build a query of the form: "select x,y,z from mandb where
 	 * mandb match :query [AND (section LIKE '1' OR section LIKE '2' OR...)]
-	 * ORDER BY rank desc..."
+	 * ORDER BY rank DESC..."
 	 * NOTES: 1. The portion in square brackets is optional, it will be there 
 	 * only if the user has specified an option on the command line to search in 
 	 * one or more specific sections.
@@ -447,15 +447,16 @@ usage(void)
 /*
  * rank_func --
  *  Sqlite user defined function for ranking the documents.
- *  For each phrase of the query, it computes the tf and idf adds them over.
+ *  For each phrase of the query, it computes the tf and idf and adds them over.
  *  It computes the final rank, by multiplying tf and idf together.
  *  Weight of term t for document d = (term frequency of t in d * 
  *                                      inverse document frequency of t) 
  *
  *  Term Frequency of term t in document d = Number of times t occurs in d / 
- *                                        Number of times t appears in all documents
+ *	                                        Number of times t appears in all 
+ *											documents
  *
- *  Inverse document frequenct of t = log(Total number of documents / 
+ *  Inverse document frequency of t = log(Total number of documents / 
  *										Number of documents in which t occurs)
  */
 static void
