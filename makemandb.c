@@ -426,6 +426,7 @@ prepare_db(sqlite3 **db)
 	
 	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **) 
 		&stopword_tokenizer_module);
+
 	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
 	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
 		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
@@ -522,7 +523,7 @@ build_file_cache(sqlite3 *db, const char *file)
 	char *md5 = NULL;
 	assert(file != NULL);
 	
-	sqlstr = "create table IF NOT EXISTS file_cache(md5_hash, file primary key)";
+	sqlstr = "CREATE TABLE IF NOT EXISTS file_cache(md5_hash, file PRIMARY KEY)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -543,7 +544,7 @@ build_file_cache(sqlite3 *db, const char *file)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "create index IF NOT EXISTS index_file_cahce_md5 ON file_cache (md5_hash)";
+	sqlstr = "CREATE INDEX IF NOT EXISTS index_file_cahce_md5 ON file_cache (md5_hash)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -557,7 +558,8 @@ build_file_cache(sqlite3 *db, const char *file)
 	
 	if ((md5 = check_md5(file, db, "file_cache")) == NULL) 
 		return;
-	sqlstr = "insert into file_cache values(:md5, :file)";
+		
+	sqlstr = "INSERT INTO file_cache VALUES (:md5, :file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -609,8 +611,8 @@ update_db(sqlite3 *db, struct mparse *mp)
 	char *file;
 	int count = 0;
 	
-	sqlstr = "select file, md5_hash from file_cache where md5_hash not in "
-		"(select md5_hash from mandb_md5)";
+	sqlstr = "SELECT file, md5_hash FROM file_cache WHERE md5_hash NOT IN "
+		"(SELECT md5_hash FROM mandb_md5)";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -637,8 +639,8 @@ update_db(sqlite3 *db, struct mparse *mp)
 	
 	printf("%d new manual pages added\n", count);
 	
-	sqlstr = "delete from mandb where rowid in (select id from mandb_md5 "
-		"where md5_hash not in (select md5_hash from file_cache))";
+	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_md5 "
+		"WHERE md5_hash NOT IN (SELECT md5_hash FROM file_cache))";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -656,7 +658,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	}
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "delete from mandb_md5 where md5_hash not in (select md5_hash from"
+	sqlstr = "DELETE FROM mandb_md5 WHERE md5_hash NOT IN (SELECT md5_hash FROM"
 		" file_cache)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -675,7 +677,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	}
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "drop table file_cache";
+	sqlstr = "DROP TABLE file_cache";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1118,7 +1120,7 @@ insert_into_db(sqlite3 *db)
 	}
 	
 /*------------------------ Populate the mandb table------------------------------ */
-	sqlstr = "insert into mandb values (:section, :name, :name_desc, :desc, :lib, "
+	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc, :lib, "
 	":synopsis, :return_vals, :env, :files, :exit_status, :diagnostics, :errors)";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -1250,7 +1252,7 @@ insert_into_db(sqlite3 *db)
 	mandb_rowid = sqlite3_last_insert_rowid(db);
 		
 /*------------------------ Populate the mandb_md5 table-----------------------*/
-	sqlstr = "insert into mandb_md5 values (:md5_hash, :id)";
+	sqlstr = "INSERT INTO mandb_md5 VALUES (:md5_hash, :id)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1303,7 +1305,7 @@ insert_into_db(sqlite3 *db)
 			if(link[strlen(link) - 1] == ',')
 				link[strlen(link) - 1] = 0;
 			
-			asprintf(&str, "insert into mandb_links values (\'%s\', \'%s\', \'%s\',"
+			asprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', \'%s\',"
 				" \'%s\')", link, name, section, machine);
 			rc = sqlite3_prepare_v2(db, str, -1, &stmt, NULL);
 			if (rc != SQLITE_OK) {
@@ -1339,7 +1341,7 @@ create_db(sqlite3 *db)
 	
 /*------------------------ Build the mandb table------------------------------ */
 
-	sqlstr = "create virtual table mandb using fts4(section, name, "
+	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
 	" errors, compress=zip, uncompress=unzip, tokenize=porter )";
 
@@ -1362,7 +1364,8 @@ create_db(sqlite3 *db)
 	sqlite3_finalize(stmt);
 
 /*------------------------ Build the mandb_md5 table------------------------------ */	
-	sqlstr = "create table IF NOT EXISTS mandb_md5(md5_hash unique, id  INTEGER primary key)";
+	sqlstr = "CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
+			"id  INTEGER PRIMARY KEY)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1383,7 +1386,9 @@ create_db(sqlite3 *db)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "create table IF NOT EXISTS mandb_links(link, target, section, machine)";
+	sqlstr = "CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
+			"machine)";
+
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1403,7 +1408,7 @@ create_db(sqlite3 *db)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "create index IF NOT EXISTS index_mandb_links ON mandb_links (link)";
+	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links (link)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1439,7 +1444,7 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 		return NULL;
 	}
 	
-	asprintf(&sqlstr, "select * from %s where md5_hash = :md5_hash", table);
+	asprintf(&sqlstr, "SELECT * from %s WHERE md5_hash = :md5_hash", table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		free(sqlstr);
@@ -1523,7 +1528,7 @@ optimize(sqlite3 *db)
 	int rc;
 	printf("Optimizing the database index\n");
 	
-	sqlstr = "insert into mandb(mandb) values(\'optimize\')";
+	sqlstr = "INSERT INTO mandb(mandb) VALUES (\'optimize\')";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));

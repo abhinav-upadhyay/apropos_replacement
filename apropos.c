@@ -124,7 +124,8 @@ main(int argc, char *argv[])
 	if (query == NULL)
 		query = *argv;
 	else if (!strcmp(query, "")) {
-		fprintf(stderr, "Try specifying more relevant keywords to get some matches\n");
+		fprintf(stderr, "Try specifying more relevant keywords to get some "
+			"matches\n");
 		exit(1);
 	}
 		
@@ -169,7 +170,7 @@ search(const char *query, apropos_flags *aflags)
 	
 	sqlite3_extended_result_codes(db, 1);
 	/* Register the tokenizer */
-	sqlstr = (char *) "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
+	sqlstr = (char *) "SELECT fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
@@ -187,6 +188,7 @@ search(const char *query, apropos_flags *aflags)
 	
 	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)
 		&stopword_tokenizer_module);
+		
 	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
 	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
 		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
@@ -207,7 +209,7 @@ search(const char *query, apropos_flags *aflags)
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function\n");
+		fprintf(stderr, "Not able to register the ranking function function\n");
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		exit(-1);
@@ -249,16 +251,16 @@ search(const char *query, apropos_flags *aflags)
 		
 		asprintf(&sqlstr, "SELECT section, name, name_desc, "
 				"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
-				"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
-				 "from mandb WHERE mandb MATCH :query");
+				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
+				 "FROM mandb WHERE mandb MATCH :query");
 	else
 		/* We are using a pager, so avoid the code sequences for bold text in 
 		*	snippet.  
 		*/
 		asprintf(&sqlstr, "SELECT section, name, name_desc, "
 				"snippet(mandb, \"\", \"\", \"...\" ), "
-				"rank_func(matchinfo(mandb, \"pclxn\")) as rank "
-				 "from mandb WHERE mandb MATCH :query");
+				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
+				 "FROM mandb WHERE mandb MATCH :query");
 	
 	for (i = 0; i < SEC_MAX; i++) {
 		if (aflags->sec_nums[i]) {
@@ -273,7 +275,7 @@ search(const char *query, apropos_flags *aflags)
 	}
 	if (flag)
 		concat(&sqlstr, ")", 1);
-	concat(&sqlstr, "ORDER BY rank desc", -1);
+	concat(&sqlstr, "ORDER BY rank DESC", -1);
 	if (!aflags->pager)
 		concat(&sqlstr, "LIMIT 10 OFFSET 0", -1);
 		
