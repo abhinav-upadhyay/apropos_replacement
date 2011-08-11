@@ -544,7 +544,7 @@ build_file_cache(sqlite3 *db, const char *file)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "CREATE INDEX IF NOT EXISTS index_file_cahce_md5 ON file_cache "
+	sqlstr = "CREATE INDEX IF NOT EXISTS index_file_cache_md5 ON file_cache "
 			"(md5_hash)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
