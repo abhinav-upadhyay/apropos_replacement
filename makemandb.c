@@ -79,7 +79,7 @@ static char *errors = NULL; // ERRORS
 static char *md5_hash = NULL;
 static char *section = NULL;
 static char *machine = NULL;
-static char *links = NULL; //stores all the links to a page in a space separated form
+static char *links = NULL; //all the links to a page in a space separated form
 static int page_type = MDOC; //Indicates the type of page: mdoc or man
 
 typedef struct makemandb_flags {
@@ -282,14 +282,14 @@ main(int argc, char *argv[])
 	if (prepare_db(&db) < 0)
 		errx(EXIT_FAILURE, "Error in initializing the database");
 		
-	/* call man -p to get the list of man page dirs */
+	/* Call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		err(EXIT_FAILURE, "fopen failed");
 	}
 	
-	/* begin the transaction for indexing the pages	*/
+	/* Begin the transaction for indexing the pages	*/
 	sqlstr = "BEGIN";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -307,7 +307,7 @@ main(int argc, char *argv[])
 
 	printf("Building temporary file cache\n");	
 	while (fgets(line, MAXLINE, file) != NULL) {
-		/* remove the new line character from the string */
+		/* Remove the new line character from the string */
 		line[strlen(line) - 1] = '\0';
 		/* Traverse the man page directories and parse the pages */
 		traversedir(line, db, mp);
@@ -323,7 +323,7 @@ main(int argc, char *argv[])
 	update_db(db, mp);
 	mparse_free(mp);
 	
-	/* commit the transaction */
+	/* Commit the transaction */
 	sqlstr = "COMMIT";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -353,9 +353,9 @@ main(int argc, char *argv[])
 }
 
 /* prepare_db --
-*   Prepare the database. Register the compress/uncompress functions and the
-*   stopword tokenizer.
-*/
+ *   Prepare the database. Register the compress/uncompress functions and the
+ *   stopword tokenizer.
+ */
 static int
 prepare_db(sqlite3 **db)
 {
@@ -368,8 +368,8 @@ prepare_db(sqlite3 **db)
 	sqlite3_stmt *stmt = NULL;
 
 	/* If the db file does not alreadt exists, we need to create the tables, set
-	*	the flag to remember this
-	*/
+	 *	the flag to remember this
+	 */
 	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)))
 		create_db_flag = 1;
 		
@@ -448,17 +448,19 @@ prepare_db(sqlite3 **db)
 	}
 	sqlite3_finalize(stmt);
 	
-	/* if the flag was set true, then we need to call create_db to create the tables */
+	/* if the flag was set true, then we need to call create_db to create the 
+	 * tables 
+	 */
 	if (create_db_flag)
 		create_db(*db);	
 	return 0;
 }
 
 /*
-* traversedir --
-*  traverses the given directory recursively and passes all the man page files 
-*  in the way to build_cache()
-*/
+ * traversedir --
+ *  Traverses the given directory recursively and passes all the man page files 
+ *  in the way to build_cache()
+ */
 static void
 traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 {
@@ -476,13 +478,13 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	if (S_ISLNK(sb.st_mode)) 
 		return;
 	
-	/* if it is a regular file, pass it to build_cache() */
+	/* If it is a regular file, pass it to build_cache() */
 	if (S_ISREG(sb.st_mode)) {
 		build_file_cache(db, file);
 		return;
 	}
 	
-	/* if it is a directory, traverse it recursively */
+	/* If it is a directory, traverse it recursively */
 	else if (S_ISDIR(sb.st_mode)) {
 		if ((dp = opendir(file)) == NULL) {
 			fprintf(stderr, "opendir error: %s\n", file);
@@ -507,13 +509,13 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	}
 }
 
-/* build_file_cache--
-*	This function generates an md5 hash of the file passed as it's 2nd parameter
-*	and stores it in a temporary table file_cache along with the full file path.
-*	This is done to support incremental updation of the database.
-*	The temporary table file_cache is dropped thereafter in the function 
-*	update_db(), once the database has been updated.
-*/
+/* build_file_cache --
+ *	This function generates an md5 hash of the file passed as it's 2nd parameter
+ *	and stores it in a temporary table file_cache along with the full file path.
+ *	This is done to support incremental updation of the database.
+ *	The temporary table file_cache is dropped thereafter in the function 
+ *	update_db(), once the database has been updated.
+ */
 static void
 build_file_cache(sqlite3 *db, const char *file)
 {
@@ -544,7 +546,8 @@ build_file_cache(sqlite3 *db, const char *file)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "CREATE INDEX IF NOT EXISTS index_file_cahce_md5 ON file_cache (md5_hash)";
+	sqlstr = "CREATE INDEX IF NOT EXISTS index_file_cahce_md5 ON file_cache "
+			"(md5_hash)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -595,13 +598,13 @@ build_file_cache(sqlite3 *db, const char *file)
 	free(md5);
 }
 
-/* update_db--
-*	Does an incremental updation of the database by checking the file_cache.
-*	It parses and adds the pages which are present in file_cache but not in the
-*	database.
-*	It also removes the pages which are present in the databse but not in the 
-*	file_cache.
-*/
+/* update_db --
+ *	Does an incremental updation of the database by checking the file_cache.
+ *	It parses and adds the pages which are present in file_cache but not in the
+ *	database.
+ *	It also removes the pages which are present in the databse but not in the 
+ *	file_cache.
+ */
 static void
 update_db(sqlite3 *db, struct mparse *mp)
 {
@@ -695,9 +698,9 @@ update_db(sqlite3 *db, struct mparse *mp)
 }
 	
 /*
-* begin_parse --
-*  parses the man page using libmandoc
-*/
+ * begin_parse --
+ *  parses the man page using libmandoc
+ */
 static void
 begin_parse(const char *file, struct mparse *mp)
 {
@@ -755,9 +758,9 @@ pmdoc_node(const struct mdoc_node *n)
 }
 
 /*
-* pmdoc_Nm --
-*  Extracts the Name of the manual page from the .Nm macro
-*/
+ * pmdoc_Nm --
+ *  Extracts the Name of the manual page from the .Nm macro
+ */
 static void
 pmdoc_Nm(const struct mdoc_node *n)
 {
@@ -770,9 +773,9 @@ pmdoc_Nm(const struct mdoc_node *n)
 }
 
 /*
-* pmdoc_Nd --
-*  Extracts the one line description of the man page from the .Nd macro
-*/
+ * pmdoc_Nd --
+ *  Extracts the one line description of the man page from the .Nd macro
+ */
 static void
 pmdoc_Nd(const struct mdoc_node *n)
 {
@@ -788,9 +791,9 @@ pmdoc_Nd(const struct mdoc_node *n)
 }
 
 /*
-* pmdoc_Sh --
-*  Extracts the complete DESCRIPTION section of the man page
-*/
+ * pmdoc_Sh --
+ *  Extracts the complete DESCRIPTION section of the man page
+ */
 static void
 pmdoc_Sh(const struct mdoc_node *n)
 {
@@ -800,8 +803,8 @@ pmdoc_Sh(const struct mdoc_node *n)
 		}
 		else { 
 			/* On encountering a .Nm macro, substitute it with it's previously
-			* cached value of the argument
-			*/
+			 * cached value of the argument
+			 */
 			if (mdocs[n->tok] == pmdoc_Nm && name != NULL)
 				mdoc_parse_section(n->sec, name);
 			/* otherwise call pmdoc_Sh again to handle the nested macros */
@@ -851,10 +854,11 @@ pman_parse_node(const struct man_node *n, char **s)
 	}
 }
 
-/* pman_parse_name --
-*   Parses the NAME section and puts the complete content in the name_desc 
-*   variable.
-*/
+/* 
+ * pman_parse_name --
+ *  Parses the NAME section and puts the complete content in the name_desc 
+ *  variable.
+ */
 static void
 pman_parse_name(const struct man_node *n)
 {
@@ -870,8 +874,8 @@ pman_parse_name(const struct man_node *n)
 }
 
 /* A stub function to be able to parse the macros like .B embedded inside a
-*  section
-*/
+ *  section
+ */
 static void
 pman_block(const struct man_node *n)
 {
@@ -879,8 +883,8 @@ pman_block(const struct man_node *n)
 }
 
 /* This function has some part of it's code taken from the mandocdb utility from
-*  the mdocml project. Thanks to Kristaps Dzonsons.
-*/
+ *  the mdocml project. Thanks to Kristaps Dzonsons.
+ */
 static void
 pman_sh(const struct man_node *n)
 {
@@ -891,15 +895,15 @@ pman_sh(const struct man_node *n)
 		head->type ==  MAN_TEXT) {
 		if (strcmp(head->string, "NAME") == 0) {
 			/* We are in the NAME section. pman_parse_name will put the complete
-			* content in name_desc
-			*/			
+			 * content in name_desc
+			 */			
 			pman_parse_name(n);
 
 			/* Take out the name of the man page. name_desc contains complete
-			* NAME section content, e.g: "gcc \- GNU project C and C++ compiler"
-			* It might be a comma separated list of multiple names, for now to 
-			* keep things simple just take the first name out before the comma.
-			*/
+			 * NAME section content, e.g: "gcc \- GNU project C and C++ compiler"
+			 * It might be a comma separated list of multiple names, for now to 
+			 * keep things simple just take the first name out before the comma.
+			 */
 			
 			/* Remove any leading spaces */
 			while (*name_desc == ' ') 
@@ -913,8 +917,8 @@ pman_sh(const struct man_node *n)
 				name_desc++;
 			
 			/* Assuming the name of a man page is a single word, we can easily
-			* take out the first word out of the string
-			*/
+			 * take out the first word out of the string
+			 */
 			char *temp = strdup(name_desc);
 			char *link;
 			sz = strcspn(temp, " ,\0");
@@ -934,8 +938,8 @@ pman_sh(const struct man_node *n)
 			}
 			free(temp);
 			/*   The name might be surrounded by escape sequences of the form:
-			*   \fBname\fR or similar. So remove those as well.
-			*/
+			 *   \fBname\fR or similar. So remove those as well.
+			 */
 			if (name[0] == '\\' && name[1] != '&') {
 				name += 3;
 				name[strlen(name) -3] = 0;
@@ -943,24 +947,26 @@ pman_sh(const struct man_node *n)
 			
 			
 			/* Now remove the name(s) of the man page(s) so that we are left with
-			* the one line description.
-			* So we know we have passed over the NAME if we:
-			* 1. encounter a space not preceeded by a comma and not succeeded by a \\
-			*    e.g.: foo-bar This is a simple foo-bar utility.
-			* 2. enconter a '-' which is preceeded by a '\' and succeeded by a space
-			*    e.g.: foo-bar \- This is a simple foo-bar utility
-			*          foo-bar, blah-blah \- foo-bar with blah-blah
-			*          foo-bar \-\- another foo-bar
-			* 3. encounter a '-' preceeded by a space and succeeded by a space
-			*     e.g.: foo-bar - This is a simple foo-bar utility
-			* (I hope this covers all possible sane combinations)
-			*/
+			 * the one line description.
+			 * So we know we have passed over the NAME if we:
+			 * 1. encounter a space not preceeded by a comma and not succeeded by a \\
+			 *    e.g.: foo-bar This is a simple foo-bar utility.
+			 * 2. enconter a '-' which is preceeded by a '\' and succeeded by a space
+			 *    e.g.: foo-bar \- This is a simple foo-bar utility
+			 *          foo-bar, blah-blah \- foo-bar with blah-blah
+			 *          foo-bar \-\- another foo-bar
+			 * 3. encounter a '-' preceeded by a space and succeeded by a space
+			 *     e.g.: foo-bar - This is a simple foo-bar utility
+			 * (I hope this covers all possible sane combinations)
+			 */
 			char prev = *name_desc++;
 			while (*name_desc) {
 				/* case 1 */
 				if (*name_desc == ' ' && prev != ',' && *(name_desc + 1) != '\\') {
 					name_desc++;
-					/* Well, there might be a '-' without a leading '\\', get over it */
+					/* Well, there might be a '-' without a leading '\\', 
+					 * get over it 
+					 */
 					if (*name_desc == '-')
 						name_desc += 2;
 					break;
@@ -976,7 +982,9 @@ pman_sh(const struct man_node *n)
 			}
 		}
 		
-		/* Check the section, and if it is of our concern, extract it's content */
+		/* Check the section, and if it is of our concern, extract it's 
+		 * content
+		 */
 		else if (strcmp((const char *)head->string, "SYNOPSIS") == 0)
 			pman_parse_node(n, &synopsis);
 		
@@ -989,7 +997,7 @@ pman_sh(const struct man_node *n)
 		else if (strcmp((const char *)head->string, "FILES") == 0)
 			pman_parse_node(n, &files);
 		
-		// The RETURN VALUE section might be specified in multiple ways 
+		/* The RETURN VALUE section might be specified in multiple ways */
 		else if (strcmp((const char *) head->string, "RETURN VALUE") == 0
 			|| strcmp((const char *)head->string, "RETURN VALUES") == 0
 			|| (strcmp((const char *)head->string, "RETURN") == 0 && 
@@ -997,15 +1005,16 @@ pman_sh(const struct man_node *n)
 			strcmp((const char *)head->next->string, "VALUES") == 0)))
 				pman_parse_node(n, &return_vals);
 		
-		// EXIT STATUS section can also be specified all on one line or on two
-		// separate lines.
+		/* EXIT STATUS section can also be specified all on one line or on two
+		 * separate lines.
+		 */
 		else if (strcmp((const char *)head->string, "EXIT STATUS") == 0
 			|| (strcmp((const char *) head->string, "EXIT") ==0 &&
 			head->next->type == MAN_TEXT &&
 			strcmp((const char *)head->next->string, "STATUS") == 0))
 			pman_parse_node(n, &exit_status);
 
-		// Store the rest of the content in desc
+		/* Store the rest of the content in desc */
 		else
 			pman_parse_node(n, &desc);
 	}
@@ -1034,9 +1043,10 @@ get_machine(const struct mdoc *md)
 		machine = strdup(md_meta->arch);
 }
 
-/* cleanup --
-*   cleans up the global buffers
-*/
+/* 
+ * cleanup --
+ *  cleans up the global buffers
+ */
 static void
 cleanup(void)
 {
@@ -1075,11 +1085,12 @@ cleanup(void)
 	 env = files = exit_status = diagnostics = errors = links = machine = NULL;
 }
 
-/* insert_into_db --
-*   Inserts the parsed data of the man page in the Sqlite databse.
-*   If any of the values is NULL, then we cleanup and return -1 indicating an 
-*   error. Otherwise, store the data in the database and return 0
-*/
+/*
+ * insert_into_db --
+ *  Inserts the parsed data of the man page in the Sqlite databse.
+ *  If any of the values is NULL, then we cleanup and return -1 indicating an 
+ *  error. Otherwise, store the data in the database and return 0
+ */
 static int
 insert_into_db(sqlite3 *db)
 {
@@ -1091,8 +1102,8 @@ insert_into_db(sqlite3 *db)
 	long int mandb_rowid;
 	
 	/* At the very minimum we want to make sure that we store the following data:
-	*  Name, One line description, the section number, and the md5 hash
-	*/		
+	 *  Name, One line description, the section number, and the md5 hash
+	 */		
 	if (name == NULL || name_desc == NULL || md5_hash == NULL 
 		|| section == NULL) {
 		cleanup();
@@ -1100,10 +1111,10 @@ insert_into_db(sqlite3 *db)
 	}
 
 	/* In case of a mdoc page: (sorry, no better place to put this block of code)
-	*  parse the comma separated list of names of man pages, the first name will
-	*  be stored in the mandb table, rest will be treated as links and put in the
-	*  mandb_links table
-	*/	
+	 *  parse the comma separated list of names of man pages, the first name will
+	 *  be stored in the mandb table, rest will be treated as links and put in the
+	 *  mandb_links table
+	 */	
 	if (page_type == MDOC) {
 		links = strdup(name);
 		free(name);
@@ -1119,9 +1130,10 @@ insert_into_db(sqlite3 *db)
 			links++;
 	}
 	
-/*------------------------ Populate the mandb table------------------------------ */
-	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc, :lib, "
-	":synopsis, :return_vals, :env, :files, :exit_status, :diagnostics, :errors)";
+/*------------------------ Populate the mandb table---------------------------*/
+	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc, "
+			":lib, :synopsis, :return_vals, :env, :files, :exit_status, "
+			":diagnostics, :errors)";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1248,7 +1260,7 @@ insert_into_db(sqlite3 *db)
 	
 	sqlite3_finalize(stmt);
 	
-	/*Get the row id of the last inserted row */
+	/* Get the row id of the last inserted row */
 	mandb_rowid = sqlite3_last_insert_rowid(db);
 		
 /*------------------------ Populate the mandb_md5 table-----------------------*/
@@ -1288,7 +1300,7 @@ insert_into_db(sqlite3 *db)
 
 	sqlite3_finalize(stmt);
 	
-/*------------------------ Populate the mandb_links table-----------------------*/
+/*------------------------ Populate the mandb_links table---------------------*/
 	char *str = NULL;
 	if (links && strlen(links) == 0) {
 		free(links);
@@ -1305,8 +1317,8 @@ insert_into_db(sqlite3 *db)
 			if(link[strlen(link) - 1] == ',')
 				link[strlen(link) - 1] = 0;
 			
-			asprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', \'%s\',"
-				" \'%s\')", link, name, section, machine);
+			asprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', "
+				"\'%s\', \'%s\')", link, name, section, machine);
 			rc = sqlite3_prepare_v2(db, str, -1, &stmt, NULL);
 			if (rc != SQLITE_OK) {
 				fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1339,11 +1351,12 @@ create_db(sqlite3 *db)
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	
-/*------------------------ Build the mandb table------------------------------ */
+/*------------------------ Build the mandb table------------------------------*/
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
-	"name_desc, desc, lib, synopsis, return_vals, env, files, exit_status, diagnostics,"
-	" errors, compress=zip, uncompress=unzip, tokenize=porter )";
+			"name_desc, desc, lib, synopsis, return_vals, env, files, "
+			"exit_status, diagnostics, errors, compress=zip, uncompress=unzip, "
+			"tokenize=porter)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1355,7 +1368,7 @@ create_db(sqlite3 *db)
 
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s yo\n", sqlite3_errmsg(db));
+		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -1363,7 +1376,7 @@ create_db(sqlite3 *db)
 	}
 	sqlite3_finalize(stmt);
 
-/*------------------------ Build the mandb_md5 table------------------------------ */	
+/*------------------------ Build the mandb_md5 table--------------------------*/	
 	sqlstr = "CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
 			"id  INTEGER PRIMARY KEY)";
 
@@ -1408,7 +1421,8 @@ create_db(sqlite3 *db)
 		
 	sqlite3_finalize(stmt);
 	
-	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links (link)";
+	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
+			"(link)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
@@ -1423,12 +1437,14 @@ create_db(sqlite3 *db)
 }
 
 /*
-* check_md5--
-*  Generates the md5 hash of the file and checks if it already doesn't exist in 
-*  the table passed as the 3rd parameter. This function is being used to avoid hardlinks.
-*  Return values: md5 hash of the file if the md5 hash does not exist in the given table
-*                 NULL if the hash exists in the database or in case of an error
-*/
+ * check_md5--
+ *  Generates the md5 hash of the file and checks if it already doesn't exist in 
+ *  the table passed as the 3rd parameter. This function is being used to avoid 
+ *  hardlinks.
+ *  Return values: 
+ *		1. md5 hash of the file if the md5 hash does not exist in the table.
+ *      2. NULL if the hash exists in the database or in case of an error
+ */
 static char * 
 check_md5(const char *file, sqlite3 *db, const char *table)
 {
@@ -1475,14 +1491,14 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 }
 
 /*
-* mdoc_parse_section--
-*  Utility function for parsing sections of the mdoc type pages.
-*  Takes two params:
-*   1. sec is an enum which indicates the section in which we are parsing presently
-*   2. string is the string which we need to append to the buffer for this particular
-*      section.
-*  The function appends string to the global section buffer and returns.
-*/
+ * mdoc_parse_section--
+ *  Utility function for parsing sections of the mdoc type pages.
+ *  Takes two params:
+ *   1. sec is an enum which indicates the section in which we are present
+ *   2. string is the string which we need to append to the buffer for this 
+ *	    particular section.
+ *  The function appends string to the global section buffer and returns.
+ */
 static void
 mdoc_parse_section(enum mdoc_sec sec, const char *string)
 {

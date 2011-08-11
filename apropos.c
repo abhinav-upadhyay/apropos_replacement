@@ -69,9 +69,10 @@ main(int argc, char *argv[])
 	if (argc < 2)
 		usage();
 	
-	/*If the user specifies a section number as an option, the correspondingly indexed 
-	* element in sec_nums is set to the string representing that section number.
-	*/
+	/*If the user specifies a section number as an option, the correspondingly 
+	 * indexed element in sec_nums is set to the string representing that 
+	 * section number.
+	 */
 	while ((ch = getopt(argc, argv, "123456789p")) != -1) {
 	switch (ch) {
 		case '1':
@@ -119,8 +120,8 @@ main(int argc, char *argv[])
 	remove_stopwords(&query);
 	
 	/* if any error occured in remove_stopwords, we continue with the initial
-	*  query input by the user
-	*/
+	 *  query input by the user
+	 */
 	if (query == NULL)
 		query = *argv;
 	else if (!strcmp(query, "")) {
@@ -138,11 +139,12 @@ main(int argc, char *argv[])
 }
 
 /*
-* search --
-*  Opens apropos.db and performs the searches for the keywords entered by the user
-*  The 2nd param: sec_nums indicates if the user has specified any specific sections
-*  to search in. We build the query string accordingly.
-*/
+ * search --
+ *  Opens apropos.db and performs the searches for the keywords entered by the 
+ *  user.
+ *  The 2nd param: sec_nums indicates if the user has specified any specific 
+ *  sections to search in. We build the query string accordingly.
+ */
 static int
 search(const char *query, apropos_flags *aflags)
 {
@@ -239,24 +241,23 @@ search(const char *query, apropos_flags *aflags)
 	int i, flag = 0;
 	
 	/* We want to build a query of the form: "select x,y,z from mandb where
-	*  mandb match :query [AND (section like '1' OR section like '2' OR...)]
-	*  ORDER BY rank desc..."
-	* NOTES: 1. The portion in square brackets is optional, it will be there if the
-	* user has specified an option on the command line to search in one or more
-	* sections.
-	* 2. I am using LIKE operator because '=' or IN operators do not seem to be
-	* working with the compression option
-	*/
+	 * mandb match :query [AND (section LIKE '1' OR section LIKE '2' OR...)]
+	 * ORDER BY rank desc..."
+	 * NOTES: 1. The portion in square brackets is optional, it will be there 
+	 * only if the user has specified an option on the command line to search in 
+	 * one or more specific sections.
+	 * 2. I am using LIKE operator because '=' or IN operators do not seem to be
+	 * working with the compression option enabled.
+	 */
 	if (!aflags->pager)
-		
 		asprintf(&sqlstr, "SELECT section, name, name_desc, "
 				"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
 				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
 				 "FROM mandb WHERE mandb MATCH :query");
 	else
 		/* We are using a pager, so avoid the code sequences for bold text in 
-		*	snippet.  
-		*/
+		 *	snippet.  
+		 */
 		asprintf(&sqlstr, "SELECT section, name, name_desc, "
 				"snippet(mandb, \"\", \"\", \"...\" ), "
 				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
@@ -323,7 +324,8 @@ search(const char *query, apropos_flags *aflags)
 			name = (char *) sqlite3_column_text(stmt, 1);
 			name_desc = (char *) sqlite3_column_text(stmt, 2);
 			snippet = (char *) sqlite3_column_text(stmt, 3);
-			fprintf(less, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, snippet);
+			fprintf(less, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
+					snippet);
 		}
 		pclose(less);
 	}
@@ -334,50 +336,50 @@ search(const char *query, apropos_flags *aflags)
 	return 0;
 }
 /*
-* remove_stopwords--
-*  Scans the query and removes any stop words from it.
-*  It scans the query word by word, and looks up a hash table of stop words
-*  to check if it is a stopword or a valid keyword. In the end we only have the
-*  relevant keywords left in the query.
-*  Error Cases: 
-*   1. In case of any error, it will set the query to NULL.	
-*   2. In case the query is found to be consisting only of stop words, it will
-*      set the query to a blank string ""
-*/
+ * remove_stopwords--
+ *  Scans the query and removes any stop words from it.
+ *  It scans the query word by word, and looks up a hash table of stop words
+ *  to check if it is a stopword or a valid keyword. In the end we only have the
+ *  relevant keywords left in the query.
+ *  Error Cases: 
+ *   1. In case of any error, it will set the query to NULL.	
+ *   2. In case the query is found to be consisting only of stop words, it will
+ *      set the query to a blank string ""
+ */
 static void
 remove_stopwords(char **query)
 {
 	int i = 0;
 	const char *temp;
 	char *buf = NULL;
-	const char *stopwords[] = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
-	 "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", 
-	 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "again", "willing", 
+	const char *stopwords[] = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+	 "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", 
+	 "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "again", "willing", 
 	 "always", "any", "around", "ask", "back", "been", "case", "did", "does", 
-	 "down", "each", "early","either", "end", "enough", "even", "every", "fact",
-	 "far", "few", "four", "further", "general", "good", "got", "great", "having",
-	 "high", "him", "his", "however", "if", "important", "in", "interest", "into",
-	 "it", "just", "keep", "keeps", "kind", "knew", "know", "large", "larger", 
-	 "last", "later", "latter", "latest", "least", "let", "like", "likely", 
-	 "long", "longer", "made", "many", "may", "me",	"might", "most", "mostly", 
-	 "much", "must", "my", "necessary", "need", "never", "needs", "next", "no",
-	"non", "noone", "not", "nothing", "number", "often", "old", "older", "once",
-	"only", "order", "our", "out", "over", "part", "per", "perhaps", "possible", 
-	"present", "problem", "quite", "rather", "really", "right", "room", "said", 
-	"same", "saw", "say", "says", "second", "see", "seem", "seemed", "seems",
-	"sees", "several", "shall", "should", "side", "sides", "small", "smaller", 
-	"so", "some", "something", "state",	"states", "still", "such", "sure", "take", 
-	"taken", "then", "them", "their", "there", "therefore", "thing", "think", 
-	"thinks", "though", "three", "thus", "together", "too", "took", "toward", 
-	"turn", "two", "until",	"upon", "us", "use", "used", "uses", "very", "want", 
-	"wanted", "wants", "was", "way", "ways", "we", "well", "went", "were", 
-	"whether", "with", "within", "without", "work", "would", "year", "yet", "you",
-	"about", "also", "all", "an", "another", "and", "are", "as", "at", "be", 
-	"before", "between", "below", "by", "bye", "but", "can", "consist",	"could", 
-	"follow", "from", "full", "give", "given", "have", "has", "had", "here", 
-	"how", "is", "names", "of", "off", "on", "or", "the", "this", "up",	"that", 
-	"to", "new", "what", "when", "why", "will", "because", "these", "those",  
-	NULL
+	 "down", "each", "early","either", "end", "enough", "even", "every", "fact"
+	 , "far", "few", "four", "further", "general", "good", "got", "great", 
+	 "having", "high", "him", "his", "however", "if", "important", "in", 
+	 "interest", "into", "it", "just", "keep", "keeps", "kind", "knew", "know", 
+	 "large", "larger", "last", "later", "latter", "latest", "least", "let", 
+	 "like", "likely", "long", "longer", "made", "many", "may", "me", "might", 
+	 "most", "mostly", "much", "must", "my", "necessary", "need", "never", 
+	 "needs", "next", "no", "non", "noone", "not", "nothing", "number", "often", 
+	 "old", "older", "once", "only", "order", "our", "out", "over", "part", 
+	 "per", "perhaps", "possible", "present", "problem", "quite", "rather", 
+	 "really", "right", "room", "said", "same", "saw", "say", "says", "second", 
+	 "see", "seem", "seemed", "seems", "sees", "several", "shall", "should", 
+	 "side", "sides", "small", "smaller", "so", "some", "something", "state",	
+	 "states", "still", "such", "sure", "take", "taken", "then", "them", "their", 
+	 "there", "therefore", "thing", "think", "thinks", "though", "three", "thus"
+	 , "together", "too", "took", "toward", "turn", "two", "until",	"upon", "us"
+	 , "use", "used", "uses", "very", "want", "wanted", "wants", "was", "way", 
+	 "ways", "we", "well", "went", "were", "whether", "with", "within", "without"
+	 , "work", "would", "year", "yet", "you", "about", "also", "all", "an", 
+	 "another", "and", "are", "as", "at", "be", "before", "between", "below", 
+	 "by", "bye", "but", "can", "consist",	"could", "follow", "from", "full", 
+	 "give", "given", "have", "has", "had", "here", "how", "is", "names", "of", 
+	 "off", "on", "or", "the", "this", "up", "that", "to", "new", "what", "when"
+	 , "why", "will", "because", "these", "those", NULL
 	};
 	
 	/* initialize the hash table for stop words */
@@ -441,19 +443,19 @@ usage(void)
 }
 
 /*
-* rank_func
-*  Sqlite user defined function for ranking the documents.
-*  For each phrase of the query, it computes the tf and idf adds them over.
-*  It computes the final rank, by multiplying tf and idf together.
-*  Weight of term t for document d = (term frequency of t in d * 
-*                                      inverse document frequency of t) 
-*
-*  Term Frequency of term t in document d = Number of times t occurs in d / 
-*                                        Number of times t appears in all documents
-*
-*  Inverse document frequenct of t = log(Total number of documents / 
-*										Number of documents in which t occurs)
-*/
+ * rank_func --
+ *  Sqlite user defined function for ranking the documents.
+ *  For each phrase of the query, it computes the tf and idf adds them over.
+ *  It computes the final rank, by multiplying tf and idf together.
+ *  Weight of term t for document d = (term frequency of t in d * 
+ *                                      inverse document frequency of t) 
+ *
+ *  Term Frequency of term t in document d = Number of times t occurs in d / 
+ *                                        Number of times t appears in all documents
+ *
+ *  Inverse document frequenct of t = log(Total number of documents / 
+ *										Number of documents in which t occurs)
+ */
 static void
 rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
@@ -481,8 +483,8 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	int doclen = 0;
 	const double k = 3.75;
 	/* Check that the number of arguments passed to this function is correct.
-	** If not, jump to wrong_number_args. 
-	*/
+	 * If not, jump to wrong_number_args. 
+	 */
 	if( nval != 1 ) {
 		fprintf(stderr, "nval != ncol\n");
 		goto wrong_number_args;
@@ -512,9 +514,9 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 			if (idf->status == 0 && ndocshitcount)
 				idf->value += log(((double)ndoc / ndocshitcount))* weight;
 
-			/* Dividing the tf by document length to normalize the effect of longer
-			*  documents.
-			*/
+			/* Dividing the tf by document length to normalize the effect of 
+			 * longer documents.
+			 */
 			if (nglobalhitcount > 0 && nhitcount)
 				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
 		}
@@ -522,9 +524,10 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	idf->status = 1;
 	
 	/* Final score = (tf * idf)/ ( k + tf)
-	*	Dividing by k+ tf further normalizes the weight leading to better results.
-	*   The value of k is experimental
-	*/
+	 *	Dividing by k+ tf further normalizes the weight leading to better 
+	 *  results.
+	 *  The value of k is experimental
+	 */
 	double score = (tf * idf->value/ ( k + tf)) ;
 	sqlite3_result_double(pctx, score);
 	return;
