@@ -1555,6 +1555,18 @@ optimize(sqlite3 *db)
 	}
 	
 	sqlite3_finalize(stmt);
+	
+	sqlstr = "VACUUM";
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		return;
+	}
+	
+	if (sqlite3_step(stmt) != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		return;
+	}
 }
 
 static void
