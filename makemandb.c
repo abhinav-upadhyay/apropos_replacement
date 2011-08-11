@@ -37,7 +37,6 @@
 #include "sqlite3.h"
 #include "stopword_tokenizer.h"
 
-#define MAXLINE 1024	//buffer size for fgets
 #define MDOC 0	//If the page is of mdoc(7) type
 #define MAN 1	//If the page  is of man(7) type
 
@@ -254,13 +253,15 @@ int
 main(int argc, char *argv[])
 {
 	FILE *file;
-	char line[MAXLINE];
+	char *line;
+	char *temp = NULL;
 	const char *sqlstr;
 	int rc;
 	char ch;
 	sqlite3_stmt *stmt = NULL;
 	struct mparse *mp = NULL;
 	sqlite3 *db;
+	size_t len;
 	makemandb_flags mflags = {0};
 	
 	while ((ch = getopt(argc, argv, "fo")) != -1) {
@@ -306,11 +307,24 @@ main(int argc, char *argv[])
 	sqlite3_finalize(stmt);
 
 	printf("Building temporary file cache\n");	
-	while (fgets(line, MAXLINE, file) != NULL) {
-		/* Remove the new line character from the string */
-		line[strlen(line) - 1] = '\0';
+	while ((line = fgetln(file, &len)) != NULL) {
+		/* Replace the new line character at the end of string with '\0' */
+		if (line[len - 1] == '\n')
+			line[len - 1] = '\0';
+		/* Last line will not contain a new line character, so a work around */
+		else {
+			temp = (char *) malloc(len + 1);
+			memcpy(temp, line, len);
+			temp[len] = '\0';
+			line = temp;
+		}
 		/* Traverse the man page directories and parse the pages */
 		traversedir(line, db, mp);
+		
+		if (temp != NULL) {
+			free(temp);
+			temp = NULL;
+		}
 	}
 	
 	if (pclose(file) == -1) {
