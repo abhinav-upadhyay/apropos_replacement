@@ -168,6 +168,7 @@ search(const char *query, apropos_flags *aflags)
 	char *snippet = NULL;
 	char *name_desc = NULL;
 	sqlite3_stmt *stmt = NULL;
+	FILE *pager = NULL;
 	inverse_document_frequency idf = {0, 0};
 	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	
@@ -266,14 +267,21 @@ search(const char *query, apropos_flags *aflags)
 				"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
 				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
 				 "FROM mandb WHERE mandb MATCH :query");
-	else
+	else {
 		/* We are using a pager, so avoid the code sequences for bold text in 
-		 *	snippet.  
+		 *	snippet.
+		 * Also open a pipe to the pager (more)
 		 */
 		asprintf(&sqlstr, "SELECT section, name, name_desc, "
 				"snippet(mandb, \"\", \"\", \"...\" ), "
 				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
 				 "FROM mandb WHERE mandb MATCH :query");
+		if ((pager = popen("more", "w")) == NULL) {
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			err(EXIT_FAILURE, "pipe failed");
+		}
+	}
 	
 	for (i = 0; i < SEC_MAX; i++) {
 		if (aflags->sec_nums[i]) {
@@ -311,37 +319,22 @@ search(const char *query, apropos_flags *aflags)
 		exit(EXIT_FAILURE);
 	}
 	
-	if (!aflags->pager) {	
-		while (sqlite3_step(stmt) == SQLITE_ROW) {
-			section = (char *) sqlite3_column_text(stmt, 0);
-			name = (char *) sqlite3_column_text(stmt, 1);
-			name_desc = (char *) sqlite3_column_text(stmt, 2);
-			snippet = (char *) sqlite3_column_text(stmt, 3);
-			printf("%s(%s)\t%s\n%s\n\n", name, section, name_desc, snippet);
-		}
+	
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		section = (char *) sqlite3_column_text(stmt, 0);
+		name = (char *) sqlite3_column_text(stmt, 1);
+		name_desc = (char *) sqlite3_column_text(stmt, 2);
+		snippet = (char *) sqlite3_column_text(stmt, 3);
+		if (aflags->pager)
+			fprintf(pager, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
+					snippet);
+		else
+			fprintf(stdout, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
+					snippet);
 	}
 	
-	/* using a pager, open a pipe to more and push the output to it */
-	else {
-		FILE *less = popen("more", "w");
-		if (less == NULL) {
-			sqlite3_finalize(stmt);	
-			sqlite3_close(db);
-			sqlite3_shutdown();
-			err(EXIT_FAILURE, "pipe failed");
-		}
-		
-		while (sqlite3_step(stmt) == SQLITE_ROW) {
-			section = (char *) sqlite3_column_text(stmt, 0);
-			name = (char *) sqlite3_column_text(stmt, 1);
-			name_desc = (char *) sqlite3_column_text(stmt, 2);
-			snippet = (char *) sqlite3_column_text(stmt, 3);
-			fprintf(less, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
-					snippet);
-		}
-		pclose(less);
-	}
-			
+	
+	pclose(pager);
 	sqlite3_finalize(stmt);	
 	sqlite3_close(db);
 	sqlite3_shutdown();
