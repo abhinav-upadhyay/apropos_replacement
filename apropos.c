@@ -124,17 +124,13 @@ main(int argc, char *argv[])
 	 */
 	if (query == NULL)
 		query = *argv;
-	else if (!strcmp(query, "")) {
-		fprintf(stderr, "Try specifying more relevant keywords to get some "
-			"matches\n");
-		exit(1);
-	}
-		
-	if (search(query, &aflags) < 0) {
-		fprintf(stderr, "Sorry, no relevant results could be obtained\n");
-		return -1;
-	}
-	
+	else if (!strcmp(query, ""))
+		errx(EXIT_FAILURE, "Try specifying more relevant keywords to get some "
+			"matches");
+
+	if (search(query, &aflags) < 0)
+		errx(EXIT_FAILURE, "Sorry, no relevant results could be obtained");
+
 	return 0;
 }
 
@@ -163,29 +159,30 @@ search(const char *query, apropos_flags *aflags)
 	sqlite3_initialize();
 	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Database does not exist. Try running makemandb and "
-		"then try again\n");
-		sqlite3_close(db);
 		sqlite3_shutdown();
-		return -1;
+		errx(EXIT_FAILURE, "Database does not exist. Try running makemandb and "
+		"then try again");
+
 	}
 	
 	sqlite3_extended_result_codes(db, 1);
+
 	/* Register the tokenizer */
 	sqlstr = (char *) "SELECT fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
 	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	
 	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)
@@ -195,15 +192,18 @@ search(const char *query, apropos_flags *aflags)
 	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
 		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		return -1;
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_close(db);
+		exit(EXIT_FAILURE);
 	}
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_ROW) {
-		fprintf(stderr, "%s tokenizer error\n", sqlite3_errmsg(db));
+		warnx("%s Tokenizer error", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		return -1;
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		exit(EXIT_FAILURE);
 	}
 	sqlite3_finalize(stmt);	
 	
@@ -211,30 +211,27 @@ search(const char *query, apropos_flags *aflags)
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register the ranking function function\n");
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		exit(-1);
+		errx(EXIT_FAILURE, "Not able to register the ranking function function");
 	}
 	
 	/* Register the compress function: zip (apropos-utils.h) */
 	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
 	                             zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: compress\n");
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return -1;
+		errx(EXIT_FAILURE, "Not able to register function: compress");
 	}
 
 	/* Register the uncompress function: unzip (apropos-utils.h) */
 	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
 		                         unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: uncompress\n");
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return -1;
+		errx(EXIT_FAILURE, "Not able to register function: uncompress");
 	}
 	
 	/* Now, prepare the statement for doing the actual search query */
@@ -283,20 +280,20 @@ search(const char *query, apropos_flags *aflags)
 	          
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":query");
 	rc = sqlite3_bind_text(stmt, idx, query, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	
 	if (!aflags->pager) {	
@@ -316,7 +313,7 @@ search(const char *query, apropos_flags *aflags)
 			sqlite3_finalize(stmt);	
 			sqlite3_close(db);
 			sqlite3_shutdown();
-			errx(EXIT_FAILURE, "pipe failed\n");
+			err(EXIT_FAILURE, "pipe failed");
 		}
 		
 		while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -435,10 +432,7 @@ remove_stopwords(char **query)
 static void
 usage(void)
 {
-
-	(void)fprintf(stderr,
-	    "Usage: %s [-p] [-s <section-number>] query\n"
-	    , getprogname());
+	(void)warnx("Usage: %s [-p] [-s <section-number>] query", getprogname());
 	exit(1);
 }
 
@@ -485,11 +479,9 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	/* Check that the number of arguments passed to this function is correct.
 	 * If not, jump to wrong_number_args. 
 	 */
-	if( nval != 1 ) {
-		fprintf(stderr, "nval != ncol\n");
+	if( nval != 1 )
 		goto wrong_number_args;
-	}
-	
+
 	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
 	nphrase = matchinfo[0];
 	ncol = matchinfo[1];

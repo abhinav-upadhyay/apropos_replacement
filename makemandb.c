@@ -293,7 +293,7 @@ main(int argc, char *argv[])
 	sqlstr = "BEGIN";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		return -1;
 	}
 	
@@ -317,7 +317,7 @@ main(int argc, char *argv[])
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		cleanup();
-		errx(EXIT_FAILURE, "pclose error");
+		err(EXIT_FAILURE, "pclose error");
 	}
 	
 	update_db(db, mp);
@@ -327,7 +327,7 @@ main(int argc, char *argv[])
 	sqlstr = "COMMIT";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		cleanup();
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -378,10 +378,8 @@ prepare_db(sqlite3 **db)
 	rc = sqlite3_open_v2(DBPATH, db, SQLITE_OPEN_READWRITE | 
 		             SQLITE_OPEN_CREATE, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Could not open database\n");
-		sqlite3_close(*db);
 		sqlite3_shutdown();
-		return -1;
+		errx(EXIT_FAILURE, "Could not open database");
 	}
 	
 	sqlite3_extended_result_codes(*db, 1);
@@ -390,19 +388,17 @@ prepare_db(sqlite3 **db)
 	rc = sqlite3_create_function(*db, "zip", 1, SQLITE_ANY, NULL, 
                              zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: compress\n");
 		sqlite3_close(*db);
 		sqlite3_shutdown();
-		return -1;
+		errx(EXIT_FAILURE, "Not able to register function: compress");
 	}
 
 	rc = sqlite3_create_function(*db, "unzip", 1, SQLITE_ANY, NULL, 
 		                         unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Not able to register function: uncompress\n");
 		sqlite3_close(*db);
 		sqlite3_shutdown();
-		return -1;
+		errx(EXIT_FAILURE, "Not able to register function: uncompress");
 	}
 	
 	/* Register the stopword tokenizer */
@@ -417,11 +413,11 @@ prepare_db(sqlite3 **db)
 	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
 	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(*db));
+		warnx("%s", sqlite3_errmsg(*db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(*db);
 		sqlite3_shutdown();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	
 	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **) 
@@ -431,28 +427,30 @@ prepare_db(sqlite3 **db)
 	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
 		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(*db));
+		warnx("%s", sqlite3_errmsg(*db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(*db);
 		sqlite3_shutdown();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_ROW) {
-		fprintf(stderr, "%s tokenizer error\n", sqlite3_errmsg(*db));
+		warnx("%s", sqlite3_errmsg(*db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(*db);
 		sqlite3_shutdown();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 	sqlite3_finalize(stmt);
 	
 	/* if the flag was set true, then we need to call create_db to create the 
 	 * tables 
 	 */
-	if (create_db_flag)
-		create_db(*db);	
+	if (create_db_flag) {
+		if (create_db(*db) < 0)
+			errx(EXIT_FAILURE, "Could not create database");
+	}
 	return 0;
 }
 
@@ -470,7 +468,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	char *buf;
 		
 	if (stat(file, &sb) < 0) {
-		fprintf(stderr, "stat failed: %s", file);
+		warn("stat failed: %s", file);
 		return;
 	}
 	
@@ -487,7 +485,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	/* If it is a directory, traverse it recursively */
 	else if (S_ISDIR(sb.st_mode)) {
 		if ((dp = opendir(file)) == NULL) {
-			fprintf(stderr, "opendir error: %s\n", file);
+			warn("opendir error: %s", file);
 			return;
 		}
 		
@@ -497,7 +495,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 				if ((asprintf(&buf, "%s/%s", file, dirp->d_name) == -1)) {
 					closedir(dp);
 					if (errno == ENOMEM)
-						fprintf(stderr, "ENOMEM\n");
+						warn(NULL);
 					continue;
 				}
 				traversedir(buf, db, mp);
@@ -529,7 +527,7 @@ build_file_cache(sqlite3 *db, const char *file)
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return ;
@@ -537,7 +535,7 @@ build_file_cache(sqlite3 *db, const char *file)
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -550,7 +548,7 @@ build_file_cache(sqlite3 *db, const char *file)
 			"(md5_hash)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return;
@@ -565,7 +563,7 @@ build_file_cache(sqlite3 *db, const char *file)
 	sqlstr = "INSERT INTO file_cache VALUES (:md5, :file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		free(md5);
 		return;
 	}
@@ -573,7 +571,7 @@ build_file_cache(sqlite3 *db, const char *file)
 	idx = sqlite3_bind_parameter_index(stmt, ":md5");
 	rc = sqlite3_bind_text(stmt, idx, md5, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		free(md5);
 		return;
@@ -582,7 +580,7 @@ build_file_cache(sqlite3 *db, const char *file)
 	idx = sqlite3_bind_parameter_index(stmt, ":file");
 	rc = sqlite3_bind_text(stmt, idx, file, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		free(md5);
 		return;
@@ -590,7 +588,7 @@ build_file_cache(sqlite3 *db, const char *file)
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		free(md5);
 		return;
 	}
@@ -619,10 +617,10 @@ update_db(sqlite3 *db, struct mparse *mp)
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Could not query file cache\n");
+		errx(EXIT_FAILURE, "Could not query file cache");
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -631,7 +629,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 		printf("Parsing: %s\n", file);
 		begin_parse(file, mp);
 		if (insert_into_db(db) < 0) {
-			fprintf(stderr, "Error in indexing %s\n", file);
+			warnx("Error in indexing %s", file);
 			cleanup();
 		}
 		else
@@ -647,16 +645,16 @@ update_db(sqlite3 *db, struct mparse *mp)
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
-			"makemandb -f to prune and rebuild the database from scratch\n");
+		warnx("%s", sqlite3_errmsg(db));
+		warnx("Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch");
 		return;
 	}
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
-			"makemandb -f to prune and rebuild the database from scratch\n");
+		warnx("Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch");
 		return;
 	}
 	sqlite3_finalize(stmt);
@@ -665,16 +663,16 @@ update_db(sqlite3 *db, struct mparse *mp)
 		" file_cache)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
-		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
-			"makemandb -f to prune and rebuild the database from scratch\n");
+		warnx("%s", sqlite3_errmsg(db));
+		warnx("Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch");
 		return;
 	}
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "Attempt to remove old entries failed. You may want to: "
-			"makemandb -f to prune and rebuild the database from scratch\n");
+		warnx("Attempt to remove old entries failed. You may want to: "
+			"makemandb -f to prune and rebuild the database from scratch");
 		sqlite3_finalize(stmt);
 		return;
 	}
@@ -683,13 +681,13 @@ update_db(sqlite3 *db, struct mparse *mp)
 	sqlstr = "DROP TABLE file_cache";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		return;
 	}
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		return;
 	}
@@ -709,13 +707,13 @@ begin_parse(const char *file, struct mparse *mp)
 	mparse_reset(mp);
 
 	if (mparse_readfd(mp, -1, file) >= MANDOCLEVEL_FATAL) {
-		fprintf(stderr, "%s: Parse failure\n", file);
+		warn("%s: Parse failure", file);
 		return;
 	}
 
 	mparse_result(mp, &mdoc, &man);
 	if (mdoc == NULL && man == NULL) {
-		fprintf(stderr, "Not a man(7) or mdoc(7) page\n");
+		warnx("Not a man(7) or mdoc(7) page");
 		return;
 	}
 
@@ -1137,7 +1135,7 @@ insert_into_db(sqlite3 *db)
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		cleanup();
 		return -1;
 	}
@@ -1145,7 +1143,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":name");
 	rc = sqlite3_bind_text(stmt, idx, name, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1154,7 +1152,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":section");
 	rc = sqlite3_bind_text(stmt, idx, section, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1163,7 +1161,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
 	rc = sqlite3_bind_text(stmt, idx, name_desc, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1172,7 +1170,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":desc");
 	rc = sqlite3_bind_text(stmt, idx, desc, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1181,7 +1179,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":lib");
 	rc = sqlite3_bind_text(stmt, idx, lib, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1190,7 +1188,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":synopsis");
 	rc = sqlite3_bind_text(stmt, idx, synopsis, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1199,7 +1197,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":return_vals");
 	rc = sqlite3_bind_text(stmt, idx, return_vals, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1208,7 +1206,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":env");
 	rc = sqlite3_bind_text(stmt, idx, env, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1217,7 +1215,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":files");
 	rc = sqlite3_bind_text(stmt, idx, files, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1226,7 +1224,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
 	rc = sqlite3_bind_text(stmt, idx, exit_status, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1235,7 +1233,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":diagnostics");
 	rc = sqlite3_bind_text(stmt, idx, diagnostics, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1244,7 +1242,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":errors");
 	rc = sqlite3_bind_text(stmt, idx, errors, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1252,7 +1250,7 @@ insert_into_db(sqlite3 *db)
 
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1267,7 +1265,7 @@ insert_into_db(sqlite3 *db)
 	sqlstr = "INSERT INTO mandb_md5 VALUES (:md5_hash, :id)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		cleanup();
 		return -1;
 	}
@@ -1275,7 +1273,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, md5_hash, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1284,7 +1282,7 @@ insert_into_db(sqlite3 *db)
 	idx = sqlite3_bind_parameter_index(stmt, ":id");
 	rc = sqlite3_bind_int64(stmt, idx, mandb_rowid);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1292,7 +1290,7 @@ insert_into_db(sqlite3 *db)
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
@@ -1321,21 +1319,21 @@ insert_into_db(sqlite3 *db)
 				"\'%s\', \'%s\')", link, name, section, machine);
 			rc = sqlite3_prepare_v2(db, str, -1, &stmt, NULL);
 			if (rc != SQLITE_OK) {
-				fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+				warnx("%s", sqlite3_errmsg(db));
 				cleanup();
 				free(str);
 				return -1;
 			}
 			rc = sqlite3_step(stmt);
 			if (rc != SQLITE_DONE) {
-				fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+				warnx("%s", sqlite3_errmsg(db));
 				sqlite3_finalize(stmt);
 				cleanup();
 				free(str);
 				return -1;
+			}
 			sqlite3_finalize(stmt);
 			free(str);
-			}
 		}
 	}
 	
@@ -1360,7 +1358,7 @@ create_db(sqlite3 *db)
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
@@ -1368,7 +1366,7 @@ create_db(sqlite3 *db)
 
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -1382,7 +1380,7 @@ create_db(sqlite3 *db)
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
@@ -1390,7 +1388,7 @@ create_db(sqlite3 *db)
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -1404,7 +1402,7 @@ create_db(sqlite3 *db)
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
@@ -1412,7 +1410,7 @@ create_db(sqlite3 *db)
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -1425,7 +1423,7 @@ create_db(sqlite3 *db)
 			"(link)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
@@ -1456,7 +1454,7 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 	assert(file != NULL);
 	char *buf = MD5File(file, NULL);
 	if (buf == NULL) {
-		fprintf(stderr, "md5 failed: %s\n", file);
+		warn("md5 failed: %s", file);
 		return NULL;
 	}
 	
@@ -1471,7 +1469,7 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, buf, -1, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		free(sqlstr);
 		free(buf);
@@ -1547,7 +1545,7 @@ optimize(sqlite3 *db)
 	sqlstr = "INSERT INTO mandb(mandb) VALUES (\'optimize\')";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		fprintf(stderr, "%s\n", sqlite3_errmsg(db));
+		warnx("%s", sqlite3_errmsg(db));
 		return;
 	}
 	
@@ -1562,7 +1560,6 @@ optimize(sqlite3 *db)
 static void
 usage(void)
 {
-	(void)fprintf(stderr,
-	    "usage: %s [-f]\n", getprogname());
+	(void)warnx("usage: %s [-f]\n", getprogname());
 	exit(1);
 }
