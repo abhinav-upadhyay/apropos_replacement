@@ -1560,6 +1560,6 @@ optimize(sqlite3 *db)
 static void
 usage(void)
 {
-	(void)warnx("usage: %s [-f]\n", getprogname());
+	(void)warnx("usage: %s [-f]", getprogname());
 	exit(1);
 }
