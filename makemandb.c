@@ -271,6 +271,7 @@ main(int argc, char *argv[])
 			mflags.optimize = 1;
 			break;
 		case '?':
+		default:
 			usage();
 			break;
 		}
