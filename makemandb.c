@@ -255,10 +255,8 @@ main(int argc, char *argv[])
 	FILE *file;
 	char *line;
 	char *temp = NULL;
-	const char *sqlstr;
-	int rc;
+	char *errmsg = NULL;
 	char ch;
-	sqlite3_stmt *stmt = NULL;
 	struct mparse *mp = NULL;
 	sqlite3 *db;
 	size_t len;
@@ -291,20 +289,13 @@ main(int argc, char *argv[])
 	}
 	
 	/* Begin the transaction for indexing the pages	*/
-	sqlstr = "BEGIN";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		return -1;
+	sqlite3_exec(db, "BEGIN", NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		exit(EXIT_FAILURE);
 	}
-	
-	if (sqlite3_step(stmt) != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	sqlite3_finalize(stmt);
+		
 
 	printf("Building temporary file cache\n");	
 	while ((line = fgetln(file, &len)) != NULL) {
@@ -338,24 +329,13 @@ main(int argc, char *argv[])
 	mparse_free(mp);
 	
 	/* Commit the transaction */
-	sqlstr = "COMMIT";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
+	sqlite3_exec(db, "COMMIT", NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
 		cleanup();
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
+		exit(EXIT_FAILURE);
 	}
-	
-	if (sqlite3_step(stmt) != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		cleanup();
-		return -1;
-	}
-	sqlite3_finalize(stmt);
 	
 	if (mflags.optimize)
 		optimize(db);
@@ -391,6 +371,7 @@ prepare_db(sqlite3 **db)
 	sqlite3_initialize();
 	rc = sqlite3_open_v2(DBPATH, db, SQLITE_OPEN_READWRITE | 
 		             SQLITE_OPEN_CREATE, NULL);
+	
 	if (rc != SQLITE_OK) {
 		sqlite3_shutdown();
 		errx(EXIT_FAILURE, "Could not open database");
@@ -535,41 +516,19 @@ build_file_cache(sqlite3 *db, const char *file)
 	sqlite3_stmt *stmt = NULL;
 	int rc, idx;
 	char *md5 = NULL;
+	char *errmsg = NULL;
 	assert(file != NULL);
 	
-	sqlstr = "CREATE TABLE IF NOT EXISTS file_cache(md5_hash, file PRIMARY KEY)";
-
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return ;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return ;
-	}
-		
-	sqlite3_finalize(stmt);
-	
-	sqlstr = "CREATE INDEX IF NOT EXISTS index_file_cache_md5 ON file_cache "
+	sqlstr = "CREATE TABLE IF NOT EXISTS file_cache(md5_hash, file PRIMARY KEY)"
+			"; CREATE INDEX IF NOT EXISTS index_file_cache_md5 ON file_cache "
 			"(md5_hash)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return;
+
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		exit(EXIT_FAILURE);
 	}
-	
-	rc = sqlite3_step(stmt);
-	sqlite3_finalize(stmt);
 	
 	if ((md5 = check_md5(file, db, "file_cache")) == NULL) 
 		return;
@@ -624,6 +583,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	sqlite3_stmt *stmt = NULL;
 	int rc;
 	char *file;
+	char *errmsg = NULL;
 	int count = 0;
 	
 	sqlstr = "SELECT file, md5_hash FROM file_cache WHERE md5_hash NOT IN "
@@ -655,58 +615,19 @@ update_db(sqlite3 *db, struct mparse *mp)
 	printf("%d new manual pages added\n", count);
 	
 	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_md5 "
-		"WHERE md5_hash NOT IN (SELECT md5_hash FROM file_cache))";
+		"WHERE md5_hash NOT IN (SELECT md5_hash FROM file_cache)); "
+		"DELETE FROM mandb_md5 WHERE md5_hash NOT IN (SELECT md5_hash FROM"
+		" file_cache); "
+		"DROP TABLE file_cache";
 	
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		warnx("Attempt to remove old entries failed. You may want to: "
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("Attempt to remove old entries failed. You may want to run: "
 			"makemandb -f to prune and rebuild the database from scratch");
+		warnx("%s", errmsg);
+		free(errmsg);
 		return;
 	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("Attempt to remove old entries failed. You may want to: "
-			"makemandb -f to prune and rebuild the database from scratch");
-		return;
-	}
-	sqlite3_finalize(stmt);
-	
-	sqlstr = "DELETE FROM mandb_md5 WHERE md5_hash NOT IN (SELECT md5_hash FROM"
-		" file_cache)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		warnx("Attempt to remove old entries failed. You may want to: "
-			"makemandb -f to prune and rebuild the database from scratch");
-		return;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("Attempt to remove old entries failed. You may want to: "
-			"makemandb -f to prune and rebuild the database from scratch");
-		sqlite3_finalize(stmt);
-		return;
-	}
-	sqlite3_finalize(stmt);
-	
-	sqlstr = "DROP TABLE file_cache";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		return;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		return;
-	}
-	sqlite3_finalize(stmt);
-
 }
 	
 /*
@@ -1111,6 +1032,7 @@ insert_into_db(sqlite3 *db)
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
 	char *link = NULL;
+	char *errmsg = NULL;
 	long int mandb_rowid;
 	
 	/* At the very minimum we want to make sure that we store the following data:
@@ -1331,22 +1253,14 @@ insert_into_db(sqlite3 *db)
 			
 			asprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', "
 				"\'%s\', \'%s\')", link, name, section, machine);
-			rc = sqlite3_prepare_v2(db, str, -1, &stmt, NULL);
-			if (rc != SQLITE_OK) {
-				warnx("%s", sqlite3_errmsg(db));
+			sqlite3_exec(db, str, NULL, NULL, &errmsg);
+			if (errmsg != NULL) {
+				warnx("%s", errmsg);
 				cleanup();
 				free(str);
+				free(errmsg);
 				return -1;
 			}
-			rc = sqlite3_step(stmt);
-			if (rc != SQLITE_DONE) {
-				warnx("%s", sqlite3_errmsg(db));
-				sqlite3_finalize(stmt);
-				cleanup();
-				free(str);
-				return -1;
-			}
-			sqlite3_finalize(stmt);
 			free(str);
 		}
 	}
@@ -1359,92 +1273,39 @@ insert_into_db(sqlite3 *db)
 static int
 create_db(sqlite3 *db)
 {
-	int rc = 0;
 	const char *sqlstr = NULL;
-	sqlite3_stmt *stmt = NULL;
+	char *errmsg = NULL;
 	
-/*------------------------ Build the mandb table------------------------------*/
+/*------------------------ Create the tables------------------------------*/
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 			"name_desc, desc, lib, synopsis, return_vals, env, files, "
 			"exit_status, diagnostics, errors, compress=zip, uncompress=unzip, "
-			"tokenize=porter)";
+			"tokenize=porter); "	//mandb table
+			"CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
+			"id  INTEGER PRIMARY KEY); "	//mandb_md5 table
+			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
+			"machine); ";	//mandb_links
 
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
 	}
 
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	sqlite3_finalize(stmt);
-
-/*------------------------ Build the mandb_md5 table--------------------------*/	
-	sqlstr = "CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
-			"id  INTEGER PRIMARY KEY)";
-
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-		
-	sqlite3_finalize(stmt);
-	
-	sqlstr = "CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-			"machine)";
-
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-		
-	sqlite3_finalize(stmt);
-	
 	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
 			"(link)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		return -1;
 	}
-	
-	rc = sqlite3_step(stmt);
-	sqlite3_finalize(stmt);
 	return 0;
 }
 
@@ -1552,35 +1413,17 @@ static void
 optimize(sqlite3 *db)
 {
 	const char *sqlstr;
-	sqlite3_stmt *stmt = NULL;
-	int rc;
+	char *errmsg = NULL;
+
 	printf("Optimizing the database index\n");
-	
-	sqlstr = "INSERT INTO mandb(mandb) VALUES (\'optimize\')";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
+	sqlstr = "INSERT INTO mandb(mandb) VALUES (\'optimize\'); "
+			"VACUUM";
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
 		return;
-	}
-	
-	if (sqlite3_step(stmt) != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		return;
-	}
-	
-	sqlite3_finalize(stmt);
-	
-	sqlstr = "VACUUM";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		return;
-	}
-	
-	if (sqlite3_step(stmt) != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		return;
-	}
+	}	
 }
 
 static void
