@@ -468,12 +468,8 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 		return;
 	}
 	
-	/* Avoid symlinks */
-	if (S_ISLNK(sb.st_mode)) 
-		return;
-	
-	/* If it is a regular file, pass it to build_cache() */
-	if (S_ISREG(sb.st_mode)) {
+	/* If it is a regular file or a symlink, pass it to build_cache() */
+	if (S_ISREG(sb.st_mode) || S_ISLNK(sb.st_mode)) {
 		build_file_cache(db, file);
 		return;
 	}
