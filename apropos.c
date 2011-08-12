@@ -146,7 +146,7 @@ main(int argc, char *argv[])
 
 	if (search(query, &aflags) < 0)
 		errx(EXIT_FAILURE, "Sorry, no relevant results could be obtained");
-
+	free(query);
 	return 0;
 }
 
@@ -413,10 +413,9 @@ remove_stopwords(char **query)
 	
 	hdestroy();
 	if (buf != NULL)
-		*query = estrdup(buf);
+		*query = buf;
 	else
-		*query = estrdup("");
-	free(buf);
+		*query = (char *)"";
 }
 
 /*
