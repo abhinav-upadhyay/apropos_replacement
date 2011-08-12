@@ -19,6 +19,7 @@ DPADD.makemandb+= 	${MDOCMLLIB}
 LDADD.makemandb+= 	-L${MDOCMLOBJDIR} -lmandoc
 LDADD+=	-lm
 LDADD+=	-lz
+LDADD+=	-lutil
 MKMAN=	no
 
 .include <bsd.prog.mk>

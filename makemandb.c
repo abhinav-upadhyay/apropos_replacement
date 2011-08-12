@@ -22,12 +22,12 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
-#include <math.h>
 #include <md5.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <util.h>
 
 #include "apropos-utils.h"
 #include "fts3_tokenizer.h"
@@ -305,7 +305,7 @@ main(int argc, char *argv[])
 			line[len - 1] = '\0';
 		/* Last line will not contain a new line character, so a work around */
 		else {
-			temp = (char *) malloc(len + 1);
+			temp = (char *) emalloc(len + 1);
 			memcpy(temp, line, len);
 			temp[len] = '\0';
 			line = temp;
@@ -600,7 +600,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		file = (char *) sqlite3_column_text(stmt, 0);
-		md5_hash = strdup((char *) sqlite3_column_text(stmt, 1));
+		md5_hash = estrdup((char *) sqlite3_column_text(stmt, 1));
 		printf("Parsing: %s\n", file);
 		begin_parse(file, mp);
 		if (insert_into_db(db) < 0) {
@@ -779,10 +779,8 @@ static void
 pman_parse_node(const struct man_node *n, char **s)
 {
 	for (n = n->child; n; n = n->next) {
-		if (n->type == MAN_TEXT) {
-			if (concat(s, n->string, strlen(n->string)) < 0)
-				return;
-		}	
+		if (n->type == MAN_TEXT)
+			concat(s, n->string, strlen(n->string));
 		else
 			pman_parse_node(n, s);
 	}
@@ -853,7 +851,7 @@ pman_sh(const struct man_node *n)
 			/* Assuming the name of a man page is a single word, we can easily
 			 * take out the first word out of the string
 			 */
-			char *temp = strdup(name_desc);
+			char *temp = estrdup(name_desc);
 			char *link;
 			sz = strcspn(temp, " ,\0");
 			name = malloc(sz+1);
@@ -959,11 +957,11 @@ get_section(const struct mdoc *md, const struct man *m)
 {
 	if (md) {
 		const struct mdoc_meta *md_meta = mdoc_meta(md);
-		section = strdup(md_meta->msec);
+		section = estrdup(md_meta->msec);
 	}
 	else if (m) {
 		const struct man_meta *m_meta = man_meta(m);
-		section = strdup(m_meta->msec);
+		section = estrdup(m_meta->msec);
 	}
 }
 
@@ -974,7 +972,7 @@ get_machine(const struct mdoc *md)
 		return;
 	const struct mdoc_meta *md_meta = mdoc_meta(md);
 	if (md_meta->arch)
-		machine = strdup(md_meta->arch);
+		machine = estrdup(md_meta->arch);
 }
 
 /* 
@@ -1244,7 +1242,7 @@ insert_into_db(sqlite3 *db)
 		
 	if (links) {
 		if (machine == NULL)
-			asprintf(&machine, "%s", "");
+			easprintf(&machine, "%s", "");
 		
 		for(link = strtok(links, " "); link; link = strtok(NULL, " ")) {
 			if (link[0] == ',')
@@ -1252,7 +1250,7 @@ insert_into_db(sqlite3 *db)
 			if(link[strlen(link) - 1] == ',')
 				link[strlen(link) - 1] = 0;
 			
-			asprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', "
+			easprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', "
 				"\'%s\', \'%s\')", link, name, section, machine);
 			sqlite3_exec(db, str, NULL, NULL, &errmsg);
 			if (errmsg != NULL) {
@@ -1334,7 +1332,7 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 		return NULL;
 	}
 	
-	asprintf(&sqlstr, "SELECT * from %s WHERE md5_hash = :md5_hash", table);
+	easprintf(&sqlstr, "SELECT * from %s WHERE md5_hash = :md5_hash", table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		free(sqlstr);

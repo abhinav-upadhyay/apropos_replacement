@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <util.h>
 
 #include "apropos-utils.h"
 #include "sqlite3.h"
@@ -101,7 +102,7 @@ lower(char *str)
 *  Utility function. Concatenates together: dst, a space character and src. 
 * dst + " " + src 
 */
-int
+void
 concat(char **dst, const char *src, int srclen)
 {
 	int total_len, dst_len;
@@ -111,10 +112,8 @@ concat(char **dst, const char *src, int srclen)
 
 	/* if destination buffer dst is NULL, then simply strdup the source buffer */
 	if (*dst == NULL) {
-		if ((*dst = strdup(src)) == NULL)
-			return -1;
-		else
-			return 0;
+		*dst = estrdup(src);
+		return;
 	}
 	else	
 		dst_len = strlen(*dst);
@@ -125,8 +124,7 @@ concat(char **dst, const char *src, int srclen)
 	*/	
 	total_len = dst_len + srclen + 2;
 	
-	if ((*dst = (char *) realloc(*dst, total_len)) == NULL)
-		return -1;
+	*dst = (char *) erealloc(*dst, total_len);
 		
 	/* Append a space at the end of dst */
 	memcpy(*dst + dst_len, " ", 1);
@@ -134,6 +132,6 @@ concat(char **dst, const char *src, int srclen)
 	
 	/* Now, copy src at the end of dst */	
 	memcpy(*dst + dst_len, src, srclen + 1);
-	return 0;
+	return;
 }
 

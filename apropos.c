@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <util.h>
 
 #include "apropos-utils.h"
 #include "fts3_tokenizer.h"
@@ -263,7 +264,7 @@ search(const char *query, apropos_flags *aflags)
 	 * working with the compression option enabled.
 	 */
 	if (!aflags->pager)
-		asprintf(&sqlstr, "SELECT section, name, name_desc, "
+		easprintf(&sqlstr, "SELECT section, name, name_desc, "
 				"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
 				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
 				 "FROM mandb WHERE mandb MATCH :query");
@@ -272,13 +273,14 @@ search(const char *query, apropos_flags *aflags)
 		 *	snippet.
 		 * Also open a pipe to the pager (more)
 		 */
-		asprintf(&sqlstr, "SELECT section, name, name_desc, "
+		easprintf(&sqlstr, "SELECT section, name, name_desc, "
 				"snippet(mandb, \"\", \"\", \"...\" ), "
 				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
 				 "FROM mandb WHERE mandb MATCH :query");
 		if ((pager = popen("more", "w")) == NULL) {
 			sqlite3_close(db);
 			sqlite3_shutdown();
+			free(sqlstr);
 			err(EXIT_FAILURE, "pipe failed");
 		}
 	}
@@ -296,6 +298,7 @@ search(const char *query, apropos_flags *aflags)
 	}
 	if (flag)
 		concat(&sqlstr, ")", 1);
+
 	concat(&sqlstr, "ORDER BY rank DESC", -1);
 	if (!aflags->pager)
 		concat(&sqlstr, "LIMIT 10 OFFSET 0", -1);
@@ -427,9 +430,9 @@ remove_stopwords(char **query)
 	
 	hdestroy();
 	if (buf != NULL)
-		*query = strdup(buf);
+		*query = estrdup(buf);
 	else
-		*query = strdup("");
+		*query = estrdup("");
 	free(buf);
 }
 
