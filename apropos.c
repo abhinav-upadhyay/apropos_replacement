@@ -407,25 +407,8 @@ remove_stopwords(char **query)
 		 ENTRY ent;
 		 ent.key = (char *)temp;
 		 ent.data = NULL;
-		 if (hsearch(ent, FIND) == NULL) {
-		 	if (buf == NULL) {
-		 		if ((buf = strdup(temp)) == NULL) {
-		 			*query = NULL;
-		 			hdestroy();
-		 			return;
-	 			}
- 			}
-		 	else {
-		 		if ((buf = realloc(buf, strlen(buf) + strlen(temp) + 2)) == NULL) {
-		 			*query = NULL;
-		 			hdestroy();
-		 			return;
-	 			}
-		 		strcat(buf, " ");
-		 		strcat(buf, temp);
-	 		}
-		 	
- 		}
+		 if (hsearch(ent, FIND) == NULL)
+		 	concat(&buf, temp, strlen(temp));
 	}
 	
 	hdestroy();
