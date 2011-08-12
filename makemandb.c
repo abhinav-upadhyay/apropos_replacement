@@ -955,14 +955,16 @@ pman_sh(const struct man_node *n)
 static void
 get_section(const struct mdoc *md, const struct man *m)
 {
+	section = emalloc(2);
 	if (md) {
 		const struct mdoc_meta *md_meta = mdoc_meta(md);
-		section = estrdup(md_meta->msec);
+		memcpy(section, md_meta->msec, 1);
 	}
 	else if (m) {
 		const struct man_meta *m_meta = man_meta(m);
-		section = estrdup(m_meta->msec);
+		memcpy(section, m_meta->msec, 1);
 	}
+	section[1] = '\0';
 }
 
 static void
