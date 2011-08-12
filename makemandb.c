@@ -1279,13 +1279,13 @@ create_db(sqlite3 *db)
 /*------------------------ Create the tables------------------------------*/
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
-			"name_desc, desc, lib, synopsis, return_vals, env, files, "
-			"exit_status, diagnostics, errors, compress=zip, uncompress=unzip, "
-			"tokenize=porter); "	//mandb table
+				"name_desc, desc, lib, synopsis, return_vals, env, files, "
+				"exit_status, diagnostics, errors, compress=zip, "
+				"uncompress=unzip, tokenize=porter); "	//mandb table
 			"CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
-			"id  INTEGER PRIMARY KEY); "	//mandb_md5 table
+				"id  INTEGER PRIMARY KEY); "	//mandb_md5 table
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-			"machine); ";	//mandb_links
+				"machine); ";	//mandb_links
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
