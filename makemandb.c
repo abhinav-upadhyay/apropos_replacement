@@ -57,7 +57,6 @@ static void pman_sh(const struct man_node *);
 static void pman_block(const struct man_node *);
 static void traversedir(const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *string);
-static int prepare_db(sqlite3 **);
 static void get_machine(const struct mdoc *);
 static void build_file_cache(sqlite3 *, const char *);
 static void update_db(sqlite3 *, struct mparse *);
@@ -279,8 +278,10 @@ main(int argc, char *argv[])
 	
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
-	if (prepare_db(&db) < 0)
-		errx(EXIT_FAILURE, "Error in initializing the database");
+	if (init(&db, 1) == 1) {
+		if (create_db(db) < 0)
+			errx(EXIT_FAILURE, "Could not create database");
+	}
 		
 	/* Call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL) {
@@ -344,109 +345,6 @@ main(int argc, char *argv[])
 	sqlite3_close(db);
 	sqlite3_shutdown();
 	cleanup();
-	return 0;
-}
-
-/* prepare_db --
- *   Prepare the database. Register the compress/uncompress functions and the
- *   stopword tokenizer.
- */
-static int
-prepare_db(sqlite3 **db)
-{
-	struct stat sb;
-	const sqlite3_tokenizer_module *stopword_tokenizer_module;
-	const char *sqlstr;
-	int rc;
-	int idx;
-	int create_db_flag = 0;
-	sqlite3_stmt *stmt = NULL;
-
-	/* If the db file does not already exists, we need to create the tables, set
-	 *	the flag to remember this
-	 */
-	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)))
-		create_db_flag = 1;
-		
-	/* Now initialize the database connection */
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, db, SQLITE_OPEN_READWRITE | 
-		             SQLITE_OPEN_CREATE, NULL);
-	
-	if (rc != SQLITE_OK) {
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Could not open database");
-	}
-	
-	sqlite3_extended_result_codes(*db, 1);
-	
-	/* Register the zip and unzip functions for FTS compression */
-	rc = sqlite3_create_function(*db, "zip", 1, SQLITE_ANY, NULL, 
-                             zip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(*db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register function: compress");
-	}
-
-	rc = sqlite3_create_function(*db, "unzip", 1, SQLITE_ANY, NULL, 
-		                         unzip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(*db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register function: uncompress");
-	}
-	
-	/* Register the stopword tokenizer */
-	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
-	rc = sqlite3_prepare_v2(*db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(*db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
-	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(*db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(*db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **) 
-		&stopword_tokenizer_module);
-
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
-	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
-		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(*db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(*db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_ROW) {
-		warnx("%s", sqlite3_errmsg(*db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(*db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	sqlite3_finalize(stmt);
-	
-	/* if the flag was set true, then we need to call create_db to create the 
-	 * tables 
-	 */
-	if (create_db_flag) {
-		if (create_db(*db) < 0)
-			errx(EXIT_FAILURE, "Could not create database");
-	}
 	return 0;
 }
 

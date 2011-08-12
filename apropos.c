@@ -171,59 +171,11 @@ search(const char *query, apropos_flags *aflags)
 	sqlite3_stmt *stmt = NULL;
 	FILE *pager = NULL;
 	inverse_document_frequency idf = {0, 0};
-	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	
-	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, SQLITE_OPEN_READONLY, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Database does not exist. Try running makemandb and "
-		"then try again");
-
-	}
-	
-	sqlite3_extended_result_codes(db, 1);
-
-	/* Register the tokenizer */
-	sqlstr = (char *) "SELECT fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
-	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		exit(EXIT_FAILURE);
-	}
-	
-	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **)
-		&stopword_tokenizer_module);
+	if (init(&db, 0) == 1)
+		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
+				"first and then try again");
 		
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
-	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
-		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		exit(EXIT_FAILURE);
-	}
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_ROW) {
-		warnx("%s Tokenizer error", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	sqlite3_finalize(stmt);	
-	
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
@@ -233,23 +185,7 @@ search(const char *query, apropos_flags *aflags)
 		errx(EXIT_FAILURE, "Not able to register the ranking function function");
 	}
 	
-	/* Register the compress function: zip (apropos-utils.h) */
-	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
-	                             zip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register function: compress");
-	}
-
-	/* Register the uncompress function: unzip (apropos-utils.h) */
-	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
-		                         unzip, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register function: uncompress");
-	}
+	
 	
 	/* Now, prepare the statement for doing the actual search query */
 	int i, flag = 0;
