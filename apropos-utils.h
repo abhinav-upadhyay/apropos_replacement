@@ -34,11 +34,22 @@
 #include "sqlite3.h"
 
 #define DBPATH "./apropos.db"
+#define SECMAX 9
+
+typedef struct query_args {
+	const char *search_str;		// user query
+	const char **sec_nums;		// Section in which to do the search
+	const char *nrec;			// number of records to fetch
+	int (*callback) (void *, int, char **, char **);	// The callback function
+	void *callback_data;	// data to pass to the callback function
+	char **errmsg;		// buffer for storing the error msg
+} query_args;
 
 void zip(sqlite3_context *, int, sqlite3_value **);
 void unzip(sqlite3_context *, int, sqlite3_value **);
 char *lower(char *);
 void concat(char **, const char *, int);
 int init(sqlite3 **, int);
-int done(sqlite3 *);
+int do_query(sqlite3 *, const char **, query_args *);
+int do_query_html(sqlite3 *, query_args *);
 #endif 

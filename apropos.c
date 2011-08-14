@@ -42,45 +42,26 @@
 #include "sqlite3.h"
 #include "stopword_tokenizer.h"
 
-#define SEC_MAX 9
 typedef struct apropos_flags {
-const char *sec_nums[SEC_MAX];
+const char *sec_nums[SECMAX];
 int pager;
 } apropos_flags;
 
-typedef struct  {
-double value;
-int status;
-} inverse_document_frequency;
-
-static void rank_func(sqlite3_context *, int, sqlite3_value **);
 static void remove_stopwords(char **);
-static int search(const char *, apropos_flags *);
-char *stemword(char *);
+static int query_callback(void *, int , char **, char **);
 static void usage(void);
-
-/* weights for individual columns */
-static const double col_weights[] = {
-	2.0,	// NAME
-	2.00,	// Name-description
-	0.55,	// DESCRIPTION
-	0.25,	// LIBRARY
-	0.10,	//SYNOPSIS
-	0.001,	//RETURN VALUES
-	0.20,	//ENVIRONMENT
-	0.01,	//FILES
-	0.001,	//EXIT STATUS
-	2.00,	//DIAGNOSTICS
-	0.05	//ERRORS
-};
 
 int
 main(int argc, char *argv[])
 {
 	char *query = NULL;	// the user query
 	char ch;
+	char *errmsg = NULL;
+	const char *nrec = "10";	// The number of records to fetch from db
+	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
+	FILE *out = stdout;		// the default stream for the search output
 	apropos_flags aflags = {{0}, 0};
-		
+	sqlite3 *db;	
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
@@ -131,7 +112,10 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;		
 	query = *argv;
-	
+	if (init(&db, 0) == 1)
+		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
+			"first and then try again");
+
 	/* Eliminate any stopwords from the query */
 	remove_stopwords(&query);
 	
@@ -144,139 +128,61 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "Try specifying more relevant keywords to get some "
 			"matches");
 
-	if (search(query, &aflags) < 0)
-		errx(EXIT_FAILURE, "Sorry, no relevant results could be obtained");
+	/* If user wants to page the output, then set some settings */
+	if (aflags.pager) {
+		/* Open a pipe to the pager */
+		if ((out = popen("more", "w")) == NULL) {
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			err(EXIT_FAILURE, "pipe failed");
+		}
+		nrec = NULL;	//NULL value of nrec means fetch all matching rows
+		/* The usual escape code \033[1m for bold text doesn't work with pager */
+		snippet_args[0] = snippet_args[1] = "";
+	}
+	
+
+	query_args args;
+	args.search_str = query;
+	args.sec_nums = aflags.sec_nums;
+	args.nrec = nrec;
+	args.callback = &query_callback;
+	args.callback_data = out;
+	args.errmsg = &errmsg;
+	if (do_query(db, snippet_args, &args) < 0)
+		errx(EXIT_FAILURE, "%s", errmsg);
+
 	free(query);
+	free(errmsg);
+	if (aflags.pager)
+		pclose(out);
+	sqlite3_close(db);
+	sqlite3_shutdown();
 	return 0;
 }
 
 /*
- * search --
- *  Opens apropos.db and performs the searches for the keywords entered by the 
- *  user.
- *  The 2nd param: sec_nums indicates if the user has specified any specific 
- *  sections to search in. We build the query string accordingly.
+ * query_callback --
+ *  Callback function for do_query.
+ *  It simply outputs the results from do_query. If the user specified the -p
+ *  option, then the output is sent to a pager, otherwise stdout is the default
+ *  output stream.
  */
 static int
-search(const char *query, apropos_flags *aflags)
+query_callback(void *data, int ncol, char **col_values, char **col_names)
 {
-	sqlite3 *db = NULL;
-	int rc = 0;
-	int idx = -1;
-	char *sqlstr = NULL;
 	char *name = NULL;
 	char *section = NULL;
 	char *snippet = NULL;
 	char *name_desc = NULL;
-	sqlite3_stmt *stmt = NULL;
-	FILE *pager = NULL;
-	inverse_document_frequency idf = {0, 0};
-	
-	if (init(&db, 0) == 1)
-		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
-				"first and then try again");
-		
-	/* Register the rank function */
-	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
-	                             rank_func, NULL, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register the ranking function function");
-	}
-	
-	
-	
-	/* Now, prepare the statement for doing the actual search query */
-	int i, flag = 0;
-	
-	/* We want to build a query of the form: "select x,y,z from mandb where
-	 * mandb match :query [AND (section LIKE '1' OR section LIKE '2' OR...)]
-	 * ORDER BY rank DESC..."
-	 * NOTES: 1. The portion in square brackets is optional, it will be there 
-	 * only if the user has specified an option on the command line to search in 
-	 * one or more specific sections.
-	 * 2. I am using LIKE operator because '=' or IN operators do not seem to be
-	 * working with the compression option enabled.
-	 */
-	if (!aflags->pager)
-		easprintf(&sqlstr, "SELECT section, name, name_desc, "
-				"snippet(mandb, \"\033[1m\", \"\033[0m\", \"...\" ), "
-				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
-				 "FROM mandb WHERE mandb MATCH :query");
-	else {
-		/* We are using a pager, so avoid the code sequences for bold text in 
-		 *	snippet.
-		 * Also open a pipe to the pager (more)
-		 */
-		easprintf(&sqlstr, "SELECT section, name, name_desc, "
-				"snippet(mandb, \"\", \"\", \"...\" ), "
-				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
-				 "FROM mandb WHERE mandb MATCH :query");
-		if ((pager = popen("more", "w")) == NULL) {
-			sqlite3_close(db);
-			sqlite3_shutdown();
-			free(sqlstr);
-			err(EXIT_FAILURE, "pipe failed");
-		}
-	}
-	
-	for (i = 0; i < SEC_MAX; i++) {
-		if (aflags->sec_nums[i]) {
-			if (flag == 0) {
-				concat(&sqlstr, "AND (section LIKE", -1);
-				flag = 1;
-			}
-			else
-				concat(&sqlstr, "OR section LIKE", -1);
-			concat(&sqlstr, aflags->sec_nums[i], strlen(aflags->sec_nums[i]));
-		}
-	}
-	if (flag)
-		concat(&sqlstr, ")", 1);
+	FILE *out = (FILE *) data;
 
-	concat(&sqlstr, "ORDER BY rank DESC", -1);
-	if (!aflags->pager)
-		concat(&sqlstr, "LIMIT 10 OFFSET 0", -1);
-		
-	          
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":query");
-	rc = sqlite3_bind_text(stmt, idx, query, -1, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	
-	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		section = (char *) sqlite3_column_text(stmt, 0);
-		name = (char *) sqlite3_column_text(stmt, 1);
-		name_desc = (char *) sqlite3_column_text(stmt, 2);
-		snippet = (char *) sqlite3_column_text(stmt, 3);
-		if (aflags->pager)
-			fprintf(pager, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
-					snippet);
-		else
-			fprintf(stdout, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
-					snippet);
-	}
-	
-	
-	pclose(pager);
-	sqlite3_finalize(stmt);	
-	sqlite3_close(db);
-	sqlite3_shutdown();
+	section =  col_values[0];
+	name = col_values[1];
+	name_desc = col_values[2];
+	snippet = col_values[3];
+	fprintf(out, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
+				snippet);
 	return 0;
 }
 /*
@@ -378,78 +284,4 @@ usage(void)
 {
 	(void)warnx("Usage: %s [-p] [-s <section-number>] query", getprogname());
 	exit(1);
-}
-
-/*
- * rank_func --
- *  Sqlite user defined function for ranking the documents.
- *  For each phrase of the query, it computes the tf and idf and adds them over.
- *  It computes the final rank, by multiplying tf and idf together.
- *  Weight of term t for document d = (term frequency of t in d * 
- *                                      inverse document frequency of t) 
- *
- *  Term Frequency of term t in document d = Number of times t occurs in d / 
- *	                                        Number of times t appears in all 
- *											documents
- *
- *  Inverse document frequency of t = log(Total number of documents / 
- *										Number of documents in which t occurs)
- */
-static void
-rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
-{
-	inverse_document_frequency *idf = (inverse_document_frequency *)
-										sqlite3_user_data(pctx);
-	double tf = 0.0;
-	unsigned int *matchinfo;
-	int ncol;
-	int nphrase;
-	int iphrase;
-	int ndoc;
-	int doclen = 0;
-	const double k = 3.75;
-	/* Check that the number of arguments passed to this function is correct. */
-	assert(nval == 1);
-
-	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
-	nphrase = matchinfo[0];
-	ncol = matchinfo[1];
-	ndoc = matchinfo[2 + 3 * ncol * nphrase + ncol];
-	for (iphrase = 0; iphrase < nphrase; iphrase++) {
-		int icol;
-		unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
-		for(icol = 1; icol < ncol; icol++) {
-			
-			/* nhitcount: number of times the current phrase occurs in the current
-			 *            column in the current document.
-			 * nglobalhitcount: number of times current phrase occurs in the current
-			 *                  column in all documents.
-			 * ndocshitcount:   number of documents in which the current phrase 
-			 *                  occurs in the current column at least once.
-			 */
-  			int nhitcount = phraseinfo[3 * icol];
-			int nglobalhitcount = phraseinfo[3 * icol + 1];
-			int ndocshitcount = phraseinfo[3 * icol + 2];
-			doclen = matchinfo[2 + icol ];
-			double weight = col_weights[icol - 1];
-			if (idf->status == 0 && ndocshitcount)
-				idf->value += log(((double)ndoc / ndocshitcount))* weight;
-
-			/* Dividing the tf by document length to normalize the effect of 
-			 * longer documents.
-			 */
-			if (nglobalhitcount > 0 && nhitcount)
-				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
-		}
-	}
-	idf->status = 1;
-	
-	/* Final score = (tf * idf)/ ( k + tf)
-	 *	Dividing by k+ tf further normalizes the weight leading to better 
-	 *  results.
-	 *  The value of k is experimental
-	 */
-	double score = (tf * idf->value/ ( k + tf)) ;
-	sqlite3_result_double(pctx, score);
-	return;
 }
