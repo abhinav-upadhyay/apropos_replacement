@@ -136,7 +136,8 @@ main(int argc, char *argv[])
 			sqlite3_shutdown();
 			err(EXIT_FAILURE, "pipe failed");
 		}
-		nrec = NULL;	//NULL value of nrec means fetch all matching rows
+		/* NULL value of nrec means fetch all matching rows */
+		nrec = NULL;
 		/* The usual escape code \033[1m for bold text doesn't work with pager */
 		snippet_args[0] = snippet_args[1] = "";
 	}
@@ -163,7 +164,7 @@ main(int argc, char *argv[])
 
 /*
  * query_callback --
- *  Callback function for do_query.
+ *  Callback function for run_query.
  *  It simply outputs the results from do_query. If the user specified the -p
  *  option, then the output is sent to a pager, otherwise stdout is the default
  *  output stream.
