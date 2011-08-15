@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <util.h>
+#include <vis.h>
 
 #include "apropos-utils.h"
 #include "fts3_tokenizer.h"
@@ -441,11 +442,16 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 	char *name = col_values[1];
 	char *name_desc = col_values[2];
 	char *snippet = col_values[3];
+	char *buf = NULL;
 	char *html_output = NULL;
 	int (*callback) (void *, int, char **, char **) = data;
-	easprintf(&html_output, "<p> <b>%s(%s)</b>\t%s <br />\n%s</p>", name, section, name_desc, 
-				snippet);
+	
+	easprintf(&buf, "<p> <b>%s(%s)</b>\t%s <br />\n%s</p>", name, section, 
+				name_desc, snippet);
+	html_output = emalloc(strlen(buf) * 4 + 1);
+	strvis(html_output, buf, VIS_CSTYLE);
 	(*callback)(NULL, 1, &html_output, col_names);
+	free(buf);
 	free(html_output);
 	return 0;
 }
