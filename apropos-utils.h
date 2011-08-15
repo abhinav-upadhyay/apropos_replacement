@@ -39,8 +39,22 @@
 /* Flags for opening the database */
 #define DB_READONLY SQLITE_OPEN_READONLY
 #define DB_WRITE SQLITE_OPEN_READWRITE
-// Create the database if it does not exist
 #define DB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+
+
+enum man_sec {
+	MANSEC_NAME = 0,
+	MANSEC_SYNOPSIS,
+	MANSEC_LIBRARY,
+	MANSEC_ERRORS,
+	MANSEC_FILES,
+	MANSEC_RETURN_VALUES,
+	MANSEC_EXIT_STATUS,
+	MANSEC_DESCRIPTION,
+	MANSEC_ENVIRONMENT,
+	MANSEC_DIAGNOSTICS,
+	MANSEC_NONE
+};
 
 typedef struct query_args {
 	const char *search_str;		// user query

@@ -40,6 +40,11 @@
 #define MDOC 0	//If the page is of mdoc(7) type
 #define MAN 1	//If the page  is of man(7) type
 
+typedef struct makemandb_flags {
+	int optimize;
+	int limit;	// limit the indexing to only DESCRIPTION section
+} makemandb_flags;
+
 static char *check_md5(const char *, sqlite3 *, const char *);
 static void cleanup(void);
 static void get_section(const struct mdoc *, const struct man *);
@@ -56,6 +61,7 @@ static void pman_sh(const struct man_node *);
 static void pman_block(const struct man_node *);
 static void traversedir(const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *string);
+static void man_parse_section(enum man_sec, const struct man_node *);
 static void get_machine(const struct mdoc *);
 static void build_file_cache(sqlite3 *, const char *);
 static void update_db(sqlite3 *, struct mparse *);
@@ -78,10 +84,7 @@ static char *section = NULL;
 static char *machine = NULL;
 static char *links = NULL; //all the links to a page in a space separated form
 static int page_type = MDOC; //Indicates the type of page: mdoc or man
-
-typedef struct makemandb_flags {
-	int optimize;
-} makemandb_flags;
+static makemandb_flags mflags;
 
 typedef	void (*pman_nf)(const struct man_node *n);
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
@@ -258,12 +261,14 @@ main(int argc, char *argv[])
 	struct mparse *mp = NULL;
 	sqlite3 *db;
 	size_t len;
-	makemandb_flags mflags = {0};
 	
-	while ((ch = getopt(argc, argv, "fo")) != -1) {
+	while ((ch = getopt(argc, argv, "flo")) != -1) {
 		switch (ch) {
 		case 'f':
 			remove(DBPATH);
+			break;
+		case 'l':
+			mflags.limit = 1;
 			break;
 		case 'o':
 			mflags.optimize = 1;
@@ -808,26 +813,30 @@ pman_sh(const struct man_node *n)
 		/* Check the section, and if it is of our concern, extract it's 
 		 * content
 		 */
+		 
+		else if (strcmp((const char *)head->string, "DESCRIPTION") == 0)
+			man_parse_section(MANSEC_DESCRIPTION, n);
+		
 		else if (strcmp((const char *)head->string, "SYNOPSIS") == 0)
-			pman_parse_node(n, &synopsis);
-		
+			man_parse_section(MANSEC_SYNOPSIS, n);
+
 		else if (strcmp((const char *)head->string, "LIBRARY") == 0)
-			pman_parse_node(n, &lib);
-		
+			man_parse_section(MANSEC_LIBRARY, n);
+
 		else if (strcmp((const char *)head->string, "ERRORS") == 0)
-			pman_parse_node(n, &errors);
-		
+			man_parse_section(MANSEC_ERRORS, n);
+
 		else if (strcmp((const char *)head->string, "FILES") == 0)
-			pman_parse_node(n, &files);
-		
+			man_parse_section(MANSEC_FILES, n);
+
 		/* The RETURN VALUE section might be specified in multiple ways */
 		else if (strcmp((const char *) head->string, "RETURN VALUE") == 0
 			|| strcmp((const char *)head->string, "RETURN VALUES") == 0
 			|| (strcmp((const char *)head->string, "RETURN") == 0 && 
 			head->next->type == MAN_TEXT && (strcmp((const char *)head->next->string, "VALUE") == 0 ||
 			strcmp((const char *)head->next->string, "VALUES") == 0)))
-				pman_parse_node(n, &return_vals);
-		
+				man_parse_section(MANSEC_RETURN_VALUES, n);
+
 		/* EXIT STATUS section can also be specified all on one line or on two
 		 * separate lines.
 		 */
@@ -835,11 +844,11 @@ pman_sh(const struct man_node *n)
 			|| (strcmp((const char *) head->string, "EXIT") ==0 &&
 			head->next->type == MAN_TEXT &&
 			strcmp((const char *)head->next->string, "STATUS") == 0))
-			pman_parse_node(n, &exit_status);
+			man_parse_section(MANSEC_EXIT_STATUS, n);
 
 		/* Store the rest of the content in desc */
 		else
-			pman_parse_node(n, &desc);
+			man_parse_section(MANSEC_NONE, n);
 	}
 }
 
@@ -1228,6 +1237,15 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 static void
 mdoc_parse_section(enum mdoc_sec sec, const char *string)
 {
+	if (mflags.limit) {
+		if (sec == SEC_DESCRIPTION) {
+		concat(&desc, string, strlen(string));
+		return;
+		}
+		else
+			return;
+	}
+	
 	switch (sec) {
 		case SEC_LIBRARY:
 			concat(&lib, string, strlen(string));
@@ -1259,6 +1277,52 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string)
 			concat(&desc, string, strlen(string));
 			break;
 	}
+}
+
+static void
+man_parse_section(enum man_sec sec, const struct man_node *n)
+{
+	if (mflags.limit) {
+		if (sec == MANSEC_DESCRIPTION) {
+			pman_parse_node(n, &desc);
+			return;
+		}
+		else
+			return;
+	}
+	
+	switch (sec) {
+		case MANSEC_LIBRARY:
+			pman_parse_node(n, &lib);
+			break;
+		case MANSEC_SYNOPSIS:
+			pman_parse_node(n, &synopsis);
+			break;
+		case MANSEC_RETURN_VALUES:
+			pman_parse_node(n, &return_vals);
+			break;
+		case MANSEC_ENVIRONMENT:
+			pman_parse_node(n, &env);
+			break;
+		case MANSEC_FILES:
+			pman_parse_node(n, &files);
+			break;
+		case MANSEC_EXIT_STATUS:
+			pman_parse_node(n, &exit_status);
+			break;
+		case MANSEC_DIAGNOSTICS:
+			pman_parse_node(n, &diagnostics);
+			break;
+		case MANSEC_ERRORS:
+			pman_parse_node(n, &errors);
+			break;
+		case MANSEC_NAME:
+			break;
+		default:
+			pman_parse_node(n, &desc);
+			break;
+	}
+
 }
 
 /* Optimize the index for faster search */
