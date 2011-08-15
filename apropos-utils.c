@@ -42,6 +42,8 @@
 #include "sqlite3.h"
 #include "stopword_tokenizer.h"
 
+static void zip(sqlite3_context *, int, sqlite3_value **);
+static void unzip(sqlite3_context *, int, sqlite3_value **);
 static int callback_html(void *, int, char **, char **);
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 
@@ -64,7 +66,8 @@ static const double col_weights[] = {
 	2.00,	//DIAGNOSTICS
 	0.05	//ERRORS
 };
-void
+
+static void
 zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {	
 	int nin, nout;
@@ -87,7 +90,7 @@ zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 }
 
 
-void
+static void
 unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {	
 	unsigned int nin, nout, rc;

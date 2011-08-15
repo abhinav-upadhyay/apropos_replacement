@@ -45,8 +45,6 @@ typedef struct query_args {
 	char **errmsg;		// buffer for storing the error msg
 } query_args;
 
-void zip(sqlite3_context *, int, sqlite3_value **);
-void unzip(sqlite3_context *, int, sqlite3_value **);
 char *lower(char *);
 void concat(char **, const char *, int);
 int init(sqlite3 **, int);
