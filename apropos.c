@@ -149,7 +149,7 @@ main(int argc, char *argv[])
 	args.callback = &query_callback;
 	args.callback_data = out;
 	args.errmsg = &errmsg;
-	if (do_query(db, snippet_args, &args) < 0)
+	if (run_query(db, snippet_args, &args) < 0)
 		errx(EXIT_FAILURE, "%s", errmsg);
 
 	free(query);

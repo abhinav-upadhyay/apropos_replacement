@@ -339,7 +339,7 @@ create_db(sqlite3 *db)
  *  
  */
 int
-do_query(sqlite3 *db, const char **snippet_args, query_args *args)
+run_query(sqlite3 *db, const char **snippet_args, query_args *args)
 {
 
 	char *sqlstr = NULL;
@@ -420,13 +420,13 @@ do_query(sqlite3 *db, const char **snippet_args, query_args *args)
  *  function would be lost.
  */
 int
-do_query_html(sqlite3 *db, query_args *args)
+run_query_html(sqlite3 *db, query_args *args)
 {
 	void *old_callback = (void *) args->callback;
 	const char *snippet_args[] = {"<b>", "</b>", "..."}; 
 	args->callback = &callback_html;
 	args->callback_data = old_callback;
-	do_query(db, snippet_args, args);
+	run_query(db, snippet_args, args);
 	return 0;
 }
 
