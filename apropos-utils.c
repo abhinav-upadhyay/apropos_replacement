@@ -41,7 +41,10 @@
 #include "sqlite3.h"
 #include "stopword_tokenizer.h"
 
-void
+static void zip(sqlite3_context *, int, sqlite3_value **);
+static void unzip(sqlite3_context *, int, sqlite3_value **);
+
+static void
 zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {	
 	int nin, nout;
@@ -64,7 +67,7 @@ zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 }
 
 
-void
+static void
 unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {	
 	unsigned int nin, nout, rc;
