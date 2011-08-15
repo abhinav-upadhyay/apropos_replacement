@@ -692,17 +692,11 @@ static void
 mdoc_parse_section(enum mdoc_sec sec, const char *string)
 {
 	/* If the user specified the 'l' flag, then parse and store only the
-	 * DESCRIPTION section. Ignore the rest.
+	 * NAME section. Ignore the rest.
 	 */
-	if (mflags.limit) {
-		if (sec == SEC_DESCRIPTION) {
-		concat(&desc, string, strlen(string));
+	if (mflags.limit)
 		return;
-		}
-		else
-			return;
-	}
-	
+
 	switch (sec) {
 		case SEC_LIBRARY:
 			concat(&lib, string, strlen(string));
@@ -959,18 +953,12 @@ pman_parse_node(const struct man_node *n, char **s)
 static void
 man_parse_section(enum man_sec sec, const struct man_node *n)
 {
-	/* If the user sepecified the 'l' flag then just parse the DESCRIPTION
-	 *  section.
+	/* If the user sepecified the 'l' flag then just parse the NAME
+	 *  section, ignore the rest.
 	 */
-	if (mflags.limit) {
-		if (sec == MANSEC_DESCRIPTION) {
-			pman_parse_node(n, &desc);
-			return;
-		}
-		else
-			return;
-	}
-	
+	if (mflags.limit)
+		return;
+
 	switch (sec) {
 		case MANSEC_LIBRARY:
 			pman_parse_node(n, &lib);
@@ -1004,7 +992,6 @@ man_parse_section(enum man_sec sec, const struct man_node *n)
 	}
 
 }
-
 
 /* 
  * cleanup --
