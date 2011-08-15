@@ -45,9 +45,6 @@
 
 static void zip(sqlite3_context *, int, sqlite3_value **);
 static void unzip(sqlite3_context *, int, sqlite3_value **);
-static int callback_html(void *, int, char **, char **);
-static int create_db(sqlite3 *);
-static void rank_func(sqlite3_context *, int, sqlite3_value **);
 
 typedef struct  {
 double value;
@@ -69,53 +66,10 @@ static const double col_weights[] = {
 	0.05	//ERRORS
 };
 
-static void
-zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
-{	
-	int nin, nout;
-	long int nout2;
-	const unsigned char * inbuf;
-	unsigned char *outbuf;
-	assert(nval == 1);
-	nin = sqlite3_value_bytes(apval[0]);
-	inbuf = (const unsigned char *) sqlite3_value_blob(apval[0]);
-	nout = nin + 13 + (nin + 999) / 1000;
-	outbuf = malloc(nout + 4);
-	outbuf[0] = nin >> 24 & 0xff;
-	outbuf[1] = nin >> 16 & 0xff;
-	outbuf[2] = nin >> 8 & 0xff;
-	outbuf[3] = nin & 0xff;
-	nout2 = (long int) nout;
-	compress(&outbuf[4], (unsigned long *) &nout2, inbuf, nin);
-	sqlite3_result_blob(pctx, outbuf, nout2 + 4, free);
-	return;
-}
-
-
-static void
-unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
-{	
-	unsigned int nin, nout, rc;
-	const unsigned char * inbuf;
-	unsigned char *outbuf;
-	long int nout2;
-	
-	assert(nval == 1);
-	nin = sqlite3_value_bytes(apval[0]);
-	if (nin <= 4) 
-		return;
-	inbuf = sqlite3_value_blob(apval[0]);
-	nout = (inbuf[0] << 24) + (inbuf[1] << 16) + (inbuf[2] << 8) + inbuf[3];
-	outbuf = malloc(nout);
-	nout2 = (long int) nout;
-	rc = uncompress(outbuf, (unsigned long *) &nout2, &inbuf[4], nin);
-	if (rc != Z_OK)
-		free(outbuf);
-	else
-		sqlite3_result_blob(pctx, outbuf, nout2, free);
-	return;
-}
-
+/*
+ * lower --
+ *  Converts the string str to lower case
+ */
 char *
 lower(char *str)
 {
@@ -164,6 +118,103 @@ concat(char **dst, const char *src, int srclen)
 	
 	/* Now, copy src at the end of dst */	
 	memcpy(*dst + dst_len, src, srclen + 1);
+	return;
+}
+
+/*
+ * create_db --
+ *  Creates the database schema.
+ */
+static int
+create_db(sqlite3 *db)
+{
+	const char *sqlstr = NULL;
+	char *errmsg = NULL;
+	
+/*------------------------ Create the tables------------------------------*/
+
+	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
+				"name_desc, desc, lib, synopsis, return_vals, env, files, "
+				"exit_status, diagnostics, errors, compress=zip, "
+				"uncompress=unzip, tokenize=porter); "	//mandb table
+			"CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
+				"id  INTEGER PRIMARY KEY); "	//mandb_md5 table
+			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
+				"machine); ";	//mandb_links
+
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+
+	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
+			"(link)";
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	return 0;
+}
+
+/*
+ * zip --
+ *  User defined Sqlite function to compress the FTS table
+ */
+static void
+zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
+{	
+	int nin, nout;
+	long int nout2;
+	const unsigned char * inbuf;
+	unsigned char *outbuf;
+	assert(nval == 1);
+	nin = sqlite3_value_bytes(apval[0]);
+	inbuf = (const unsigned char *) sqlite3_value_blob(apval[0]);
+	nout = nin + 13 + (nin + 999) / 1000;
+	outbuf = malloc(nout + 4);
+	outbuf[0] = nin >> 24 & 0xff;
+	outbuf[1] = nin >> 16 & 0xff;
+	outbuf[2] = nin >> 8 & 0xff;
+	outbuf[3] = nin & 0xff;
+	nout2 = (long int) nout;
+	compress(&outbuf[4], (unsigned long *) &nout2, inbuf, nin);
+	sqlite3_result_blob(pctx, outbuf, nout2 + 4, free);
+	return;
+}
+
+/*
+ * unzip --
+ *  User defined Sqlite function to uncompress the FTS table.
+ */
+static void
+unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
+{	
+	unsigned int nin, nout, rc;
+	const unsigned char * inbuf;
+	unsigned char *outbuf;
+	long int nout2;
+	
+	assert(nval == 1);
+	nin = sqlite3_value_bytes(apval[0]);
+	if (nin <= 4) 
+		return;
+	inbuf = sqlite3_value_blob(apval[0]);
+	nout = (inbuf[0] << 24) + (inbuf[1] << 16) + (inbuf[2] << 8) + inbuf[3];
+	outbuf = malloc(nout);
+	nout2 = (long int) nout;
+	rc = uncompress(outbuf, (unsigned long *) &nout2, &inbuf[4], nin);
+	if (rc != Z_OK)
+		free(outbuf);
+	else
+		sqlite3_result_blob(pctx, outbuf, nout2, free);
 	return;
 }
 
@@ -290,47 +341,82 @@ init_db(int db_flag)
 	return db;
 }
 
-static int
-create_db(sqlite3 *db)
+/*
+ * rank_func --
+ *  Sqlite user defined function for ranking the documents.
+ *  For each phrase of the query, it computes the tf and idf and adds them over.
+ *  It computes the final rank, by multiplying tf and idf together.
+ *  Weight of term t for document d = (term frequency of t in d * 
+ *                                      inverse document frequency of t) 
+ *
+ *  Term Frequency of term t in document d = Number of times t occurs in d / 
+ *	                                        Number of times t appears in all 
+ *											documents
+ *
+ *  Inverse document frequency of t = log(Total number of documents / 
+ *										Number of documents in which t occurs)
+ */
+static void
+rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
-	const char *sqlstr = NULL;
-	char *errmsg = NULL;
+	inverse_document_frequency *idf = (inverse_document_frequency *)
+										sqlite3_user_data(pctx);
+	double tf = 0.0;
+	unsigned int *matchinfo;
+	int ncol;
+	int nphrase;
+	int iphrase;
+	int ndoc;
+	int doclen = 0;
+	const double k = 3.75;
+	/* Check that the number of arguments passed to this function is correct. */
+	assert(nval == 1);
+
+	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
+	nphrase = matchinfo[0];
+	ncol = matchinfo[1];
+	ndoc = matchinfo[2 + 3 * ncol * nphrase + ncol];
+	for (iphrase = 0; iphrase < nphrase; iphrase++) {
+		int icol;
+		unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
+		for(icol = 1; icol < ncol; icol++) {
+			
+			/* nhitcount: number of times the current phrase occurs in the current
+			 *            column in the current document.
+			 * nglobalhitcount: number of times current phrase occurs in the current
+			 *                  column in all documents.
+			 * ndocshitcount:   number of documents in which the current phrase 
+			 *                  occurs in the current column at least once.
+			 */
+  			int nhitcount = phraseinfo[3 * icol];
+			int nglobalhitcount = phraseinfo[3 * icol + 1];
+			int ndocshitcount = phraseinfo[3 * icol + 2];
+			doclen = matchinfo[2 + icol ];
+			double weight = col_weights[icol - 1];
+			if (idf->status == 0 && ndocshitcount)
+				idf->value += log(((double)ndoc / ndocshitcount))* weight;
+
+			/* Dividing the tf by document length to normalize the effect of 
+			 * longer documents.
+			 */
+			if (nglobalhitcount > 0 && nhitcount)
+				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
+		}
+	}
+	idf->status = 1;
 	
-/*------------------------ Create the tables------------------------------*/
-
-	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
-				"name_desc, desc, lib, synopsis, return_vals, env, files, "
-				"exit_status, diagnostics, errors, compress=zip, "
-				"uncompress=unzip, tokenize=porter); "	//mandb table
-			"CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
-				"id  INTEGER PRIMARY KEY); "	//mandb_md5 table
-			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-				"machine); ";	//mandb_links
-
-	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-
-	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
-			"(link)";
-	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-	return 0;
+	/* Final score = (tf * idf)/ ( k + tf)
+	 *	Dividing by k+ tf further normalizes the weight leading to better 
+	 *  results.
+	 *  The value of k is experimental
+	 */
+	double score = (tf * idf->value/ ( k + tf)) ;
+	sqlite3_result_double(pctx, score);
+	return;
 }
 
 /*
- *  do_query --
+ *  run_query --
  *  Performs the searches for the keywords entered by the user.
  *  The 2nd param: snippet_args is an array of strings providing values for the
  *  last three parameters to the snippet function of sqlite. (Look at the docs).
@@ -410,29 +496,8 @@ run_query(sqlite3 *db, const char **snippet_args, query_args *args)
 }
 
 /*
- * do_query_html --
- *  Utility function to output query result in HTML format.
- *  It internally calls do_query only, but it first passes the output to it's 
- *  own custom callback function, which builds a single HTML string representing
- *  one row of output.
- *  After that it delegates the call the actual user supplied callback function.
- *  #TODO One limit to this is that, the user supplied data for the callback 
- *  function would be lost.
- */
-int
-run_query_html(sqlite3 *db, query_args *args)
-{
-	void *old_callback = (void *) args->callback;
-	const char *snippet_args[] = {"<b>", "</b>", "..."}; 
-	args->callback = &callback_html;
-	args->callback_data = old_callback;
-	run_query(db, snippet_args, args);
-	return 0;
-}
-
-/*
  * callback_html --
- *  Callback function for do_query_html. It builds the html output and then
+ *  Callback function for run_query_html. It builds the html output and then
  *  calls the actual user supplied callback function.
  */
 static int
@@ -457,75 +522,22 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 }
 
 /*
- * rank_func --
- *  Sqlite user defined function for ranking the documents.
- *  For each phrase of the query, it computes the tf and idf and adds them over.
- *  It computes the final rank, by multiplying tf and idf together.
- *  Weight of term t for document d = (term frequency of t in d * 
- *                                      inverse document frequency of t) 
- *
- *  Term Frequency of term t in document d = Number of times t occurs in d / 
- *	                                        Number of times t appears in all 
- *											documents
- *
- *  Inverse document frequency of t = log(Total number of documents / 
- *										Number of documents in which t occurs)
+ * run_query_html --
+ *  Utility function to output query result in HTML format.
+ *  It internally calls do_query only, but it first passes the output to it's 
+ *  own custom callback function, which builds a single HTML string representing
+ *  one row of output.
+ *  After that it delegates the call the actual user supplied callback function.
+ *  #TODO One limit to this is that, the user supplied data for the callback 
+ *  function would be lost.
  */
-static void
-rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
+int
+run_query_html(sqlite3 *db, query_args *args)
 {
-	inverse_document_frequency *idf = (inverse_document_frequency *)
-										sqlite3_user_data(pctx);
-	double tf = 0.0;
-	unsigned int *matchinfo;
-	int ncol;
-	int nphrase;
-	int iphrase;
-	int ndoc;
-	int doclen = 0;
-	const double k = 3.75;
-	/* Check that the number of arguments passed to this function is correct. */
-	assert(nval == 1);
-
-	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
-	nphrase = matchinfo[0];
-	ncol = matchinfo[1];
-	ndoc = matchinfo[2 + 3 * ncol * nphrase + ncol];
-	for (iphrase = 0; iphrase < nphrase; iphrase++) {
-		int icol;
-		unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
-		for(icol = 1; icol < ncol; icol++) {
-			
-			/* nhitcount: number of times the current phrase occurs in the current
-			 *            column in the current document.
-			 * nglobalhitcount: number of times current phrase occurs in the current
-			 *                  column in all documents.
-			 * ndocshitcount:   number of documents in which the current phrase 
-			 *                  occurs in the current column at least once.
-			 */
-  			int nhitcount = phraseinfo[3 * icol];
-			int nglobalhitcount = phraseinfo[3 * icol + 1];
-			int ndocshitcount = phraseinfo[3 * icol + 2];
-			doclen = matchinfo[2 + icol ];
-			double weight = col_weights[icol - 1];
-			if (idf->status == 0 && ndocshitcount)
-				idf->value += log(((double)ndoc / ndocshitcount))* weight;
-
-			/* Dividing the tf by document length to normalize the effect of 
-			 * longer documents.
-			 */
-			if (nglobalhitcount > 0 && nhitcount)
-				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
-		}
-	}
-	idf->status = 1;
-	
-	/* Final score = (tf * idf)/ ( k + tf)
-	 *	Dividing by k+ tf further normalizes the weight leading to better 
-	 *  results.
-	 *  The value of k is experimental
-	 */
-	double score = (tf * idf->value/ ( k + tf)) ;
-	sqlite3_result_double(pctx, score);
-	return;
+	void *old_callback = (void *) args->callback;
+	const char *snippet_args[] = {"<b>", "</b>", "..."}; 
+	args->callback = &callback_html;
+	args->callback_data = old_callback;
+	run_query(db, snippet_args, args);
+	return 0;
 }
