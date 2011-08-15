@@ -73,31 +73,31 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "123456789p")) != -1) {
 	switch (ch) {
 		case '1':
-			aflags.sec_nums[0] = (char *)"1";
+			aflags.sec_nums[0] = "1";
 			break;
 		case '2':
-			aflags.sec_nums[1] = (char *)"2";
+			aflags.sec_nums[1] = "2";
 			break;
 		case '3':
-			aflags.sec_nums[2] = (char *)"3";
+			aflags.sec_nums[2] = "3";
 			break;
 		case '4':
-			aflags.sec_nums[3] = (char *)"4";
+			aflags.sec_nums[3] = "4";
 			break;
 		case '5':
-			aflags.sec_nums[4] = (char *)"5";
+			aflags.sec_nums[4] = "5";
 			break;
 		case '6':
-			aflags.sec_nums[5] = (char *)"6";
+			aflags.sec_nums[5] = "6";
 			break;
 		case '7':
-			aflags.sec_nums[6] = (char *)"7";
+			aflags.sec_nums[6] = "7";
 			break;
 		case '8':
-			aflags.sec_nums[7] = (char *)"8";
+			aflags.sec_nums[7] = "8";
 			break;
 		case '9':
-			aflags.sec_nums[8] = (char *)"9";
+			aflags.sec_nums[8] = "9";
 			break;
 		case 'p':	//user wants to view more than 10 results and page them
 			aflags.pager = 1;
