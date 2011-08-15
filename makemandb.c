@@ -1375,6 +1375,6 @@ optimize(sqlite3 *db)
 static void
 usage(void)
 {
-	(void)warnx("usage: %s [-f]", getprogname());
+	(void)warnx("usage: %s [-flo]", getprogname());
 	exit(1);
 }
