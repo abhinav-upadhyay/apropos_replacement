@@ -45,6 +45,7 @@
 static void zip(sqlite3_context *, int, sqlite3_value **);
 static void unzip(sqlite3_context *, int, sqlite3_value **);
 static int callback_html(void *, int, char **, char **);
+static int create_db(sqlite3 *);
 static void rank_func(sqlite3_context *, int, sqlite3_value **);
 
 typedef struct  {
@@ -165,70 +166,80 @@ concat(char **dst, const char *src, int srclen)
 	return;
 }
 
-/* init --
+/* init_db --
  *   Prepare the database. Register the compress/uncompress functions and the
  *   stopword tokenizer.
- *	 The create_flag tells us whether the caller wants us to create the database
- *	 in case it doesn't exist or not. In case the caller doesn't want to create
- *	 the database (a non-zero value), we return. 
- *	 A return value of 1 to the caller indicates that the database does not exist
+ *	 db_flag specifies the mode in which to open the database. 3 options are 
+ *   available:
+ *   	1. DB_READONLY: Open in READONLY mode. An error if db does not exist.
+ *  	2. DB_READWRITE: Open in read-write mode. An error if db does not exist.
+ *  	3. DB_CREATE: Open in read-write mode. It will try to create the db if
+ *			it does not exist already.
+ *  RETURN VALUES:
+ *		The function will return NULL in case the db does not exist and DB_CREATE 
+ *  	was not specified. And in case DB_CREATE was specified and yet NULL is 
+ *  	returned, then there was some other error.
+ *  	In normal cases the function should return a handle to the db.
  */
-int
-init(sqlite3 **db, int create_flag)
+sqlite3 *
+init_db(int db_flag)
 {
-
+	sqlite3 *db = NULL;
 	struct stat sb;
 	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	const char *sqlstr;
 	int rc;
 	int idx;
-	int return_val = 0;
+	int create_db_flag = 0;
 	sqlite3_stmt *stmt = NULL;
 
-	/* If the db file does not already exists, set the return_val to 1 */
-	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode)))
-		return_val = 1;
-	/* A zero value of create_flag means that caller does not want to proceed
-	 * in case database file did not exist, so return.
-	 */
-	if (!create_flag && return_val)
-		return return_val;
-		
+	/* Check if the databse exists or not */
+	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode))) {
+		/* Database does not exist, check if DB_CREATE was specified, and set
+		 * flag to create the database schema
+		 */
+		if (db_flag == (DB_CREATE))
+			create_db_flag = 1;
+		else
+		/* db does not exist and DB_CREATE was also not specified, return NULL */
+			return NULL;
+	}
+
 	/* Now initialize the database connection */
 	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, db, SQLITE_OPEN_READWRITE | 
-		             SQLITE_OPEN_CREATE, NULL);
+	rc = sqlite3_open_v2(DBPATH, &db, db_flag, NULL);
 	
 	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Could not open database");
+		return NULL;
 	}
 	
-	sqlite3_extended_result_codes(*db, 1);
+	sqlite3_extended_result_codes(db, 1);
 	
 	/* Register the zip and unzip functions for FTS compression */
-	rc = sqlite3_create_function(*db, "zip", 1, SQLITE_ANY, NULL, 
+	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
                              zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		sqlite3_close(*db);
+		sqlite3_close(db);
 		sqlite3_shutdown();
 		errx(EXIT_FAILURE, "Not able to register function: compress");
 	}
 
-	rc = sqlite3_create_function(*db, "unzip", 1, SQLITE_ANY, NULL, 
+	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
 		                         unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		sqlite3_close(*db);
+		sqlite3_close(db);
 		sqlite3_shutdown();
 		errx(EXIT_FAILURE, "Not able to register function: uncompress");
 	}
 	
 	/* Register the stopword tokenizer */
 	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
-	rc = sqlite3_prepare_v2(*db, sqlstr, -1, &stmt, NULL);
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(*db));
-		sqlite3_close(*db);
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_close(db);
 		sqlite3_shutdown();
 		exit(EXIT_FAILURE);
 	}
@@ -236,9 +247,9 @@ init(sqlite3 **db, int create_flag)
 	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
 	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(*db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		sqlite3_close(*db);
+		sqlite3_close(db);
 		sqlite3_shutdown();
 		exit(EXIT_FAILURE);
 	}
@@ -250,23 +261,71 @@ init(sqlite3 **db, int create_flag)
 	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
 		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(*db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		sqlite3_close(*db);
+		sqlite3_close(db);
 		sqlite3_shutdown();
 		exit(EXIT_FAILURE);
 	}
 	
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_ROW) {
-		warnx("%s", sqlite3_errmsg(*db));
+		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		sqlite3_close(*db);
+		sqlite3_close(db);
 		sqlite3_shutdown();
 		exit(EXIT_FAILURE);
 	}
 	sqlite3_finalize(stmt);
-	return return_val;
+	
+	if (create_db_flag) {
+		if (create_db(db) < 0) {
+			warnx("%s", "Could not create database schema");
+			sqlite3_close(db);
+			sqlite3_shutdown();
+			return NULL;
+		}
+	}
+	return db;
+}
+
+static int
+create_db(sqlite3 *db)
+{
+	const char *sqlstr = NULL;
+	char *errmsg = NULL;
+	
+/*------------------------ Create the tables------------------------------*/
+
+	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
+				"name_desc, desc, lib, synopsis, return_vals, env, files, "
+				"exit_status, diagnostics, errors, compress=zip, "
+				"uncompress=unzip, tokenize=porter); "	//mandb table
+			"CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
+				"id  INTEGER PRIMARY KEY); "	//mandb_md5 table
+			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
+				"machine); ";	//mandb_links
+
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+
+	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
+			"(link)";
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	return 0;
 }
 
 /*

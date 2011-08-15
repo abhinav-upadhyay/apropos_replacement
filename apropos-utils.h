@@ -36,6 +36,12 @@
 #define DBPATH "./apropos.db"
 #define SECMAX 9
 
+/* Flags for opening the database */
+#define DB_READONLY SQLITE_OPEN_READONLY
+#define DB_WRITE SQLITE_OPEN_READWRITE
+// Create the database if it does not exist
+#define DB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+
 typedef struct query_args {
 	const char *search_str;		// user query
 	const char **sec_nums;		// Section in which to do the search
@@ -47,7 +53,7 @@ typedef struct query_args {
 
 char *lower(char *);
 void concat(char **, const char *, int);
-int init(sqlite3 **, int);
+sqlite3 *init_db(int);
 int do_query(sqlite3 *, const char **, query_args *);
 int do_query_html(sqlite3 *, query_args *);
 #endif 

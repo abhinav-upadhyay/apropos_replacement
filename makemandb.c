@@ -42,7 +42,6 @@
 
 static char *check_md5(const char *, sqlite3 *, const char *);
 static void cleanup(void);
-static int create_db(sqlite3 *);
 static void get_section(const struct mdoc *, const struct man *);
 static int insert_into_db(sqlite3 *);
 static	void begin_parse(const char *, struct mparse *);
@@ -278,10 +277,8 @@ main(int argc, char *argv[])
 	
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
-	if (init(&db, 1) == 1) {
-		if (create_db(db) < 0)
-			errx(EXIT_FAILURE, "Could not create database");
-	}
+	if ((db = init_db(DB_CREATE)) == NULL)
+		errx(EXIT_FAILURE, "%s", "Could not initialize the database");
 		
 	/* Call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL) {
@@ -1162,45 +1159,6 @@ insert_into_db(sqlite3 *db)
 	
 	cleanup();
 	free(links);
-	return 0;
-}
-
-static int
-create_db(sqlite3 *db)
-{
-	const char *sqlstr = NULL;
-	char *errmsg = NULL;
-	
-/*------------------------ Create the tables------------------------------*/
-
-	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
-				"name_desc, desc, lib, synopsis, return_vals, env, files, "
-				"exit_status, diagnostics, errors, compress=zip, "
-				"uncompress=unzip, tokenize=porter); "	//mandb table
-			"CREATE TABLE IF NOT EXISTS mandb_md5(md5_hash unique, "
-				"id  INTEGER PRIMARY KEY); "	//mandb_md5 table
-			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-				"machine); ";	//mandb_links
-
-	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
-
-	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
-			"(link)";
-	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
 	return 0;
 }
 
