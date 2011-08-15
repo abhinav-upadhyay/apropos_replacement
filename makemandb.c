@@ -561,6 +561,40 @@ begin_parse(const char *file, struct mparse *mp)
 	}
 }
 
+/*
+ * get_section --
+ *  Extracts the section naumber and normalizes it to only the numeric part
+ *  (Which should be the first character of the string).
+ */
+static void
+get_section(const struct mdoc *md, const struct man *m)
+{
+	section = emalloc(2);
+	if (md) {
+		const struct mdoc_meta *md_meta = mdoc_meta(md);
+		memcpy(section, md_meta->msec, 1);
+	}
+	else if (m) {
+		const struct man_meta *m_meta = man_meta(m);
+		memcpy(section, m_meta->msec, 1);
+	}
+	section[1] = '\0';
+}
+
+/*
+ * get_machine --
+ *  Extracts the machine architecture information if available.
+ */
+static void
+get_machine(const struct mdoc *md)
+{
+	if (md == NULL)
+		return;
+	const struct mdoc_meta *md_meta = mdoc_meta(md);
+	if (md_meta->arch)
+		machine = estrdup(md_meta->arch);
+}
+
 static void
 pmdoc_node(const struct mdoc_node *n)
 {
@@ -645,6 +679,63 @@ pmdoc_Sh(const struct mdoc_node *n)
 	}
 }
 
+/*
+ * mdoc_parse_section--
+ *  Utility function for parsing sections of the mdoc type pages.
+ *  Takes two params:
+ *   1. sec is an enum which indicates the section in which we are present
+ *   2. string is the string which we need to append to the buffer for this 
+ *	    particular section.
+ *  The function appends string to the global section buffer and returns.
+ */
+static void
+mdoc_parse_section(enum mdoc_sec sec, const char *string)
+{
+	/* If the user specified the 'l' flag, then parse and store only the
+	 * DESCRIPTION section. Ignore the rest.
+	 */
+	if (mflags.limit) {
+		if (sec == SEC_DESCRIPTION) {
+		concat(&desc, string, strlen(string));
+		return;
+		}
+		else
+			return;
+	}
+	
+	switch (sec) {
+		case SEC_LIBRARY:
+			concat(&lib, string, strlen(string));
+			break;
+		case SEC_SYNOPSIS:
+			concat(&synopsis, string, strlen(string));
+			break;
+		case SEC_RETURN_VALUES:
+			concat(&return_vals, string, strlen(string));
+			break;
+		case SEC_ENVIRONMENT:
+			concat(&env, string, strlen(string));
+			break;
+		case SEC_FILES:
+			concat(&files, string, strlen(string));
+			break;
+		case SEC_EXIT_STATUS:
+			concat(&exit_status, string, strlen(string));
+			break;
+		case SEC_DIAGNOSTICS:
+			concat(&diagnostics, string, strlen(string));
+			break;
+		case SEC_ERRORS:
+			concat(&errors, string, strlen(string));
+			break;
+		case SEC_NAME:
+			break;
+		default:
+			concat(&desc, string, strlen(string));
+			break;
+	}
+}
+
 static void
 pman_node(const struct man_node *n)
 {
@@ -669,17 +760,6 @@ pman_node(const struct man_node *n)
 
 	pman_node(n->child);
 	pman_node(n->next);
-}
-
-static void
-pman_parse_node(const struct man_node *n, char **s)
-{
-	for (n = n->child; n; n = n->next) {
-		if (n->type == MAN_TEXT)
-			concat(s, n->string, strlen(n->string));
-		else
-			pman_parse_node(n, s);
-	}
 }
 
 /* 
@@ -852,30 +932,79 @@ pman_sh(const struct man_node *n)
 	}
 }
 
+/*
+ * pman_parse_node --
+ *  Generic function to iterate through a node. Usually called from 
+ *  man_parse_section to parse a particular section of the man page.
+ */
 static void
-get_section(const struct mdoc *md, const struct man *m)
+pman_parse_node(const struct man_node *n, char **s)
 {
-	section = emalloc(2);
-	if (md) {
-		const struct mdoc_meta *md_meta = mdoc_meta(md);
-		memcpy(section, md_meta->msec, 1);
+	for (n = n->child; n; n = n->next) {
+		if (n->type == MAN_TEXT)
+			concat(s, n->string, strlen(n->string));
+		else
+			pman_parse_node(n, s);
 	}
-	else if (m) {
-		const struct man_meta *m_meta = man_meta(m);
-		memcpy(section, m_meta->msec, 1);
-	}
-	section[1] = '\0';
 }
 
+/*
+ * man_parse_section --
+ *  Takes two parameters: 
+ *   sec: Tells which section we are present in
+ *   n: Is the present node of the AST.
+ * Depending on the section, we call pman_parse_node to parse that section and
+ * concatenate the content from that section into the buffer for that section.
+ */
 static void
-get_machine(const struct mdoc *md)
+man_parse_section(enum man_sec sec, const struct man_node *n)
 {
-	if (md == NULL)
-		return;
-	const struct mdoc_meta *md_meta = mdoc_meta(md);
-	if (md_meta->arch)
-		machine = estrdup(md_meta->arch);
+	/* If the user sepecified the 'l' flag then just parse the DESCRIPTION
+	 *  section.
+	 */
+	if (mflags.limit) {
+		if (sec == MANSEC_DESCRIPTION) {
+			pman_parse_node(n, &desc);
+			return;
+		}
+		else
+			return;
+	}
+	
+	switch (sec) {
+		case MANSEC_LIBRARY:
+			pman_parse_node(n, &lib);
+			break;
+		case MANSEC_SYNOPSIS:
+			pman_parse_node(n, &synopsis);
+			break;
+		case MANSEC_RETURN_VALUES:
+			pman_parse_node(n, &return_vals);
+			break;
+		case MANSEC_ENVIRONMENT:
+			pman_parse_node(n, &env);
+			break;
+		case MANSEC_FILES:
+			pman_parse_node(n, &files);
+			break;
+		case MANSEC_EXIT_STATUS:
+			pman_parse_node(n, &exit_status);
+			break;
+		case MANSEC_DIAGNOSTICS:
+			pman_parse_node(n, &diagnostics);
+			break;
+		case MANSEC_ERRORS:
+			pman_parse_node(n, &errors);
+			break;
+		case MANSEC_NAME:
+			break;
+		default:
+			pman_parse_node(n, &desc);
+			break;
+	}
+
 }
+
 
 /* 
  * cleanup --
@@ -1223,106 +1352,6 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 	sqlite3_finalize(stmt);
 	free(sqlstr);
 	return buf;
-}
-
-/*
- * mdoc_parse_section--
- *  Utility function for parsing sections of the mdoc type pages.
- *  Takes two params:
- *   1. sec is an enum which indicates the section in which we are present
- *   2. string is the string which we need to append to the buffer for this 
- *	    particular section.
- *  The function appends string to the global section buffer and returns.
- */
-static void
-mdoc_parse_section(enum mdoc_sec sec, const char *string)
-{
-	if (mflags.limit) {
-		if (sec == SEC_DESCRIPTION) {
-		concat(&desc, string, strlen(string));
-		return;
-		}
-		else
-			return;
-	}
-	
-	switch (sec) {
-		case SEC_LIBRARY:
-			concat(&lib, string, strlen(string));
-			break;
-		case SEC_SYNOPSIS:
-			concat(&synopsis, string, strlen(string));
-			break;
-		case SEC_RETURN_VALUES:
-			concat(&return_vals, string, strlen(string));
-			break;
-		case SEC_ENVIRONMENT:
-			concat(&env, string, strlen(string));
-			break;
-		case SEC_FILES:
-			concat(&files, string, strlen(string));
-			break;
-		case SEC_EXIT_STATUS:
-			concat(&exit_status, string, strlen(string));
-			break;
-		case SEC_DIAGNOSTICS:
-			concat(&diagnostics, string, strlen(string));
-			break;
-		case SEC_ERRORS:
-			concat(&errors, string, strlen(string));
-			break;
-		case SEC_NAME:
-			break;
-		default:
-			concat(&desc, string, strlen(string));
-			break;
-	}
-}
-
-static void
-man_parse_section(enum man_sec sec, const struct man_node *n)
-{
-	if (mflags.limit) {
-		if (sec == MANSEC_DESCRIPTION) {
-			pman_parse_node(n, &desc);
-			return;
-		}
-		else
-			return;
-	}
-	
-	switch (sec) {
-		case MANSEC_LIBRARY:
-			pman_parse_node(n, &lib);
-			break;
-		case MANSEC_SYNOPSIS:
-			pman_parse_node(n, &synopsis);
-			break;
-		case MANSEC_RETURN_VALUES:
-			pman_parse_node(n, &return_vals);
-			break;
-		case MANSEC_ENVIRONMENT:
-			pman_parse_node(n, &env);
-			break;
-		case MANSEC_FILES:
-			pman_parse_node(n, &files);
-			break;
-		case MANSEC_EXIT_STATUS:
-			pman_parse_node(n, &exit_status);
-			break;
-		case MANSEC_DIAGNOSTICS:
-			pman_parse_node(n, &diagnostics);
-			break;
-		case MANSEC_ERRORS:
-			pman_parse_node(n, &errors);
-			break;
-		case MANSEC_NAME:
-			break;
-		default:
-			pman_parse_node(n, &desc);
-			break;
-	}
-
 }
 
 /* Optimize the index for faster search */
