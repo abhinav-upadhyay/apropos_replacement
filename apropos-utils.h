@@ -68,6 +68,7 @@ typedef struct query_args {
 char *lower(char *);
 void concat(char **, const char *, int);
 sqlite3 *init_db(int);
+void close_db(sqlite3 *);
 int run_query(sqlite3 *, const char **, query_args *);
 int run_query_html(sqlite3 *, query_args *);
 int run_query_pager(sqlite3 *, query_args *);

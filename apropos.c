@@ -132,8 +132,7 @@ main(int argc, char *argv[])
 	if (aflags.pager) {
 		/* Open a pipe to the pager */
 		if ((out = popen("more", "w")) == NULL) {
-			sqlite3_close(db);
-			sqlite3_shutdown();
+			close_db(db);
 			err(EXIT_FAILURE, "pipe failed");
 		}
 		/* NULL value of nrec means fetch all matching rows */
@@ -164,8 +163,7 @@ main(int argc, char *argv[])
 	free(errmsg);
 	if (aflags.pager)
 		pclose(out);
-	sqlite3_close(db);
-	sqlite3_shutdown();
+	close_db(db);
 	return 0;
 }
 

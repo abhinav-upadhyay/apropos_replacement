@@ -127,6 +127,13 @@ concat(char **dst, const char *src, int srclen)
 	return;
 }
 
+void
+close_db(sqlite3 *db)
+{
+	sqlite3_close(db);
+	sqlite3_shutdown();
+}
+
 /*
  * create_db --
  *  Creates the database schema.
