@@ -515,13 +515,14 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 	char *snippet = col_values[3];
 	char *buf = NULL;
 	char *html_output = NULL;
-	int (*callback) (void *, int, char **, char **) = data;
+	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
+	int (*callback) (void *, int, char **, char **) = orig_data->callback;
 	
 	easprintf(&buf, "<p> <b>%s(%s)</b>\t%s <br />\n%s</p>", name, section, 
 				name_desc, snippet);
 	html_output = emalloc(strlen(buf) * 4 + 1);
 	strvis(html_output, buf, VIS_CSTYLE);
-	(*callback)(NULL, 1, &html_output, col_names);
+	(*callback)(orig_data->data, 1, &html_output, col_names);
 	free(buf);
 	free(html_output);
 	return 0;
@@ -540,10 +541,12 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 int
 run_query_html(sqlite3 *db, query_args *args)
 {
-	void *old_callback = (void *) args->callback;
+	struct orig_callback_data orig_data;
+	orig_data.callback = args->callback;
+	orig_data.data = args->callback_data;
 	const char *snippet_args[] = {"<b>", "</b>", "..."}; 
 	args->callback = &callback_html;
-	args->callback_data = old_callback;
+	args->callback_data = (void *) &orig_data;
 	run_query(db, snippet_args, args);
 	return 0;
 }
