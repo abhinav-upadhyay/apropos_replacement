@@ -44,8 +44,8 @@
 #include "stopword_tokenizer.h"
 
 typedef struct apropos_flags {
-const char *sec_nums[SECMAX];
-int pager;
+	const char *sec_nums[SECMAX];
+	int pager;
 } apropos_flags;
 
 static void remove_stopwords(char **);

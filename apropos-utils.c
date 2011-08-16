@@ -56,9 +56,9 @@ typedef struct orig_callback_data {
 	int (*callback) (void *, int, char **, char **);
 } orig_callback_data;
 
-typedef struct  {
-double value;
-int status;
+typedef struct inverse_document_frequency {
+	double value;
+	int status;
 } inverse_document_frequency;
 
 /* weights for individual columns */

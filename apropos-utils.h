@@ -44,7 +44,10 @@
 #define DB_WRITE SQLITE_OPEN_READWRITE
 #define DB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
 
-
+/*
+ * Used to identify the section of a man(7) page.
+ * This is similar to the enum mdoc_sec defined in mdoc.h from mdocml project.
+ */
 enum man_sec {
 	MANSEC_NAME = 0,
 	MANSEC_SYNOPSIS,
