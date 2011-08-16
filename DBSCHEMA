@@ -27,10 +27,10 @@ There are three tables in the database at present:
 	hardlinks.
 
   COLUMN NAME       DESCRIPTION
-  md5_hash			MD5 Hash of the man page
-  id				A unique integer ID for the page, which
-					refers to a page in mandb (Implicit foreign 
-					key?)
+  md5_hash          MD5 Hash of the man page
+  id                A unique integer ID for the page, which
+               		refers to a page in mandb (Implicit foreign 
+    	            key?)
 
 (3) mandb_links:
 	This is an index of all the hard/soft links of the man 
@@ -38,8 +38,8 @@ There are three tables in the database at present:
 	from the multiple .Nm entries in the page.
 
   Column Name       Description
-  1. link        	The name of the hard/soft link  
-  2. target      	Name of the target page to which it points  
-  3. section     	The section number  
-  4. machine     	The machine architecture (if any) for which 
-					the page is relevant
+  1. link           The name of the hard/soft link  
+  2. target         Name of the target page to which it points  
+  3. section        The section number  
+  4. machine        The machine architecture (if any) for which 
+				    the page is relevant
