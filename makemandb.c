@@ -352,7 +352,7 @@ main(int argc, char *argv[])
 /*
  * traversedir --
  *  Traverses the given directory recursively and passes all the man page files 
- *  in the way to build_cache()
+ *  in the way to build_file_cache()
  */
 static void
 traversedir(const char *file, sqlite3 *db, struct mparse *mp)
