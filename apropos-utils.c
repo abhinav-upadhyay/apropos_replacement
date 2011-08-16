@@ -32,6 +32,7 @@
 #include <ctype.h>
 #include <err.h>
 #include <math.h>
+#include <search.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,6 +46,11 @@
 
 static void zip(sqlite3_context *, int, sqlite3_value **);
 static void unzip(sqlite3_context *, int, sqlite3_value **);
+
+typedef struct orig_callback_data {
+	void *data;
+	int (*callback) (void *, int, char **, char **);
+} orig_callback_data;
 
 typedef struct  {
 double value;
@@ -540,4 +546,113 @@ run_query_html(sqlite3 *db, query_args *args)
 	args->callback_data = old_callback;
 	run_query(db, snippet_args, args);
 	return 0;
+}
+
+/*
+ * pager_highlight --
+ *  Builds a string in a form so that a pager like more or less may display it in
+ *  bold.
+ *  This function is required by run_query_pager, which calls it to replace the
+ *  snippet returned from Sqlite.
+ *  Caller should free the string returned from this function.
+ */
+static char *
+pager_highlight(char *str)
+{
+	char *temp = NULL;
+	char *buf = NULL;
+	ENTRY ent, *result;
+	/* Process the string word by word and if the word is found in the hash 
+	 * table, then replace that word with it's bold text representation obtained
+	 * from the table.
+	 */
+	for (temp = strtok(str, " "); temp; temp = strtok(NULL, " ")) {
+		 ent.key = (char *)temp;
+		 ent.data = NULL;
+		 if ((result = hsearch(ent, FIND)) == NULL)
+		 	concat(&buf, temp, strlen(temp));
+		 else
+		 	concat(&buf, (char *)result->data, -1);
+	}
+	return buf;
+}
+
+/*
+ * callback_pager --
+ *  A callback similar to callback_html. Difference being it formats the snippet
+ *  so that the pager should be able to dispaly the matching bits of the snippet
+ *  in bold and then calls the actual callback function specified by the user.
+ *  It passes the snippet to pager_highlight which returns a new string which is
+ *  suitable to be passed to a pager.
+ */
+static int
+callback_pager(void *data, int ncol, char **col_values, char **col_names)
+{
+	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
+	char *snippet = pager_highlight(col_values[3]);
+	col_values[3] = snippet;
+	int (*callback) (void *, int, char **, char **) = orig_data->callback;
+	(*callback)(orig_data->data, ncol, col_values, col_names);
+	free(snippet);
+	return 0;
+}
+
+/*
+ * build_cat_string --
+ *  Builds a string which is in a form so that a pager may display it in bold.
+ *  Basic aim is: If the input string is "A", then output should be: "A\bA"
+ */
+static char *
+build_cat_string(char *str)
+{
+	int i, j;
+	char *catstr = emalloc(3 * strlen(str) + 1);
+	for (i = 0, j = 0; str[i] != '\0'; i++, j+=3) {
+		catstr[j] = str[i];
+		catstr[j + 1] = '\b';
+		catstr[ j + 2] = str[i];
+	}
+	catstr[j] = 0;
+	return catstr;
+}
+
+/*
+ * run_query_pager --
+ *  Utility function similar to run_query_html. This function tries to process
+ *  the result assuming it will be piped to a pager.
+ *  It's basic aim is to pre-process the snippet returned from the result-set
+ *  in a form so that the pager may be able to highlight the matching bits of 
+ *  the text.
+ *  We use a hashtable to store each word of the user query as a key and it's
+ *  bold text representation as it's value for faster lookup when building the
+ *  snippet in pager_highlight.
+ */
+int run_query_pager(sqlite3 *db, query_args *args)
+{
+	char *temp = NULL;
+	struct orig_callback_data orig_data;
+	orig_data.callback = args->callback;
+	orig_data.data = args->callback_data;
+	const char *snippet_args[] = {"", "", "..."};
+	char *query = strdup(args->search_str);
+	/* initialize the hash table for stop words */
+	if (!hcreate(10))
+		return -1;
+	
+	/* store the query words in the hashtable as key and their equivalent
+	 * bold text representation as their values.
+	 */	
+	for (temp = strtok(query, " "); temp; temp = strtok(NULL, " ")) {
+		ENTRY ent;
+		ent.key = strdup(temp);
+		ent.data = (void *) build_cat_string(temp);
+		hsearch(ent, ENTER);
+	}
+	free(query);
+	args->callback = &callback_pager;
+	args->callback_data = (void *) &orig_data;
+	run_query(db, snippet_args, args);
+	hdestroy();
+	return 0;
+
 }

@@ -150,8 +150,15 @@ main(int argc, char *argv[])
 	args.callback = &query_callback;
 	args.callback_data = out;
 	args.errmsg = &errmsg;
-	if (run_query(db, snippet_args, &args) < 0)
-		errx(EXIT_FAILURE, "%s", errmsg);
+	if (aflags.pager) {
+		if (run_query_pager(db, &args) < 0)
+			errx(EXIT_FAILURE, "%s", errmsg);
+	}
+	else {
+		if (run_query_pager(db, &args) < 0)
+			errx(EXIT_FAILURE, "%s", errmsg);
+	}
+		
 
 	free(query);
 	free(errmsg);
