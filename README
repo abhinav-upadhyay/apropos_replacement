@@ -23,7 +23,7 @@ apropos(1) in a better manner so as to allow more extensive and
 flexible searches and that too over the complete content of the
 man pages rather than limiting it to the name section. More often
 than not we are not sure of the exact keywords to search for and
-apropos(1) doesn't give us the rignt results (or no results at all)
+apropos(1) does not give us the right results (or no results at all)
 in which case we turn to Google.
 
 The idea behind this project is to mend this problem by reimplementing
