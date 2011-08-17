@@ -15,13 +15,18 @@ It uses the FTS engine of Sqlite to perform the search. The database is
 created with the help of
 .Xr makemandb 1
 utility.
-It is more sophisticated than the classical version of
-.Xr apropos 1
+.Pp
+This implementation of
+.Nm
+utility is more sophisticated than the classical version of
+.Nm
 Like modern search applications, it uses advanced techniques like stemming,
 and term weighting to rank the matching results in decreasing order of 
 relevance.
 By default
-.Nm will display only top 10 matches in the output.
+.Nm 
+will display only top 10 matches in the output.
+.Pp
 It supports following options:
 .Bl -tag -width indent
 .It Fl 1
@@ -59,8 +64,7 @@ The Sqlite FTS database which maintains an index of the manual pages.
 .Sh AUTHORS
 .An Abhinav Upadhyay
 .Sh BUGS
-.Nm
-at the moment 
+At the moment 
 .Xr makemandb 1
 is unable to parse the escape sequences in
 .Xr man 7 
