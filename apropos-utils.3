@@ -1,0 +1,58 @@
+.Dd August 17, 2011
+.Dt APROPOS-UTILS 3
+.Os
+.Sh NAME
+.Nm init_db ,
+.Nm close_db ,
+.Nm run_query ,
+.Nm run_query_html ,
+.Nm run_query_pager ,
+.Sh SYNOPSIS
+.In apropos-utils.h
+.Ft sqlite3 *
+.Fn init_db "int db_flag"
+.Ft void
+.Fn close_db "sqlite3 *db"
+.Ft int
+.Fn run_query "sqlite3 *db" "const char **snippet_args" "query_args *args"
+.Ft int
+.Fn run_query_html "sqlite3 *db" "query_args *args"
+.Ft int
+.Fn run_query_pager "sqlite3 *db" "query_args"
+.Sh DESCRIPTION
+These functions all live in the
+.Pa strings.h
+header file.
+Except for
+.Fn ffs ,
+they operate on strings.
+.Fn index ,
+.Fn rindex ,
+and
+.Fn strcasecmp
+need nul-terminated strings.
+.Pp
+See the specific manual pages for more information.
+.Pp
+See
+.Xr string 3
+for string functions that follow
+.St -ansiC
+or
+.St -isoC-99 ,
+.Xr bstring 3
+for functions that operate on strings that are not nul-terminated, and
+.Xr bitstring 3
+for bit-string manipulation macros.
+.Sh SEE ALSO
+.Xr bcmp 3 ,
+.Xr bcopy 3 ,
+.Xr bitstring 3 ,
+.Xr bstring 3 ,
+.Xr bzero 3 ,
+.Xr ffs 3 ,
+.Xr index 3 ,
+.Xr rindex 3 ,
+.Xr strcasecmp 3 ,
+.Xr string 3
+

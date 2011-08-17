@@ -1,0 +1,30 @@
+.Dd August 17, 2011
+.Dt CLOSE_DB 3
+.Os
+.Sh NAME
+.Nm close_db
+.Sh SYNOPSIS
+.In apropos-utils.h
+.Ft void
+.Fn close_db "sqlite3 *db"
+.Sh DESCRIPTION
+The
+.Fn close_db
+function will close the connection to 
+.Pa /etc/apropos.db
+referenced by
+.Fa db
+and release any resources being used by it safely.
+.Sh FILES
+.Bl -hang -width /etc/apropos.db -compact
+.Pa /etc/apropos.db
+The Sqlite FTS database which maintains an index of the manual pages.
+.Sh SEE ALSO
+.Xr apropos-utils 3 ,
+.Xr init_db 3 ,
+.Xr run_query 3 ,
+.Xr run_query_html ,
+.Xr run_query_pager
+.Sh AUTHORS
+.An Abhinav Upadhyay
+
