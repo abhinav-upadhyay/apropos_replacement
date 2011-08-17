@@ -471,7 +471,7 @@ run_query(sqlite3 *db, const char **snippet_args, query_args *args)
 	 * working with the compression option enabled.
 	 */
 	easprintf(&sqlstr, "SELECT section, name, name_desc, "
-			"snippet(mandb, \"%s\", \"%s\", \"%s\" ), "
+			"snippet(mandb, \"%s\", \"%s\", \"%s\", -1, 64 ), "
 			"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
 			 "FROM mandb WHERE mandb MATCH \'%s\'", snippet_args[0],
 			 snippet_args[1], snippet_args[2], args->search_str);
