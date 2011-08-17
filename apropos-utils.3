@@ -6,7 +6,7 @@
 .Nm close_db ,
 .Nm run_query ,
 .Nm run_query_html ,
-.Nm run_query_pager ,
+.Nm run_query_pager
 .Sh SYNOPSIS
 .In apropos-utils.h
 .Ft sqlite3 *
@@ -18,41 +18,21 @@
 .Ft int
 .Fn run_query_html "sqlite3 *db" "query_args *args"
 .Ft int
-.Fn run_query_pager "sqlite3 *db" "query_args"
+.Fn run_query_pager "sqlite3 *db" "query_args *args"
 .Sh DESCRIPTION
 These functions all live in the
-.Pa strings.h
+.Pa apropos-utils.h
 header file.
-Except for
-.Fn ffs ,
-they operate on strings.
-.Fn index ,
-.Fn rindex ,
-and
-.Fn strcasecmp
-need nul-terminated strings.
-.Pp
-See the specific manual pages for more information.
-.Pp
-See
-.Xr string 3
-for string functions that follow
-.St -ansiC
-or
-.St -isoC-99 ,
-.Xr bstring 3
-for functions that operate on strings that are not nul-terminated, and
-.Xr bitstring 3
-for bit-string manipulation macros.
+They operate on
+.Pa /etc/apropos.db
+which is an Sqlite database containing a full text search index of the manual 
+pages. The functions provide an easy to use interface to query the database and 
+develop applications on top of it.
 .Sh SEE ALSO
-.Xr bcmp 3 ,
-.Xr bcopy 3 ,
-.Xr bitstring 3 ,
-.Xr bstring 3 ,
-.Xr bzero 3 ,
-.Xr ffs 3 ,
-.Xr index 3 ,
-.Xr rindex 3 ,
-.Xr strcasecmp 3 ,
-.Xr string 3
-
+.Xr init_db 3 ,
+.Xr close_db 3 ,
+.Xr run_query 3 ,
+.Xr run_query_html 3 ,
+.Xr run_query_pager 3
+.Sh AUTHORS
+.An Abhinav Upadhyay
