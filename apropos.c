@@ -289,6 +289,6 @@ remove_stopwords(char **query)
 static void
 usage(void)
 {
-	(void)warnx("Usage: %s [-p] [-s <section-number>] query", getprogname());
+	(void)warnx("Usage: %s [-p] [-123456789] query", getprogname());
 	exit(1);
 }
