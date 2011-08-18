@@ -442,7 +442,7 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
  *  
  */
 int
-run_query(sqlite3 *db, const char **snippet_args, query_args *args)
+run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 {
 
 	char *sqlstr = NULL;
