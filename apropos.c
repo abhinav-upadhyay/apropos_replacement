@@ -138,10 +138,7 @@ main(int argc, char *argv[])
 		}
 		/* NULL value of nrec means fetch all matching rows */
 		nrec = NULL;
-		/* The usual escape code \033[1m for bold text doesn't work with pager */
-		snippet_args[0] = snippet_args[1] = "";
 	}
-	
 
 	query_args args;
 	args.search_str = query;
@@ -155,7 +152,7 @@ main(int argc, char *argv[])
 			errx(EXIT_FAILURE, "%s", errmsg);
 	}
 	else {
-		if (run_query_pager(db, &args) < 0)
+		if (run_query(db, snippet_args, &args) < 0)
 			errx(EXIT_FAILURE, "%s", errmsg);
 	}
 		
