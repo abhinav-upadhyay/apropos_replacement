@@ -25,15 +25,15 @@ The
 .Fn run_query
 function takes following arguments:
 .Pp
-.Fa sqlite3 *db Ta Handle to the database connection, can be
+.Fa sqlite3 *db Ta Handle to the database connection which can be
 obtained by calling
 .Fn init_db
 .Pp
 .Fa const char *snippet_args 
 An array of strings which specify the 
 delimiters to the matching text in snippet. 
-\&It is an optional argument and caller can supply a NULL value for it, in which
- case, a default value of
+\&It is an optional argument and caller can supply a NULL value for 
+it, in which case, a default value of
 .Brq \&"\&", \&"\&", \&"...\&"
 will be used. The 3 members of array specify 
 following values:
@@ -56,8 +56,7 @@ value:
 .Ed
 .Pp
 .Fa query_args *args
-query_args is a typedef to
-.Dv struct query_args
+query_args is a struct
 which is defined in apropos-utils.h. It has following fields:
 .Bl -column -offset indent "Struct Field" "Field Description"
 .It Li const char *search_str Ta This is the query as entered by the user. You may want to pre-process 
@@ -97,7 +96,6 @@ Following is a code excerpt of how apropos.c uses run_query.
 #include <apropos-utils.h>
 query_args args;
 char *errmsg = NULL;
-const char **snippet_args = {"", "", "..."};
 const char **sec_nums = {NULL, "2", "3", NUll, NULL, NULL, NULL, NULL, NULL};
 //query is obtained as a command line argument
 args.search_str = argv[1];
@@ -106,7 +104,7 @@ args.nrec = "10";
 args.callback = &query_callback;
 args.callback_data = NULL;
 args.errmsg = &errmsg;
-if (run_query(db, snippet_args &args) < 0)
+if (run_query(db, NULL, &args) < 0)
 		errx(EXIT_FAILURE, "%s", errmsg);
 }
 
