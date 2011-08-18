@@ -31,7 +31,11 @@ obtained by calling
 .Pp
 .Fa const char *snippet_args 
 An array of strings which specify the 
-delimiters to the matching text in snippet. The 3 members of array specify 
+delimiters to the matching text in snippet. 
+\&It is an optional argument and caller can supply a NULL value for it, in which
+ case, a default value of
+.Brq \&"\&", \&"\&", \&"...\&"
+will be used. The 3 members of array specify 
 following values:
 .Bl -enum -offset indent
 .It
@@ -41,14 +45,16 @@ The second element the end of each matching token in the snippet.
 .It
 The third element is used to delimit the beginning and end of the snippet.
 .El
-For example for highlighting matching tokens in HTML style mark-up:
+For example for highlighting matching tokens in HTML style mark-up use this 
+value:
 .Bd -literal -offset indent
  const char **snippet_args = {
 	"<b>",
 	"</b>",
 	"..."
-	};
+ };
 .Ed
+.Pp
 .Fa query_args *args
 query_args is a typedef to
 .Dv struct query_args
