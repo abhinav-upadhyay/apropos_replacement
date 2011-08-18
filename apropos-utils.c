@@ -451,7 +451,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	int i;
 	int flag = 0;
 	inverse_document_frequency idf = {0, 0};
-	
+
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
@@ -470,12 +470,19 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	 * 2. I am using LIKE operator because '=' or IN operators do not seem to be
 	 * working with the compression option enabled.
 	 */
-	easprintf(&sqlstr, "SELECT section, name, name_desc, "
-			"snippet(mandb, \"%s\", \"%s\", \"%s\", -1, 64 ), "
-			"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
-			 "FROM mandb WHERE mandb MATCH \'%s\'", snippet_args[0],
-			 snippet_args[1], snippet_args[2], args->search_str);
-	
+	if (snippet_args)
+		easprintf(&sqlstr, "SELECT section, name, name_desc, "
+				"snippet(mandb, \"%s\", \"%s\", \"%s\", -1, 64 ), "
+				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
+				 "FROM mandb WHERE mandb MATCH \'%s\'", snippet_args[0],
+				 snippet_args[1], snippet_args[2], args->search_str);
+	else
+		easprintf(&sqlstr, "SELECT section, name, name_desc, "
+				"snippet(mandb, \"%s\", \"%s\", \"%s\", -1, 64 ), "
+				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
+				 "FROM mandb WHERE mandb MATCH \'%s\'", "",
+				 "", "...", args->search_str);
+
 	for (i = 0; i < SECMAX; i++) {
 		if (args->sec_nums[i]) {
 			if (flag == 0) {
@@ -647,7 +654,6 @@ int run_query_pager(sqlite3 *db, query_args *args)
 	struct orig_callback_data orig_data;
 	orig_data.callback = args->callback;
 	orig_data.data = args->callback_data;
-	const char *snippet_args[] = {"", "", "..."};
 	char *query = strdup(args->search_str);
 	/* initialize the hash table for stop words */
 	if (!hcreate(10))
@@ -665,7 +671,7 @@ int run_query_pager(sqlite3 *db, query_args *args)
 	free(query);
 	args->callback = &callback_pager;
 	args->callback_data = (void *) &orig_data;
-	run_query(db, snippet_args, args);
+	run_query(db, NULL, args);
 	hdestroy();
 	return 0;
 
