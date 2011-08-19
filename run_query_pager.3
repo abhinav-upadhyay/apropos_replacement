@@ -1,0 +1,116 @@
+.\"
+.\" Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
+.\" All rights reserved.
+.\" 
+.\" This code was developed as part of Google's Summer of Code 2011 program.
+.\" Thanks to Google for sponsoring.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in
+.\"    the documentation and/or other materials provided with the
+.\"    distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+.\" ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+.\" LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+.\" FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE
+.\" COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+.\" INCIDENTAL, SPECIAL, EXEMPLARY OR CONSEQUENTIAL DAMAGES (INCLUDING,
+.\" BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+.\" LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+.\" AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+.\" OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+.\" OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.Dd August 19, 2011
+.Dt RUN_QUERY_HTML 3
+.Os
+.Sh NAME
+.Nm run_query_pager
+.Nd Runs a query against
+.Pa /var/db/man.db
+and returns the results in in a format which can be 
+piped to pager like
+.Xr more 1
+or
+.Xr less 1
+inside the callback function.
+.Sh SYNOPSIS
+.In apropos-utils.h
+.Ft int
+.Fn run_query_pager "sqlite3 *db" "query_args *args"
+.Sh DESCRIPTION
+The
+.Fn run_query_pager
+is very much similar to
+.Fn run_query_html
+but with following two differences.
+.Bl -enum -offset indent
+.It Li
+.Nm
+will return a 5 column result set, much like
+.Xr run_query 3
+.It Li
+The snippet returned by 
+.Nm
+in the callback function is in a format so that the matching text appears 
+highlighted when piped to a pager.
+.El
+For more details, refer to the manual page of
+.Xr run_query 3
+.Sh EXAMPLES
+Following is a code excerpt of how
+.Nm
+can be used.
+.Bd -literal -offset indent
+#include <apropos-utils.h>
+query_args args;
+FILE *pager = popen("more", "w");
+char *errmsg = NULL;
+const char **sec_nums = {NULL, "2", "3", NUll, NULL, NULL, NULL, NULL, NULL};
+args.search_str = argv[1];
+args.sec_nums = sec_nums;
+args.nrec = "10";
+args.callback = &query_callback;
+args.callback_data = (void *)pager;
+args.errmsg = &errmsg;
+if (run_query(db, &args) < 0)
+		errx(EXIT_FAILURE, "%s", errmsg);
+}
+
+free(query);
+free(errmsg);
+pclose(pager);
+
+static int
+query_callback(void *data, int ncol, char **col_values, char **col_names)
+{
+	FILE *out = (FILE *) data;
+	char *html_result = col_values[0];
+	fprintf(out, "%s\n", html_result);
+	return 0;
+}
+.Ed
+.Sh FILES
+.Bl -hang -width -compact
+.It Pa /var/db/man.db
+The Sqlite FTS database which maintains an index of the manual pages.
+.Sh RETURN VALUES
+On successful execution the
+.Fn run_query_pager
+function will return 0 and in case of an error -1 will be returned.
+.Sh SEE ALSO
+.Xr apropos-utils 3 ,
+.Xr init_db 3 ,
+.Xr close_db 3 ,
+.Xr run_query 3 ,
+.Xr run_query_html 3
+.Sh AUTHORS
+.An Abhinav Upadhyay
