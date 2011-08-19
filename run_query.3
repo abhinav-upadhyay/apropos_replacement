@@ -90,6 +90,16 @@ represents the value of the correspondigly indexed column in the result set.
 .It Li char **col_names Ta This array stores the name of the columns whose values 
 have been fetched from the database.
 .El
+The query which
+.Fn run_query
+results in a 5 column result set. Those are as follows:
+.Bl -column -offset indent "Column Name" "Column Description"
+.It Li section Ta The section number of the page.
+.It Li name Ta The name of the page.
+.It Li snippet Ta The snippet of the matching text in the page.
+.It Li name_desc Ta The one line description from NAME section.
+.It Li rank Ta A double value indicating rank/weight of the page.
+.El
 .Sh EXAMPLES
 Following is a code excerpt of how apropos.c uses run_query.
 .Bd -literal -offset indent
@@ -97,7 +107,6 @@ Following is a code excerpt of how apropos.c uses run_query.
 query_args args;
 char *errmsg = NULL;
 const char **sec_nums = {NULL, "2", "3", NUll, NULL, NULL, NULL, NULL, NULL};
-//query is obtained as a command line argument
 args.search_str = argv[1];
 args.sec_nums = sec_nums;
 args.nrec = "10";
@@ -114,17 +123,13 @@ free(errmsg);
 static int
 query_callback(void *data, int ncol, char **col_values, char **col_names)
 {
-	char *name = NULL;	//this is the fist column
-	char *section = NULL;	//second column
-	char *snippet = NULL;	//third column
-	char *name_desc = NULL;	//fourth column
+	char *section = col_values[0];
+	char *name = col_values[1];
+	char *snippet = col_values[2];
+	char *name_desc = col_values[3];
 	/* The user supplied data could be obtained as follows */
 //	 my_data *buf = (my_data *) data;
 
-	section = col_values[0];
-	name = col_values[1];
-	name_desc = col_values[2];
-	snippet = col_values[3];
 	fprintf(stdout, "%s(%s)\t%s\n%s\n\n", name, section, name_desc,
 	snippet);
 	return 0;
