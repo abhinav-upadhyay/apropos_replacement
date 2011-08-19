@@ -37,6 +37,22 @@ As the database file is stored under
 , therefore to run
 .Nm
 root privileges are required.
+.Pp
+.Ss DATABASE SCHEMA
+The name of the FTS table is mandb and it's schema is as follows:
+.Bl -column -offset indent "Column Name" "Column Description"
+.It Li section Ta The section number of the page
+.It Li name Ta The name of the page from NAME section.
+.It Li name_desc Ta The one line description from NAME section.
+.It Li desc Ta The DESCRIPTION section.
+.It Li lib Ta The LIBRARY section.
+.It Li synopsis Ta The SYNOPSIS section.
+.It Li return_vals Ta The RETURN VALUES section.
+.It Li env Ta The ENVIRONMENT section.
+.It Li files Ta The FILES section.
+.It Li exit_status Ta The EXIT STATUS section.
+.It Li errors Ta The ERRORS section.
+.El
 .Sh FILES
 .Bl -hang -width -compact
 .Pa /var/db/man.db
