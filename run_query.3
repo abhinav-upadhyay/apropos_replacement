@@ -4,7 +4,7 @@
 .Sh NAME
 .Nm run_query
 .Nd Run a query against
-.Pa /etc/apropos.db
+.Pa /var/db/man.db
 and process the results in a callback function.
 .Sh SYNOPSIS
 .In apropos-utils.h
@@ -15,7 +15,7 @@ The
 .Fn run_query
 function prepares the user supplied query in a form suitable to be run 
 against
-.Pa /etc/apropos.db
+.Pa /var/db/man.db
 and executes the query. For each row obtained in the result set
 .Fn run_query
 will call the user supplied callback function, which should contain the 
@@ -131,8 +131,8 @@ query_callback(void *data, int ncol, char **col_values, char **col_names)
 }
 .Ed
 .Sh FILES
-.Bl -hang -width /etc/apropos.db -compact
-.It Pa /etc/apropos.db
+.Bl -hang -width /var/db/man.db -compact
+.It Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
 .Sh RETURN VALUES
 On successful execution the

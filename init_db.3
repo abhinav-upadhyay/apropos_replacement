@@ -29,8 +29,8 @@ This will open the database in read and write mode.
 This will open the database in read/write mode, and this will also create 
 the database schema if it does not exist already.
 .Sh FILES
-.Bl -hang -width /etc/apropos.db -compact
-.It Pa /etc/apropos.db
+.Bl -hang -width /var/db/man.db -compact
+.It Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
 .Sh RETURN VALUES
 On successful execution the
@@ -39,7 +39,7 @@ function will return a pointer to sqlite3 which represents a connection to
 the database.
 .Pp
 In case the file
-.Pa /etc/apropos.db does not exist and
+.Pa /var/db/man.db does not exist and
 .Dv DB_CREATE
 is not used as a value of
 .Fa db_flag

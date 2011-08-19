@@ -11,13 +11,13 @@
 The
 .Fn close_db
 function will close the connection to 
-.Pa /etc/apropos.db
+.Pa /var/db/man.db
 referenced by
 .Fa db
 and release any resources being used by it safely.
 .Sh FILES
-.Bl -hang -width /etc/apropos.db -compact
-.Pa /etc/apropos.db
+.Bl -hang -width /var/db/man.db -compact
+.Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
 .Sh SEE ALSO
 .Xr apropos-utils 3 ,

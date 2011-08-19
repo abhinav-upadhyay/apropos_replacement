@@ -30,9 +30,16 @@ and also save disk space substantially.
 Use this option to optimize the index so that the search is fast and also 
 it drops the disk space usage significantly, but this is a somewhat expensive 
 operation.
+.El
+.Pp
+As the database file is stored under
+.Pa /var/db
+, therefore to run
+.Nm
+root priviliges are required.
 .Sh FILES
-.Bl -hang -width /etc/apropos.db -compact
-.Pa /etc/apropos.db
+.Bl -hang -width -compact
+.Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
 .Sh SEE ALSO
 .Xr man 1 ,
