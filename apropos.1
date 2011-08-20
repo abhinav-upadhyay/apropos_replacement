@@ -1,7 +1,7 @@
 .\"
 .\" Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
 .\" All rights reserved.
-.\" 
+.\"
 .\" This code was developed as part of Google's Summer of Code 2011 program.
 .\" Thanks to Google for sponsoring.
 .\"
@@ -42,7 +42,7 @@
 .Sh DESCRIPTION
 The
 .Nm
-utility performs a full text search across the complete content of man pages. 
+utility performs a full text search across the complete content of man pages.
 It uses the FTS engine of Sqlite to perform the search. The database is
 created with the help of
 .Xr makemandb 1
@@ -53,10 +53,10 @@ This implementation of
 utility is more sophisticated than the classical version of
 .Nm
 Like modern search applications, it uses advanced techniques like stemming,
-and term weighting to rank the matching results in decreasing order of 
+and term weighting to rank the matching results in decreasing order of
 relevance.
 By default
-.Nm 
+.Nm
 will display only top 10 matches in the output.
 .Pp
 It supports following options:
@@ -80,8 +80,8 @@ Search only within section 8 manual pages.
 .It Fl 9
 Search only within section 9 manual pages.
 .It Fl p
-This option may be used to overcome the default limit of 10 results 
-in the output. It will make 
+This option may be used to overcome the default limit of 10 results
+in the output. It will make
 .Nm
 to display all matching results and also pipe them to a pager (
 .Xr more 1
@@ -96,10 +96,10 @@ The Sqlite FTS database which maintains an index of the manual pages.
 .Sh AUTHORS
 .An Abhinav Upadhyay
 .Sh BUGS
-At the moment 
+At the moment
 .Xr makemandb 1
 is unable to parse the escape sequences in
-.Xr man 7 
-pages, therefore at times you might see the snippets of the matching 
+.Xr man 7
+pages, therefore at times you might see the snippets of the matching
 text mixed with escape sequences, making it a bit unreadable. This
 should be fixed in upcoming versions.

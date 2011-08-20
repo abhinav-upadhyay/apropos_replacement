@@ -1,7 +1,7 @@
 .\"
 .\" Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
 .\" All rights reserved.
-.\" 
+.\"
 .\" This code was developed as part of Google's Summer of Code 2011 program.
 .\" Thanks to Google for sponsoring.
 .\"
@@ -36,7 +36,7 @@
 .Nm run_query_html
 .Nd Runs a query against
 .Pa /var/db/man.db
-and returns the results in HTML format which can be 
+and returns the results in HTML format which can be
 processed inside a callback function.
 .Sh SYNOPSIS
 .In apropos-utils.h
@@ -58,7 +58,7 @@ will return a single column result set, unlike
 .Xr run_query 3
 which returns a 5 column result set.
 .It Li
-The value returned by 
+The value returned by
 .Nm
 in the callback function is in HTML format, enclosed between <p> and </p> tags.
 .El

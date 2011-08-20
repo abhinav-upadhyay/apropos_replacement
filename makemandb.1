@@ -1,7 +1,7 @@
 .\"
 .\" Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
 .\" All rights reserved.
-.\" 
+.\"
 .\" This code was developed as part of Google's Summer of Code 2011 program.
 .\" Thanks to Google for sponsoring.
 .\"
@@ -41,11 +41,11 @@
 .Sh DESCRIPTION
 The
 .Nm
-utility traverses the list of directories containing man pages, parses them 
-with the help of libmandoc and builds an Sqlite database apropos.db to support 
-full text searches. It obtains this list of directories using the 
+utility traverses the list of directories containing man pages, parses them
+with the help of libmandoc and builds an Sqlite database apropos.db to support
+full text searches. It obtains this list of directories using the
 .Op Fl p
-option of 
+option of
 .Xr man 1
 .Pp
 Its supports following options:
@@ -53,13 +53,13 @@ Its supports following options:
 .It Fl f
 Force rebuilding the index from scratch, pruning the existing one.
 .It Fl l
-Limit the parsing to only the NAME section of the pages. This option 
+Limit the parsing to only the NAME section of the pages. This option
 can be used to mimic the behaviour of the classic
 .Xr apropos 1
 and also save disk space substantially.
 .It Fl o
-Use this option to optimize the index so that the search is fast and also 
-it drops the disk space usage significantly, but this is a somewhat expensive 
+Use this option to optimize the index so that the search is fast and also
+it drops the disk space usage significantly, but this is a somewhat expensive
 operation.
 .El
 .Pp
@@ -99,5 +99,5 @@ as part of Google's Summer of Code 2011.
 .Sh BUGS
 .Nm
 at the moment is unable to parse the escape sequences in
-.Xr man 7 
+.Xr man 7
 pages, which should be fixed in upcoming versions.

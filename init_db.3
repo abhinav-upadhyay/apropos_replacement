@@ -1,7 +1,7 @@
 .\"
 .\" Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
 .\" All rights reserved.
-.\" 
+.\"
 .\" This code was developed as part of Google's Summer of Code 2011 program.
 .\" Thanks to Google for sponsoring.
 .\"
@@ -41,23 +41,23 @@
 .Sh DESCRIPTION
 The
 .Fn init_db
-function will try to initialize a connection to apropos.db which is an 
-Sqlite database and return a pointer to sqlite to use that connection. 
-The connection should subsequentaly be closed by calling 
+function will try to initialize a connection to apropos.db which is an
+Sqlite database and return a pointer to sqlite to use that connection.
+The connection should subsequentaly be closed by calling
 .Fn close_db
 which will also release any resources being used by it.
 .Pp
 The argument
 .Fa db_flag
 should be supplied one of the following macros as it's value:
-.Bl -hang -width 
+.Bl -hang -width
 .It Dv DB_READONLY
-This will open the database in read only mode. Use this when you simply 
+This will open the database in read only mode. Use this when you simply
 want to query the database.
 .It Dv DB_WRITE
-This will open the database in read and write mode. 
+This will open the database in read and write mode.
 .It Dv DB_CREATE
-This will open the database in read/write mode, and this will also create 
+This will open the database in read/write mode, and this will also create
 the database schema if it does not exist already.
 .Sh FILES
 .Bl -hang -width /var/db/man.db -compact
@@ -66,7 +66,7 @@ The Sqlite FTS database which maintains an index of the manual pages.
 .Sh RETURN VALUES
 On successful execution the
 .Fn init_db
-function will return a pointer to sqlite3 which represents a connection to 
+function will return a pointer to sqlite3 which represents a connection to
 the database.
 .Pp
 In case the file
