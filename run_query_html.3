@@ -38,7 +38,7 @@
 .Nd Runs a query against
 .Pa /var/db/man.db
 and returns the results in HTML format which can be
-processed inside a callback function.
+processed inside a callback function
 .Sh SYNOPSIS
 .In apropos-utils.h
 .Ft int
@@ -48,7 +48,7 @@ The
 .Fn run_query_html
 is very much similar to
 .Fn run_query
-but with following two differences.
+but with the following two differences.
 .Bl -enum -offset indent
 .It Li
 .Nm
@@ -64,7 +64,7 @@ The value returned by
 in the callback function is in HTML format, enclosed between <p> and </p> tags.
 .El
 For more details, refer to the manual page of
-.Xr run_query 3
+.Xr run_query 3 .
 .Sh RETURN VALUES
 On successful execution the
 .Fn run_query_html
@@ -73,6 +73,7 @@ function will return 0 and in case of an error \-1 will be returned.
 .Bl -hang -width -compact
 .It Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
+.El
 .Sh EXAMPLES
 Following is a code excerpt of how
 .Nm

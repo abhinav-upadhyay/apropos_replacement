@@ -60,18 +60,17 @@ function takes following arguments:
 .Pp
 .Fa sqlite3 *db Ta Handle to the database connection which can be
 obtained by calling
-.Fn init_db
+.Fn init_db .
 .Pp
 .Fa const char *snippet_args
 An array of strings which specify the
 delimiters to the matching text in snippet.
 It is an optional argument and caller can supply a
 .Dv NULL
-value for
-it, in which case, a default value of
+value for it, in which case, a default value of
 .Brq \&"\&", \&"\&", \&"...\&"
 will be used.
-The 3 members of array specify following values:
+The 3 members of the array specify the following values:
 .Bl -enum -offset indent
 .It
 The first element marks the beginning of each matching token in the snippet.
@@ -93,7 +92,7 @@ value:
 .Fa query_args *args
 query_args is a struct
 which is defined in apropos-utils.h.
-It has following fields:
+It has the following fields:
 .Bl -column -offset indent "Struct Field" "Field Description"
 .It Li const char *search_str Ta This is the query as entered by the user.
 You may want to pre-process it to do sanitization etc.
@@ -154,6 +153,7 @@ function will return 0 and in case of an error \-1 will be returned.
 .Bl -hang -width /var/db/man.db -compact
 .It Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
+.El
 .Sh EXAMPLES
 Following is a code excerpt of how apropos.c uses run_query.
 .Bd -literal -offset indent
