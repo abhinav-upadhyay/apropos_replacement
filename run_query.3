@@ -35,7 +35,7 @@
 .Os
 .Sh NAME
 .Nm run_query
-.Nd Run a query against
+.Nd run a query against
 .Pa /var/db/man.db
 and process the results in a callback function.
 .Sh SYNOPSIS
@@ -49,7 +49,7 @@ function prepares the user supplied query in a form suitable to be run
 against
 .Pa /var/db/man.db
 and executes the query.
-For each row obtained in the result set
+For each row obtained in the result set,
 .Fn run_query
 will call the user supplied callback function, which should contain the
 logic for processing the data thus obtained.
@@ -57,12 +57,11 @@ logic for processing the data thus obtained.
 The
 .Fn run_query
 function takes following arguments:
-.Pp
-.Fa sqlite3 *db Ta Handle to the database connection which can be
-obtained by calling
+.Bl -tag -width 8n
+.It Fa sqlite3 *db
+Handle to the database connection which can be obtained by calling
 .Fn init_db .
-.Pp
-.Fa const char *snippet_args
+.It Fa const char *snippet_args
 An array of strings which specify the
 delimiters to the matching text in snippet.
 It is an optional argument and caller can supply a
@@ -79,7 +78,7 @@ The second element the end of each matching token in the snippet.
 .It
 The third element is used to delimit the beginning and end of the snippet.
 .El
-For example for highlighting matching tokens in HTML style mark-up use this
+For example for highlighting matching tokens in HTML style mark-up, use this
 value:
 .Bd -literal -offset indent
  const char **snippet_args = {
@@ -88,44 +87,60 @@ value:
 	"..."
  };
 .Ed
-.Pp
-.Fa query_args *args
-query_args is a struct
-which is defined in apropos-utils.h.
+.It Fa query_args *args
+.Ft query_args
+is a struct which is defined in
+.Pa apropos-utils.h .
 It has the following fields:
-.Bl -column -offset indent "Struct Field" "Field Description"
-.It Li const char *search_str Ta This is the query as entered by the user.
+.Bl -tag -width 8n -offset indent
+.It Li const char *search_str
+This is the query as entered by the user.
 You may want to pre-process it to do sanitization etc.
-.It Li const char **sec_nums Ta \&It is an array of char * wherein each index element represents the
+.It Li const char **sec_nums
+This is an array of
+.Ft char *
+wherein each index element represents the
 section number in which search should be performed.
 The sections whose corresponding index element in this array is set to
 .Dv NULL
-are not searched in.
+are not searched.
 If all the elements in the array are
 .Dv NULL
 then all the sections are searched.
-.It Li const char *nrec Ta \&It specifies the number of matching rows to fetch from the database.
-.It Li int (*callback) (void *, int, char **, char **) Ta
-.Pp
+.It Li const char *nrec
+This specifies the number of matching rows to fetch from the database.
+.It Li int (*callback) (void *, int, char **, char **)
 This is the callback function which will
 be called for each row retrieved from the database.
 The function should return a value of 0 on successful execution.
-A non-zero return value will indicate a failure and run_query will return.
+A non-zero return value will indicate a failure and
+.Fn run_query
+will return.
 The interface of the callback function is described later in this section.
-.It Li void *callback_data Ta \&Use this argument to pass any data to the callback function.
-It can be retrieved inside the callback function from it's first argument.
-.It Li char **errmsg Ta If an error occurs while fetching the data from the database,
-a human readable error message will be stored in errmsg.
-If no error occurs then errmsg will be set to
+.It Li void *callback_data
+Use this argument to pass any data to the callback function.
+It can be retrieved inside the callback function from its first argument.
+.It Li char **errmsg
+If an error occurs while fetching the data from the database,
+a human readable error message will be stored in
+.Fa errmsg .
+If no error occurs then
+.Fa errmsg
+will be set to
 .Dv NULL .
-In case errmsg is not
+In case
+.Fa errmsg
+is not
 .Dv NULL ,
 then the caller should make sure to free it.
 .El
+.El
 .Pp
-The interface of the callback function is as follows:
+The interface of the callback function is
+.Ft int
+.Fn (*callback) "void *callback_data" "int ncol" "char **col_values" "char **col_names" .
 .Pp
-.Fn int callback "void *callback_data" "int ncol" "char **col_values" "char **col_names"
+Its arguments are:
 .Bl -column -offset indent "Function" "Argument Description"
 .It Li void *callback_data Ta This is the caller supplied data.
 .It Li int ncol Ta Ta \&It represents the number of columns in the result set.
@@ -142,7 +157,7 @@ Those are as follows:
 .It Li section Ta The section number of the page.
 .It Li name Ta The name of the page.
 .It Li snippet Ta The snippet of the matching text in the page.
-.It Li name_desc Ta The one line description from NAME section.
+.It Li name_desc Ta The one line description from the NAME section.
 .It Li rank Ta A double value indicating rank/weight of the page.
 .El
 .Sh RETURN VALUES
@@ -152,10 +167,13 @@ function will return 0 and in case of an error \-1 will be returned.
 .Sh FILES
 .Bl -hang -width /var/db/man.db -compact
 .It Pa /var/db/man.db
-The Sqlite FTS database which maintains an index of the manual pages.
+The Sqlite FTS database which contains an index of the manual pages.
 .El
 .Sh EXAMPLES
-Following is a code excerpt of how apropos.c uses run_query.
+Following is a code excerpt of how
+.Pa apropos.c
+uses
+.Fn run_query .
 .Bd -literal -offset indent
 #include <apropos-utils.h>
 query_args args;
@@ -184,7 +202,7 @@ query_callback(void *data, int ncol, char **col_values, char **col_names)
 	/* The user supplied data could be obtained as follows */
 //	 my_data *buf = (my_data *) data;
 
-	fprintf(stdout, "%s(%s)\t%s\n%s\n\n", name, section, name_desc,
+	fprintf(stdout, "%s(%s)\t%s\en%s\en\en", name, section, name_desc,
 	snippet);
 	return 0;
 }

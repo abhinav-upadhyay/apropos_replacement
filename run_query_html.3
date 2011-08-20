@@ -35,10 +35,9 @@
 .Os
 .Sh NAME
 .Nm run_query_html
-.Nd Runs a query against
+.Nd run a query against
 .Pa /var/db/man.db
-and returns the results in HTML format which can be
-processed inside a callback function
+and returns the results in HTML format
 .Sh SYNOPSIS
 .In apropos-utils.h
 .Ft int
@@ -72,7 +71,7 @@ function will return 0 and in case of an error \-1 will be returned.
 .Sh FILES
 .Bl -hang -width -compact
 .It Pa /var/db/man.db
-The Sqlite FTS database which maintains an index of the manual pages.
+The Sqlite FTS database which contains an index of the manual pages.
 .El
 .Sh EXAMPLES
 Following is a code excerpt of how
@@ -100,7 +99,7 @@ static int
 query_callback(void *data, int ncol, char **col_values, char **col_names)
 {
 	char *html_result = col_values[0];
-	fprintf(stdout, "%s\n", html_result);
+	fprintf(stdout, "%s\en", html_result);
 	return 0;
 }
 .Ed
