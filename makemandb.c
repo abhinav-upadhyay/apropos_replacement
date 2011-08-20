@@ -779,8 +779,19 @@ pman_block(const struct man_node *n)
 // empty stub
 }
 
-/* This function has some part of it's code taken from the mandocdb utility from
- *  the mdocml project. Thanks to Kristaps Dzonsons.
+/* 
+ * pman_sh --
+ * This function does one of the two things:
+ *  1. If the present section is NAME, then it will:
+ *    (a) extract the name of the page (in case of multiple comma separated 
+ *	      names, it will pick up the first one).
+ *	  (b) It will also build a space spearated list of all the sym/hardlinks to
+ *        this page and store in the buffer 'links'. These are extracted from
+ *        the comma separated list of names in the NAME section as well.
+ *    (c) And then it will move on to the one line description section, which is
+ *        after the list of names in the NAME section.
+ *  2. Otherwise, it will check the section name and call the man_parse_section
+ *     function, passing the enum corresponding that section.
  */
 static void
 pman_sh(const struct man_node *n)
@@ -806,7 +817,7 @@ pman_sh(const struct man_node *n)
 			while (*name_desc == ' ') 
 				name_desc++;
 			
-			/* If the line begins with a "\&", avoid it */
+			/* If the line begins with a "\&", avoid those */
 			if (name_desc[0] == '\\' && name_desc[1] == '&')
 				name_desc += 2;
 			/* Again remove any leading spaces left */
@@ -825,6 +836,7 @@ pman_sh(const struct man_node *n)
 				name[i] = *temp++;
 			name[i] = 0;
 			
+			/* Build a space separated list of all the links to this page */
 			for(link = strtok(temp, " "); link; link = strtok(NULL, " ")) {
 				if (link[strlen(link)] == ',') {
 					link[strlen(link)] = 0;
