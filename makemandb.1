@@ -35,7 +35,7 @@
 .Os
 .Sh NAME
 .Nm makemandb
-.Nd Parse the man pages and build mandb.
+.Nd Parse the man pages and build mandb
 .Sh SYNOPSIS
 .Nm
 .Op Fl flo
@@ -48,9 +48,9 @@ full text searches.
 It obtains this list of directories using the
 .Op Fl p
 option of
-.Xr man 1
+.Xr man 1 .
 .Pp
-Its supports following options:
+It supports the following options:
 .Bl -tag -width indent
 .It Fl f
 Force rebuilding the index from scratch, pruning the existing one.
@@ -58,19 +58,18 @@ Force rebuilding the index from scratch, pruning the existing one.
 Limit the parsing to only the NAME section of the pages.
 This option can be used to mimic the behaviour of the classic
 .Xr apropos 1
-and also save disk space substantially.
+and also to save disk space substantially.
 .It Fl o
 Use this option to optimize the index so that the search is fast and also
-it drops the disk space usage significantly, but this is a somewhat expensive
+to drop disk space usage significantly, but this is a somewhat expensive
 operation.
 .El
 .Pp
 As the database file is stored under
-.Pa /var/db
-, therefore to run
+.Pa /var/db ,
+therefore to run
 .Nm
 root privileges are required.
-.Pp
 .Ss DATABASE SCHEMA
 The name of the FTS table is mandb and it's schema is as follows:
 .Bl -column -offset indent "Column Name" "Column Description"
@@ -90,6 +89,7 @@ The name of the FTS table is mandb and it's schema is as follows:
 .Bl -hang -width -compact
 .Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
+.El
 .Sh SEE ALSO
 .Xr apropos 1 ,
 .Xr man 1 ,
