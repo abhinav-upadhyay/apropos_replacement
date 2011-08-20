@@ -146,6 +146,14 @@ Those are as follows:
 .It Li name_desc Ta The one line description from NAME section.
 .It Li rank Ta A double value indicating rank/weight of the page.
 .El
+.Sh RETURN VALUES
+On successful execution the
+.Fn run_query
+function will return 0 and in case of an error -1 will be returned.
+.Sh FILES
+.Bl -hang -width /var/db/man.db -compact
+.It Pa /var/db/man.db
+The Sqlite FTS database which maintains an index of the manual pages.
 .Sh EXAMPLES
 Following is a code excerpt of how apropos.c uses run_query.
 .Bd -literal -offset indent
@@ -181,19 +189,10 @@ query_callback(void *data, int ncol, char **col_values, char **col_names)
 	return 0;
 }
 .Ed
-.Sh FILES
-.Bl -hang -width /var/db/man.db -compact
-.It Pa /var/db/man.db
-The Sqlite FTS database which maintains an index of the manual pages.
-.Sh RETURN VALUES
-On successful execution the
-.Fn run_query
-function will return 0 and in case of an error -1 will be returned.
 .Sh SEE ALSO
 .Xr apropos-utils 3 ,
-.Xr init_db 3 ,
 .Xr close_db 3 ,
-.Xr run_query 3 ,
+.Xr init_db 3 ,
 .Xr run_query_html 3 ,
 .Xr run_query_pager 3
 .Sh AUTHORS
