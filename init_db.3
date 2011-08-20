@@ -42,7 +42,9 @@
 .Sh DESCRIPTION
 The
 .Fn init_db
-function will try to initialize a connection to apropos.db which is an
+function will try to initialize a connection to
+.Pa apropos.db
+which is an
 Sqlite database and return a pointer to sqlite to use that connection.
 The connection should subsequentaly be closed by calling
 .Fn close_db
@@ -60,10 +62,6 @@ This will open the database in read and write mode.
 .It Dv DB_CREATE
 This will open the database in read/write mode, and this will also create
 the database schema if it does not exist already.
-.Sh FILES
-.Bl -hang -width /var/db/man.db -compact
-.It Pa /var/db/man.db
-The Sqlite FTS database which maintains an index of the manual pages.
 .Sh RETURN VALUES
 On successful execution the
 .Fn init_db
@@ -71,19 +69,24 @@ function will return a pointer to sqlite3 which represents a connection to
 the database.
 .Pp
 In case the file
-.Pa /var/db/man.db does not exist and
+.Pa /var/db/man.db
+does not exist and
 .Dv DB_CREATE
 is not used as a value of
 .Fa db_flag
 then
 .Dv NULL
 will be returned.
+.Sh FILES
+.Bl -hang -width /var/db/man.db -compact
+.It Pa /var/db/man.db
+The Sqlite FTS database which maintains an index of the manual pages.
+.El
 .Sh SEE ALSO
 .Xr apropos-utils 3 ,
 .Xr close_db 3 ,
 .Xr run_query 3 ,
-.Xr run_query_html ,
-.Xr run_query_pager
+.Xr run_query_html 3 ,
+.Xr run_query_pager 3
 .Sh AUTHORS
 .An Abhinav Upadhyay
-
