@@ -35,19 +35,19 @@
 .Os
 .Sh NAME
 .Nm makemandb
-.Nd Parse the man pages and build mandb
+.Nd parse the manual pages and build a search index over them
 .Sh SYNOPSIS
 .Nm
 .Op Fl flo
 .Sh DESCRIPTION
 The
 .Nm
-utility traverses the list of directories containing man pages, parses them
-with the help of libmandoc and builds an Sqlite database
+utility traverses the directories containing man pages, parses the manual
+pages with the help of libmandoc and builds an Sqlite database
 .Pa apropos.db
 to support full text searches.
-It obtains this list of directories using the
-.Op Fl p
+It obtains the list of directories to traverse using the
+.Fl p
 option of
 .Xr man 1 .
 .Pp
@@ -59,24 +59,23 @@ Force rebuilding the index from scratch, pruning the existing one.
 Limit the parsing to only the NAME section of the pages.
 This option can be used to mimic the behavior of the classic
 .Xr apropos 1
-and also to save disk space substantially.
+and also to substantially save disk space.
 .It Fl o
-Use this option to optimize the index so that the search is fast and also
-to drop disk space usage significantly, but this is a somewhat expensive
-operation.
+Use this option to optimize the index for speed and also
+to significantly reduce disk space usage.
+This is a somewhat expensive operation.
 .El
 .Pp
 As the database file is stored under
 .Pa /var/db ,
-therefore to run
-.Nm
-root privileges are required.
+root privileges are required to run
+.Nm .
 .Ss DATABASE SCHEMA
-The name of the FTS table is mandb and it's schema is as follows:
+The name of the FTS table is mandb and its schema is as follows:
 .Bl -column -offset indent "Column Name" "Column Description"
 .It Li section Ta The section number of the page
-.It Li name Ta The name of the page from NAME section.
-.It Li name_desc Ta The one line description from NAME section.
+.It Li name Ta The name of the page from the NAME section.
+.It Li name_desc Ta The one line description from the NAME section.
 .It Li desc Ta The DESCRIPTION section.
 .It Li lib Ta The LIBRARY section.
 .It Li synopsis Ta The SYNOPSIS section.
@@ -89,7 +88,7 @@ The name of the FTS table is mandb and it's schema is as follows:
 .Sh FILES
 .Bl -hang -width -compact
 .Pa /var/db/man.db
-The Sqlite FTS database which maintains an index of the manual pages.
+The Sqlite FTS database which contains an index of the manual pages.
 .El
 .Sh SEE ALSO
 .Xr apropos 1 ,
@@ -99,6 +98,6 @@ The Sqlite FTS database which maintains an index of the manual pages.
 .An Abhinav Upadhyay
 .Sh BUGS
 .Nm
-at the moment is unable to parse the escape sequences in
+is currently unable to parse the escape sequences in
 .Xr man 7
 pages, which should be fixed in upcoming versions.
