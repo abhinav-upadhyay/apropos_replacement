@@ -48,7 +48,8 @@ The
 function prepares the user supplied query in a form suitable to be run
 against
 .Pa /var/db/man.db
-and executes the query. For each row obtained in the result set
+and executes the query.
+For each row obtained in the result set
 .Fn run_query
 will call the user supplied callback function, which should contain the
 logic for processing the data thus obtained.
@@ -67,8 +68,8 @@ delimiters to the matching text in snippet.
 \&It is an optional argument and caller can supply a NULL value for
 it, in which case, a default value of
 .Brq \&"\&", \&"\&", \&"...\&"
-will be used. The 3 members of array specify
-following values:
+will be used.
+The 3 members of array specify following values:
 .Bl -enum -offset indent
 .It
 The first element marks the beginning of each matching token in the snippet.
@@ -89,26 +90,29 @@ value:
 .Pp
 .Fa query_args *args
 query_args is a struct
-which is defined in apropos-utils.h. It has following fields:
+which is defined in apropos-utils.h.
+It has following fields:
 .Bl -column -offset indent "Struct Field" "Field Description"
-.It Li const char *search_str Ta This is the query as entered by the user. You may want to pre-process
-it to do sanitization etc.
+.It Li const char *search_str Ta This is the query as entered by the user.
+You may want to pre-process it to do sanitization etc.
 .It Li const char **sec_nums Ta \&It is an array of char * wherein each index element represents the
-section number in which search should be performed. The sections whose corresponding index element in
-this array is set to NULL are not searched in. If all the elements in the array are NULL then all the
- sections are searched.
+section number in which search should be performed.
+The sections whose corresponding index element in this array is set to NULL are not searched in.
+If all the elements in the array are NULL then all the sections are searched.
 .It Li const char *nrec Ta \&It specifies the number of matching rows to fetch from the database.
 .It Li int (*callback) (void *, int, char **, char **) Ta
 .Pp
 This is the callback function which will
-be called for each row retrieved from the database. The function should return a value of 0 on
-successful execution. A non-zero return value will indicate a failure and run_query will return.
+be called for each row retrieved from the database.
+The function should return a value of 0 on successful execution.
+A non-zero return value will indicate a failure and run_query will return.
 The interface of the callback function is described later in this section.
 .It Li void *callback_data Ta \&Use this argument to pass any data to the callback function.
 It can be retrieved inside the callback function from it's first argument.
 .It Li char **errmsg Ta If an error occurs while fetching the data from the database,
-a human readable error message will be stored in errmsg. If no error occurs then errmsg will
-be set to NULL. In case errmsg is not NULL, then the caller should make sure to free it.
+a human readable error message will be stored in errmsg.
+If no error occurs then errmsg will be set to NULL.
+In case errmsg is not NULL, then the caller should make sure to free it.
 .El
 .Pp
 The interface of the callback function is as follows:
@@ -124,7 +128,8 @@ have been fetched from the database.
 .El
 The query which
 .Fn run_query
-results in a 5 column result set. Those are as follows:
+results in a 5 column result set.
+Those are as follows:
 .Bl -column -offset indent "Column Name" "Column Description"
 .It Li section Ta The section number of the page.
 .It Li name Ta The name of the page.

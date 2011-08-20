@@ -44,8 +44,8 @@
 The
 .Nm
 utility performs a full text search across the complete content of man pages.
-It uses the FTS engine of Sqlite to perform the search. The database is
-created with the help of
+It uses the FTS engine of Sqlite to perform the search.
+The database is created with the help of
 .Xr makemandb 1
 utility.
 .Pp
@@ -82,7 +82,8 @@ Search only within section 8 manual pages.
 Search only within section 9 manual pages.
 .It Fl p
 This option may be used to overcome the default limit of 10 results
-in the output. It will make
+in the output.
+It will make
 .Nm
 to display all matching results and also pipe them to a pager (
 .Xr more 1
@@ -102,5 +103,5 @@ At the moment
 is unable to parse the escape sequences in
 .Xr man 7
 pages, therefore at times you might see the snippets of the matching
-text mixed with escape sequences, making it a bit unreadable. This
-should be fixed in upcoming versions.
+text mixed with escape sequences, making it a bit unreadable.
+This should be fixed in upcoming versions.
