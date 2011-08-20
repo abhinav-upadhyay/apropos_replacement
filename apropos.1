@@ -35,7 +35,7 @@
 .Os
 .Sh NAME
 .Nm apropos
-.Nd Search across the complete content of man pages
+.Nd search the complete content of all man pages
 .Sh SYNOPSIS
 .Nm
 .Op Fl 123456789p
@@ -43,24 +43,24 @@
 .Sh DESCRIPTION
 The
 .Nm
-utility performs a full text search across the complete content of man pages.
+utility performs a full text search over the complete content of all man pages.
 It uses the FTS engine of Sqlite to perform the search.
 The database is created with the help of
 .Xr makemandb 1
 utility.
 .Pp
-This implementation of
+This implementation of the
 .Nm
 utility is more sophisticated than the classical version of
 .Nm .
-Like modern search applications, it uses advanced techniques like stemming,
+Like modern search applications, it uses advanced techniques like stemming
 and term weighting to rank the matching results in decreasing order of
 relevance.
 By default
 .Nm
-will display only the top 10 matches in the output.
+will only display the top 10 matches in the output.
 .Pp
-It supports following options:
+It supports the following options:
 .Bl -tag -width indent
 .It Fl 1
 Search only within section 1 manual pages.
@@ -81,17 +81,14 @@ Search only within section 8 manual pages.
 .It Fl 9
 Search only within section 9 manual pages.
 .It Fl p
-This option may be used to overcome the default limit of 10 results
-in the output.
-It will make
-.Nm
-to display all matching results and also pipe them to a pager
-.Xr ( more 1
-is the default).
+This display all matching results (instead of the default of 10)
+and pipe them through a pager (defaulting to
+.Xr more 1 ) .
+.El
 .Sh FILES
 .Bl -hang -width -compact
 .Pa /var/db/man.db
-The Sqlite FTS database which maintains an index of the manual pages.
+The Sqlite FTS database which contains an index of the manual pages.
 .El
 .Sh SEE ALSO
 .Xr makemandb 1 ,
@@ -101,8 +98,8 @@ The Sqlite FTS database which maintains an index of the manual pages.
 .Sh BUGS
 At the moment
 .Xr makemandb 1
-is unable to parse the escape sequences in
+is currently unable to parse the escape sequences in
 .Xr man 7
-pages, therefore at times you might see the snippets of the matching
-text mixed with escape sequences, making it a bit unreadable.
+pages, therefore at times you might see snippets of the matching
+text mixed escape sequences, making it a bit unreadable.
 This should be fixed in upcoming versions.
