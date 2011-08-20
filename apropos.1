@@ -35,7 +35,7 @@
 .Os
 .Sh NAME
 .Nm apropos
-.Nd Search across the complete content of man pages.
+.Nd Search across the complete content of man pages
 .Sh SYNOPSIS
 .Nm
 .Op Fl 123456789p
@@ -52,13 +52,13 @@ utility.
 This implementation of
 .Nm
 utility is more sophisticated than the classical version of
-.Nm
+.Nm .
 Like modern search applications, it uses advanced techniques like stemming,
 and term weighting to rank the matching results in decreasing order of
 relevance.
 By default
 .Nm
-will display only top 10 matches in the output.
+will display only the top 10 matches in the output.
 .Pp
 It supports following options:
 .Bl -tag -width indent
@@ -85,13 +85,14 @@ This option may be used to overcome the default limit of 10 results
 in the output.
 It will make
 .Nm
-to display all matching results and also pipe them to a pager (
-.Xr more 1
-is default).
+to display all matching results and also pipe them to a pager
+.Xr ( more 1
+is the default).
 .Sh FILES
 .Bl -hang -width -compact
 .Pa /var/db/man.db
 The Sqlite FTS database which maintains an index of the manual pages.
+.El
 .Sh SEE ALSO
 .Xr makemandb 1 ,
 .Xr man 1
