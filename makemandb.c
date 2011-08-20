@@ -286,8 +286,7 @@ main(int argc, char *argv[])
 		
 	/* Call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
+		close_db(db);
 		err(EXIT_FAILURE, "fopen failed");
 	}
 	
@@ -322,8 +321,7 @@ main(int argc, char *argv[])
 	}
 	
 	if (pclose(file) == -1) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
+		close_db(db);
 		cleanup();
 		err(EXIT_FAILURE, "pclose error");
 	}
@@ -343,8 +341,7 @@ main(int argc, char *argv[])
 	if (mflags.optimize)
 		optimize(db);
 	
-	sqlite3_close(db);
-	sqlite3_shutdown();
+	close_db(db);
 	cleanup();
 	return 0;
 }
@@ -488,8 +485,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
+		close_db(db);
 		errx(EXIT_FAILURE, "Could not query file cache");
 	}
 	
