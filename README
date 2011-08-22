@@ -1,34 +1,118 @@
-Unix systems have had a culture and one of the main reasons behind
-the long standing success of Unices has been to follow this culture
-and philosophy over the years. Part of this culture and philosophy
-is to provide documentation for each component of the Operating
-System, whether it is a command line utility, a system call, a
-library function, a configuration file or anything that should be
-documented to make the life of the end user easier. This documentation
-has been shipped with the base system in the form of Manual pages
-(man pages in short), which can be easily accessed using the 'man'
-command.  A couple of utilities are also provided to search the
-documentation easily. apropos(1) can be used to search for man
-pages. How apropos(1) works is very simple. The name section of
-the man pages has been indexed in a file (typically named whatis.db)
-and apropos(1) performs search on this file for the keywords
-specified by the user.
+1. INTRODUCTION
+    Unix systems have had a culture and one of the main reasons behind
+    the long standing success of Unix has been to follow this culture
+    and philosophy over the years. Part of this culture and philosophy
+    is to provide documentation for each component of the Operating
+    System, whether it is a command line utility, a system call, a
+    library function, a configuration file or anything that should be
+    documented to make the life of the end user easier. This documentation
+    has been primarly shipped in the form of Manual pages
+    (man pages in short), which can be easily accessed using the 'man'
+    command.  A couple of utilities are also provided to search the
+    documentation easily. apropos(1) can be used to search for man
+    pages. How apropos(1) works is very simple. The name section of
+    the man pages has been indexed in a file (typically named whatis.db)
+    and apropos(1) performs search on this file for the keywords
+    specified by the user.
 
-While apropos(1) was designed keeping in mind the resources (both
-hardware and software) available during the early days, but things
-have changed drastically over the time. Now we have the resources
-available and in the Google era it behooves us to rethink the design
-and implementation of apropos(1). It is now possible to implement
-apropos(1) in a better manner so as to allow more extensive and
-flexible searches and that too over the complete content of the
-man pages rather than limiting it to the name section. More often
-than not we are not sure of the exact keywords to search for and
-apropos(1) does not give us the right results (or no results at all)
-in which case we turn to Google.
+    While apropos(1) was designed keeping in mind the resources (both
+    hardware and software) available during the early days, but things
+    have changed drastically over the time. Now we have the resources
+    available and in the Google era it behooves us to rethink the design
+    and implementation of apropos(1). It is now possible to implement
+    apropos(1) in a better manner so as to allow more extensive and
+    flexible searches and that too over the complete content of the
+    man pages rather than limiting it to the name section. More often
+    than not we are not sure of the exact keywords to search for and
+    apropos(1) does not give us the right results (or no results at all)
+    in which case we turn to Google.
 
-The idea behind this project is to mend this problem by reimplementing
-apropos(1) to enable full text search capabilities and in the
-process enhancing and modifying other man utilities as required.
-We have decided to use the FTS engine of Sqlite [1] for this purpose.
+    The idea behind this project is to mend this problem by reimplementing
+    apropos(1) to enable full text search capabilities and in the
+    process enhancing and modifying other man utilities as required.
+    We have decided to use the FTS engine of Sqlite [1] for this purpose.
 
+2. REQUIREMENTS FOR BUILDING & RUNNING:
+    The project has been developed on NetBSD so I can only claim that it works
+    well on a NetBSD system (that too the current development snapshot). Though 
+    it should be possible to build it and run on other BSD systems with little 
+    or no changes. 
+    
+    Following are the requirements for building and running it on NetBSD:
+    2.1 -CURRENT version of NetBSD (or at least man pages from -CURRENT)
+    2.2 mdocml
+    
+    While for other BSDs like FreeBSD or DragonFlyBSD the requirements should be 
+    about same. Though I made a patch to man.c for adding a new option 'p' to 
+    man(1) which would print the search path for man pages in a new line separated 
+    format on stdout. That is required for building the Full Text Search Index 
+    using makemandb. And of course the Makefile might require some modifications.
+    
+    
+3. USING:
+    There are two command line utilities 'makemandb' and 'apropos'. You would 
+    first need to build the Full Text Search (FTS) Index using makemandb(1) and then 
+    you can use apropos(1) (the one provided by this project) to perform searches.
+    
+    3.1 makemandb: Simply running makemandb will build the FTS index and tell you 
+        the number of pages indexed. Some of the pages might not get indexed on 
+        the way which will be indicated by error messages on the screen but 
+        nothing to worry about that.
+        
+    NOTE: The default behavior of makemandb is incremental updation. That is to 
+        say it will try to add only those pages to the index which it did not 
+        have previously and also it will remove those pages from the index which 
+        are no more on the file system. Of course if there is no existing index 
+        it will build it from scratch.
+        
+        makemandb supports following options:
+        
+        [-f]: The option 'f' will tell makemandb(1) to prune the existing index
+        (if there exists one) and rebuild the database from scratch.
+        
+        [-l]: The option 'l' will tell makemand(1) to limit the indexing to only 
+        the NAME section of the man pages. This option can be used to mimic the 
+        behavior of the "classical apropos" although with improved search 
+        capabilities. This option might be useful if you want to save few MB of 
+        disk space.
+        
+        [-o]: The option  'o' is for optimizing the index. makemand(1) will try 
+        to optimize the FTS index for faster search performance and also it will 
+        optimize the storage of the data to optimize disk space usage.
+        
+    3.2 apropos: Once you have built the database you can fire apropos(1) and 
+        pass a query to do a search. For example:
+        $apropos "add a new user"
+        
+        apropos supports following options:
+        
+        [-1234569]: You can pass section numbers as options to apropos which 
+        will make apropos to search only within the specified set of sections.
+        
+        [-p]: By default apropos(1) will display the top 10 ranked results on 
+        stdout. So if you would like to see more results then use 'p'. It will 
+        allow apropos(1) to display all the results and also it will pipe the 
+        results to a pager (more(1)).
 
+4. OTHER DELIVERABLES:
+    Besides the two command line tools, I have also developed a very small 
+    library to allow and build a search application on top of the FTS index built 
+    by makemandb. It has following public functions:
+    
+    4.1 init_db(): To initialize a connection to the database.
+    
+    4.2 run_query(): To run a query as entered by the user and process the rows 
+    obtained in a callback function (apropos.c uses it).
+    
+    4.3 run_query_html(): Similar to run_query() but it formats the results 
+    obtained in the form of an HTML fragment. This can be used to build a CGI 
+    application to do searches from a browser.
+    
+    4.4 run_query_pager(): Similar to run_query_html but it formats the results 
+    so that the matching text appears highlighted when piped to a pager.
+    apropos.c uses it when the -p option is specified.
+    
+    4.5 close_db(): To close the database connection and release any resources.
+    
+For more detailed documentation you can read up the man pages of the individual 
+components.
