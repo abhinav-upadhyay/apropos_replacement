@@ -512,9 +512,9 @@ static void
 update_db(sqlite3 *db, struct mparse *mp)
 {
 	const char *sqlstr;
-	//const char *inner_sqlstr;
+	const char *inner_sqlstr;
 	sqlite3_stmt *stmt = NULL;
-//	sqlite3_stmt *inner_stmt = NULL;
+	sqlite3_stmt *inner_stmt = NULL;
 	char *file;
 	char *errmsg = NULL;
 	char *buf = NULL;
@@ -522,12 +522,12 @@ update_db(sqlite3 *db, struct mparse *mp)
 	char *sqlquery;
 	int new_count = 0;
 	int update_count = 0;
-	int md5_status;
-	int rc;//, idx;
+	int md5_status, count = 0;
+	int rc, idx;
 	dev_t device_cache;
 	ino_t inode_cache;
 	time_t mtime_cache;
-		
+	int link_count = 0;
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
 				" SELECT device, inode, mtime, file from mandb_meta";
 	
@@ -539,6 +539,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		count++;
 		device_cache = sqlite3_column_int64(stmt, 0);
 		inode_cache = sqlite3_column_int64(stmt, 1);
 		mtime_cache = sqlite3_column_int64(stmt, 2);
@@ -552,15 +553,23 @@ update_db(sqlite3 *db, struct mparse *mp)
 			/* The md5 is already present in the database, so simply update the 
 			 * metadata.
 			 */
-		/*else if (md5_status == 0) {
-			printf("Updating %s\n", file);
+		else if (md5_status == 0) {
+			struct stat sb;
+			stat(file, &sb);
+			if (!S_ISLNK(sb.st_mode)) {
+				free(buf);
+				link_count++;
+				continue;
+			}
+			
 			inner_sqlstr = "UPDATE mandb_meta SET device = :device, inode = :inode, "
-						"mtime = :mtime, file = :file WHERE md5_hash = :md5 "
+						"mtime = :mtime WHERE md5_hash = :md5 "
 						" AND file = :file2";
 			rc = sqlite3_prepare_v2(db, inner_sqlstr, -1, &inner_stmt, NULL);
 			if (rc != SQLITE_OK) {
 				warnx("%s", sqlite3_errmsg(db));
 				free(buf);
+				exit(1);
 				continue;
 			}
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":device");
@@ -580,12 +589,15 @@ update_db(sqlite3 *db, struct mparse *mp)
 				warnx("Could not update the meta data for %s", file);
 				free(buf);
 				sqlite3_finalize(inner_stmt);
+				exit(1);
 				continue;
 			}
-			else
+			else {
+				printf("Updating %s\n", file);
 				update_count++;
+			}
 			sqlite3_finalize(inner_stmt);
-		}*/
+		}
 		else if (md5_status == 1) {
 			/* The md5 was not present in the database, which means this is 
 			 * either a new file or an updated file. We should go ahead with 
@@ -624,12 +636,12 @@ update_db(sqlite3 *db, struct mparse *mp)
 	sqlite3_finalize(stmt);
 	
 	printf("%d new manual pages added\n"
-			"%d manual pages updated\n", new_count, update_count);
+			"%d manual pages updated\nlink count = %d\ntotal = %d\n", new_count, update_count, link_count, count);
 	
 	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
-		"WHERE md5_hash NOT IN (SELECT md5_hash FROM metadb.md5_cache)); "
-		"DELETE FROM mandb_meta WHERE md5_hash NOT IN (SELECT md5_hash FROM"
-		" metadb.md5_cache); "
+		"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
+		"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
+		" metadb.file_cache); "
 		"DROP TABLE metadb.file_cache; "
 		"DROP TABLE metadb.md5_cache";
 	
