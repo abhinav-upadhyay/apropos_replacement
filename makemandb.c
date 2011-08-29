@@ -549,6 +549,9 @@ update_db(sqlite3 *db, struct mparse *mp)
 			warnx("An error occurred in checking md5 value for file %s", file);
 			continue;
 		}
+			/* The md5 is already present in the database, so simply update the 
+			 * metadata.
+			 */
 		/*else if (md5_status == 0) {
 			printf("Updating %s\n", file);
 			inner_sqlstr = "UPDATE mandb_meta SET device = :device, inode = :inode, "
@@ -584,6 +587,10 @@ update_db(sqlite3 *db, struct mparse *mp)
 			sqlite3_finalize(inner_stmt);
 		}*/
 		else if (md5_status == 1) {
+			/* The md5 was not present in the database, which means this is 
+			 * either a new file or an updated file. We should go ahead with 
+			 * parsing.
+			 */
 			printf("Parsing: %s\n", file);
 			md5_hash = estrdup(buf);
 			file_path = estrdup(file);
