@@ -45,7 +45,7 @@ typedef struct makemandb_flags {
 	int limit;	// limit the indexing to only DESCRIPTION section
 } makemandb_flags;
 
-static char *check_md5(const char *, sqlite3 *, const char *);
+static int check_md5(const char *, sqlite3 *, const char *, char **);
 static void cleanup(void);
 static void get_section(const struct mdoc *, const struct man *);
 static int insert_into_db(sqlite3 *);
@@ -63,7 +63,7 @@ static void traversedir(const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *string);
 static void man_parse_section(enum man_sec, const struct man_node *);
 static void get_machine(const struct mdoc *);
-static void build_file_cache(sqlite3 *, const char *);
+static void build_file_cache(sqlite3 *, const char *, struct stat *);
 static void update_db(sqlite3 *, struct mparse *);
 static void usage(void);
 static void optimize(sqlite3 *);
@@ -83,6 +83,10 @@ static char *md5_hash = NULL;
 static char *section = NULL;
 static char *machine = NULL;
 static char *links = NULL; //all the links to a page in a space separated form
+static char *file_path = NULL;
+static dev_t device;
+static ino_t inode;
+static time_t mtime;
 static int page_type = MDOC; //Indicates the type of page: mdoc or man
 static makemandb_flags mflags;
 
@@ -284,6 +288,16 @@ main(int argc, char *argv[])
 	
 	if ((db = init_db(DB_CREATE)) == NULL)
 		errx(EXIT_FAILURE, "%s", "Could not initialize the database");
+
+	sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL, 
+				&errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		close_db(db);
+		exit(EXIT_FAILURE);
+	}
+		
 		
 	/* Call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL) {
@@ -367,7 +381,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	
 	/* If it is a regular file or a symlink, pass it to build_cache() */
 	if (S_ISREG(sb.st_mode) || S_ISLNK(sb.st_mode)) {
-		build_file_cache(db, file);
+		build_file_cache(db, file, &sb);
 		return;
 	}
 	
@@ -404,7 +418,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
  *	update_db(), once the database has been updated.
  */
 static void
-build_file_cache(sqlite3 *db, const char *file)
+build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 {
 	const char *sqlstr;
 	sqlite3_stmt *stmt = NULL;
@@ -413,36 +427,60 @@ build_file_cache(sqlite3 *db, const char *file)
 	char *errmsg = NULL;
 	assert(file != NULL);
 	
-	sqlstr = "CREATE TABLE IF NOT EXISTS file_cache(md5_hash, file PRIMARY KEY)"
-			"; CREATE INDEX IF NOT EXISTS index_file_cache_md5 ON file_cache "
-			"(md5_hash)";
+	device = sb->st_dev;
+	inode = sb->st_ino;
+	mtime = sb->st_mtime;
+	
+	sqlstr = "CREATE TABLE IF NOT EXISTS metadb.file_cache(device, inode, "
+				"mtime, file PRIMARY KEY); "
+			"CREATE TABLE IF NOT EXISTS metadb.md5_cache(md5_hash PRIMARY KEY); "
+			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_file_cache_dev ON "
+				"file_cache (device, inode)";
+			
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
+		close_db(db);
 		exit(EXIT_FAILURE);
 	}
 	
-	if ((md5 = check_md5(file, db, "file_cache")) == NULL) 
-		return;
-		
-	sqlstr = "INSERT INTO file_cache VALUES (:md5, :file)";
+	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode, :mtime, :file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		free(md5);
 		return;
 	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":md5");
-	rc = sqlite3_bind_text(stmt, idx, md5, -1, NULL);
+
+	idx = sqlite3_bind_parameter_index(stmt, ":device");
+	rc = sqlite3_bind_int64(stmt, idx, device);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		free(md5);
 		return;
 	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":inode");
+	rc = sqlite3_bind_int64(stmt, idx, inode);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		free(md5);
+		return;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":mtime");
+	rc = sqlite3_bind_int64(stmt, idx, mtime);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		free(md5);
+		return;
+	}
+
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":file");
 	rc = sqlite3_bind_text(stmt, idx, file, -1, NULL);
@@ -474,14 +512,24 @@ static void
 update_db(sqlite3 *db, struct mparse *mp)
 {
 	const char *sqlstr;
+	//const char *inner_sqlstr;
 	sqlite3_stmt *stmt = NULL;
-	int rc;
+//	sqlite3_stmt *inner_stmt = NULL;
 	char *file;
 	char *errmsg = NULL;
-	int count = 0;
-	
-	sqlstr = "SELECT file, md5_hash FROM file_cache WHERE md5_hash NOT IN "
-		"(SELECT md5_hash FROM mandb_md5)";
+	char *buf = NULL;
+	char *temp = NULL;
+	char *sqlquery;
+	int new_count = 0;
+	int update_count = 0;
+	int md5_status;
+	int rc;//, idx;
+	dev_t device_cache;
+	ino_t inode_cache;
+	time_t mtime_cache;
+		
+	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
+				" SELECT device, inode, mtime, file from mandb_meta";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -491,27 +539,92 @@ update_db(sqlite3 *db, struct mparse *mp)
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		file = (char *) sqlite3_column_text(stmt, 0);
-		md5_hash = estrdup((char *) sqlite3_column_text(stmt, 1));
-		printf("Parsing: %s\n", file);
-		begin_parse(file, mp);
-		if (insert_into_db(db) < 0) {
-			warnx("Error in indexing %s", file);
-			cleanup();
+		device_cache = sqlite3_column_int64(stmt, 0);
+		inode_cache = sqlite3_column_int64(stmt, 1);
+		mtime_cache = sqlite3_column_int64(stmt, 2);
+		file = (char *) sqlite3_column_text(stmt, 3);
+		md5_status = check_md5(file, db, "mandb_meta", &buf);
+		assert(buf != NULL);
+		if (md5_status == -1) {
+			warnx("An error occurred in checking md5 value for file %s", file);
+			continue;
 		}
-		else
-			count++;
+		/*else if (md5_status == 0) {
+			printf("Updating %s\n", file);
+			inner_sqlstr = "UPDATE mandb_meta SET device = :device, inode = :inode, "
+						"mtime = :mtime, file = :file WHERE md5_hash = :md5 "
+						" AND file = :file2";
+			rc = sqlite3_prepare_v2(db, inner_sqlstr, -1, &inner_stmt, NULL);
+			if (rc != SQLITE_OK) {
+				warnx("%s", sqlite3_errmsg(db));
+				free(buf);
+				continue;
+			}
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":device");
+			sqlite3_bind_int64(inner_stmt, idx, device_cache);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":inode");
+			sqlite3_bind_int64(inner_stmt, idx, inode_cache);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime");
+			sqlite3_bind_int64(inner_stmt, idx, mtime_cache);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":file");
+			sqlite3_bind_text(inner_stmt, idx, file, -1, NULL);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":md5");
+			sqlite3_bind_text(inner_stmt, idx, buf, -1, NULL);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":file2");
+			sqlite3_bind_text(inner_stmt, idx, file, -1, NULL);
+			rc = sqlite3_step(inner_stmt);
+			if (rc != SQLITE_DONE) {
+				warnx("Could not update the meta data for %s", file);
+				free(buf);
+				sqlite3_finalize(inner_stmt);
+				continue;
+			}
+			else
+				update_count++;
+			sqlite3_finalize(inner_stmt);
+		}*/
+		else if (md5_status == 1) {
+			printf("Parsing: %s\n", file);
+			md5_hash = estrdup(buf);
+			file_path = estrdup(file);
+			begin_parse(file, mp);
+			if (insert_into_db(db) < 0) {
+				warnx("Error in indexing %s", file);
+				cleanup();
+				continue;
+			}
+			else
+				new_count++;
+		}
+		if (check_md5(file, db, "metadb.md5_cache", &temp) == 1) {
+			easprintf(&sqlquery, "INSERT INTO metadb.md5_cache VALUES (\'%s\')", buf);
+			sqlite3_exec(db, sqlquery, NULL, NULL, &errmsg);
+			if (errmsg != NULL) {
+				warnx("Could not update temporary md5 cache for file: %s\n%s ", 
+				 file, errmsg);
+				free(errmsg);
+				free(buf);
+				free(temp);
+				free(sqlquery);
+				continue;
+			}
+			free(sqlquery);
+		}
+		free(buf);
+		free(temp);
 	}
 	
 	sqlite3_finalize(stmt);
 	
-	printf("%d new manual pages added\n", count);
+	printf("%d new manual pages added\n"
+			"%d manual pages updated\n", new_count, update_count);
 	
-	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_md5 "
-		"WHERE md5_hash NOT IN (SELECT md5_hash FROM file_cache)); "
-		"DELETE FROM mandb_md5 WHERE md5_hash NOT IN (SELECT md5_hash FROM"
-		" file_cache); "
-		"DROP TABLE file_cache";
+	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
+		"WHERE md5_hash NOT IN (SELECT md5_hash FROM metadb.md5_cache)); "
+		"DELETE FROM mandb_meta WHERE md5_hash NOT IN (SELECT md5_hash FROM"
+		" metadb.md5_cache); "
+		"DROP TABLE metadb.file_cache; "
+		"DROP TABLE metadb.md5_cache";
 	
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
@@ -1038,9 +1151,12 @@ cleanup(void)
 		free(links);
 	if (machine)
 		free(machine);
+	if (file_path)
+		free(file_path);
 		
 	name = name_desc = desc = md5_hash = section = lib = synopsis = return_vals =
-	 env = files = exit_status = diagnostics = errors = links = machine = NULL;
+	 env = files = exit_status = diagnostics = errors = links = machine = 
+	 file_path = NULL;
 }
 
 /*
@@ -1223,10 +1339,47 @@ insert_into_db(sqlite3 *db)
 	mandb_rowid = sqlite3_last_insert_rowid(db);
 		
 /*------------------------ Populate the mandb_md5 table-----------------------*/
-	sqlstr = "INSERT INTO mandb_md5 VALUES (:md5_hash, :id)";
+	sqlstr = "INSERT INTO mandb_meta VALUES (:device, :inode, :mtime, :file, "
+				":md5_hash, :id)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
+		cleanup();
+		return -1;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":device");
+	rc = sqlite3_bind_int64(stmt, idx, device);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":inode");
+	rc = sqlite3_bind_int64(stmt, idx, inode);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":mtime");
+	rc = sqlite3_bind_int64(stmt, idx, mtime);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup();
+		return -1;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":file");
+	rc = sqlite3_bind_text(stmt, idx, file_path, -1, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
 		cleanup();
 		return -1;
 	}
@@ -1304,8 +1457,8 @@ insert_into_db(sqlite3 *db)
  *		1. md5 hash of the file if the md5 hash does not exist in the table.
  *      2. NULL if the hash exists in the database or in case of an error
  */
-static char * 
-check_md5(const char *file, sqlite3 *db, const char *table)
+static int
+check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
 {
 	int rc = 0;
 	int idx = -1;
@@ -1313,40 +1466,41 @@ check_md5(const char *file, sqlite3 *db, const char *table)
 	sqlite3_stmt *stmt = NULL;
 
 	assert(file != NULL);
-	char *buf = MD5File(file, NULL);
-	if (buf == NULL) {
+	*buf = MD5File(file, NULL);
+	if (*buf == NULL) {
 		warn("md5 failed: %s", file);
-		return NULL;
+		return -1;
 	}
 	
 	easprintf(&sqlstr, "SELECT * from %s WHERE md5_hash = :md5_hash", table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		free(sqlstr);
-		free(buf);
-		return NULL;
+		free(*buf);
+		*buf = NULL;
+		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
-	rc = sqlite3_bind_text(stmt, idx, buf, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, *buf, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
 		free(sqlstr);
-		free(buf);
-		return NULL;
+		free(*buf);
+		*buf = NULL;
+		return -1;
 	}
 	
 	if (sqlite3_step(stmt) == SQLITE_ROW) {
 		sqlite3_finalize(stmt);	
 		free(sqlstr);
-		free(buf);
-		return NULL;
+		return 0;
 	}
 	
 	sqlite3_finalize(stmt);
 	free(sqlstr);
-	return buf;
+	return 1;
 }
 
 /* Optimize the index for faster search */
