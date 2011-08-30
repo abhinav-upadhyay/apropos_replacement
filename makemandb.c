@@ -1453,7 +1453,7 @@ insert_into_db(sqlite3 *db)
  *  Return values:
  *		-1: If an error occurs somewhere and sets the md5 return buffer to NULL.
  *		0: If the md5 hash does not exist in the table.
- *      1: If the hash exists in the database.
+ *		1: If the hash exists in the database.
  */
 static int
 check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
