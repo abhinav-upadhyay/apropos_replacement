@@ -69,32 +69,32 @@ typedef struct mandb_rec {
 } mandb_rec;
 
 static int check_md5(const char *, sqlite3 *, const char *, char **);
-static void cleanup(struct mandb_rec *);
-static void get_section(const struct mdoc *, const struct man *, struct mandb_rec *);
-static int insert_into_db(sqlite3 *, struct mandb_rec *);
-static	void begin_parse(const char *, struct mparse *, struct mandb_rec *);
-static void pmdoc_node(const struct mdoc_node *, struct mandb_rec *);
-static void pmdoc_Nm(const struct mdoc_node *, struct mandb_rec *);
-static void pmdoc_Nd(const struct mdoc_node *, struct mandb_rec *);
-static void pmdoc_Sh(const struct mdoc_node *, struct mandb_rec *);
-static void pman_node(const struct man_node *n, struct mandb_rec *);
+static void cleanup(mandb_rec *);
+static void get_section(const struct mdoc *, const struct man *, mandb_rec *);
+static int insert_into_db(sqlite3 *, mandb_rec *);
+static	void begin_parse(const char *, struct mparse *, mandb_rec *);
+static void pmdoc_node(const struct mdoc_node *, mandb_rec *);
+static void pmdoc_Nm(const struct mdoc_node *, mandb_rec *);
+static void pmdoc_Nd(const struct mdoc_node *, mandb_rec *);
+static void pmdoc_Sh(const struct mdoc_node *, mandb_rec *);
+static void pman_node(const struct man_node *n, mandb_rec *);
 static void pman_parse_node(const struct man_node *, char **);
-static void pman_parse_name(const struct man_node *, struct mandb_rec *);
-static void pman_sh(const struct man_node *, struct mandb_rec *);
-static void pman_block(const struct man_node *, struct mandb_rec *);
+static void pman_parse_name(const struct man_node *, mandb_rec *);
+static void pman_sh(const struct man_node *, mandb_rec *);
+static void pman_block(const struct man_node *, mandb_rec *);
 static void traversedir(const char *, sqlite3 *, struct mparse *);
-static void mdoc_parse_section(enum mdoc_sec, const char *string, struct mandb_rec *);
-static void man_parse_section(enum man_sec, const struct man_node *, struct mandb_rec *);
-static void get_machine(const struct mdoc *, struct mandb_rec *);
+static void mdoc_parse_section(enum mdoc_sec, const char *string, mandb_rec *);
+static void man_parse_section(enum man_sec, const struct man_node *, mandb_rec *);
+static void get_machine(const struct mdoc *, mandb_rec *);
 static void build_file_cache(sqlite3 *, const char *, struct stat *);
-static void update_db(sqlite3 *, struct mparse *, struct mandb_rec *);
+static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 static void usage(void);
 static void optimize(sqlite3 *);
 
 static makemandb_flags mflags;
 
-typedef	void (*pman_nf)(const struct man_node *n, struct mandb_rec *);
-typedef	void (*pmdoc_nf)(const struct mdoc_node *n, struct mandb_rec *);
+typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
+typedef	void (*pmdoc_nf)(const struct mdoc_node *n, mandb_rec *);
 static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Ap */
 	NULL, /* Dd */
@@ -448,7 +448,8 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	ino_t inode_cache = sb->st_ino;
 	time_t mtime_cache = sb->st_mtime;
 
-	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode, :mtime, :file)";
+	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode, :mtime, "
+				":file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
@@ -500,7 +501,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
  *	file_cache.
  */
 static void
-update_db(sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
+update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 {
 	const char *sqlstr;
 	const char *inner_sqlstr;
@@ -514,7 +515,7 @@ update_db(sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
 	int rc, idx;
 
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
-				" SELECT device, inode, mtime, file from mandb_meta";
+			" SELECT device, inode, mtime, file from mandb_meta";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -610,10 +611,10 @@ update_db(sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
 	sqlite3_finalize(stmt);
 	
 	printf("Total Number of new or updated pages enountered = %d\n"
-			"Total number of pages that were successfully indexed = %d\n"
-			"Total number of pages that could not be indexed due to parsing "
-			"errors = %d\n",
-			total_count, new_count, err_count);
+		"Total number of pages that were successfully indexed = %d\n"
+		"Total number of pages that could not be indexed due to parsing "
+		"errors = %d\n",
+		total_count, new_count, err_count);
 	
 	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
 				"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
@@ -636,7 +637,7 @@ update_db(sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
  *  parses the man page using libmandoc
  */
 static void
-begin_parse(const char *file, struct mparse *mp, struct mandb_rec *rec)
+begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 {
 	struct mdoc *mdoc;
 	struct man *man;
@@ -671,7 +672,7 @@ begin_parse(const char *file, struct mparse *mp, struct mandb_rec *rec)
  *  (Which should be the first character of the string).
  */
 static void
-get_section(const struct mdoc *md, const struct man *m, struct mandb_rec *rec)
+get_section(const struct mdoc *md, const struct man *m, mandb_rec *rec)
 {
 	rec->section = emalloc(2);
 	if (md) {
@@ -690,7 +691,7 @@ get_section(const struct mdoc *md, const struct man *m, struct mandb_rec *rec)
  *  Extracts the machine architecture information if available.
  */
 static void
-get_machine(const struct mdoc *md, struct mandb_rec *rec)
+get_machine(const struct mdoc *md, mandb_rec *rec)
 {
 	if (md == NULL)
 		return;
@@ -700,7 +701,7 @@ get_machine(const struct mdoc *md, struct mandb_rec *rec)
 }
 
 static void
-pmdoc_node(const struct mdoc_node *n, struct mandb_rec *rec)
+pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
 {
 	
 	if (n == NULL)
@@ -730,7 +731,7 @@ pmdoc_node(const struct mdoc_node *n, struct mandb_rec *rec)
  *  Extracts the Name of the manual page from the .Nm macro
  */
 static void
-pmdoc_Nm(const struct mdoc_node *n, struct mandb_rec *rec)
+pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 {
 	if (n->sec == SEC_NAME) {
 		for (n = n->child; n; n = n->next) {
@@ -745,7 +746,7 @@ pmdoc_Nm(const struct mdoc_node *n, struct mandb_rec *rec)
  *  Extracts the one line description of the man page from the .Nd macro
  */
 static void
-pmdoc_Nd(const struct mdoc_node *n, struct mandb_rec *rec)
+pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
@@ -763,7 +764,7 @@ pmdoc_Nd(const struct mdoc_node *n, struct mandb_rec *rec)
  *  Extracts the complete DESCRIPTION section of the man page
  */
 static void
-pmdoc_Sh(const struct mdoc_node *n, struct mandb_rec *rec)
+pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 {
 	for(n = n->child; n; n = n->next) {
 		if (n->type == MDOC_TEXT) {
@@ -793,7 +794,7 @@ pmdoc_Sh(const struct mdoc_node *n, struct mandb_rec *rec)
  *  The function appends string to the global section buffer and returns.
  */
 static void
-mdoc_parse_section(enum mdoc_sec sec, const char *string, struct mandb_rec *rec)
+mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 {
 	/* If the user specified the 'l' flag, then parse and store only the
 	 * NAME section. Ignore the rest.
@@ -835,7 +836,7 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, struct mandb_rec *rec)
 }
 
 static void
-pman_node(const struct man_node *n, struct mandb_rec *rec)
+pman_node(const struct man_node *n, mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
@@ -866,7 +867,7 @@ pman_node(const struct man_node *n, struct mandb_rec *rec)
  *  variable.
  */
 static void
-pman_parse_name(const struct man_node *n, struct mandb_rec *rec)
+pman_parse_name(const struct man_node *n, mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
@@ -883,7 +884,7 @@ pman_parse_name(const struct man_node *n, struct mandb_rec *rec)
  *  section
  */
 static void
-pman_block(const struct man_node *n, struct mandb_rec *rec)
+pman_block(const struct man_node *n, mandb_rec *rec)
 {
 // empty stub
 }
@@ -903,7 +904,7 @@ pman_block(const struct man_node *n, struct mandb_rec *rec)
  *     function, passing the enum corresponding that section.
  */
 static void
-pman_sh(const struct man_node *n, struct mandb_rec *rec)
+pman_sh(const struct man_node *n, mandb_rec *rec)
 {
 	const struct man_node *head;
 	int sz;
@@ -964,12 +965,14 @@ pman_sh(const struct man_node *n, struct mandb_rec *rec)
 			}
 			
 			
-			/* Now remove the name(s) of the man page(s) so that we are left with
-			 * the one line description.
-			 * So we know we have passed over the NAME if we:
-			 * 1. encounter a space not preceeded by a comma and not succeeded by a \\
+			/* Now remove the name(s) of the man page(s) so that we are left 
+			 * with the one line description.
+			 * So we know we have passed over the list of names if we:
+			 * 1. encounter a space not preceeded by a comma and not succeeded 
+			 *		by a \\
 			 *    e.g.: foo-bar This is a simple foo-bar utility.
-			 * 2. enconter a '-' which is preceeded by a '\' and succeeded by a space
+			 * 2. enconter a '-' which is preceeded by a '\' and succeeded by a 
+			 *		space
 			 *    e.g.: foo-bar \- This is a simple foo-bar utility
 			 *          foo-bar, blah-blah \- foo-bar with blah-blah
 			 *          foo-bar \-\- another foo-bar
@@ -980,7 +983,8 @@ pman_sh(const struct man_node *n, struct mandb_rec *rec)
 			char prev = *rec->name_desc++;
 			while (*(rec->name_desc)) {
 				/* case 1 */
-				if (*(rec->name_desc) == ' ' && prev != ',' && *(rec->name_desc + 1) != '\\') {
+				if (*(rec->name_desc) == ' ' && prev != ',' && 
+					*(rec->name_desc + 1) != '\\') {
 					rec->name_desc++;
 					/* Well, there might be a '-' without a leading '\\', 
 					 * get over it 
@@ -1023,9 +1027,10 @@ pman_sh(const struct man_node *n, struct mandb_rec *rec)
 		else if (strcmp((const char *) head->string, "RETURN VALUE") == 0
 			|| strcmp((const char *)head->string, "RETURN VALUES") == 0
 			|| (strcmp((const char *)head->string, "RETURN") == 0 && 
-			head->next->type == MAN_TEXT && (strcmp((const char *)head->next->string, "VALUE") == 0 ||
+			head->next->type == MAN_TEXT && 
+			(strcmp((const char *)head->next->string, "VALUE") == 0 ||
 			strcmp((const char *)head->next->string, "VALUES") == 0)))
-				man_parse_section(MANSEC_RETURN_VALUES, n, rec);
+			man_parse_section(MANSEC_RETURN_VALUES, n, rec);
 
 		/* EXIT STATUS section can also be specified all on one line or on two
 		 * separate lines.
@@ -1067,7 +1072,7 @@ pman_parse_node(const struct man_node *n, char **s)
  * concatenate the content from that section into the buffer for that section.
  */
 static void
-man_parse_section(enum man_sec sec, const struct man_node *n, struct mandb_rec *rec)
+man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 {
 	/* If the user sepecified the 'l' flag then just parse the NAME
 	 *  section, ignore the rest.
@@ -1114,7 +1119,7 @@ man_parse_section(enum man_sec sec, const struct man_node *n, struct mandb_rec *
  *  cleans up the global buffers
  */
 static void
-cleanup(struct mandb_rec *rec)
+cleanup(mandb_rec *rec)
 {
 	free(rec->name);
 	free(rec->name_desc);
@@ -1133,9 +1138,6 @@ cleanup(struct mandb_rec *rec)
 	free(rec->machine);
 	free(rec->file_path);
 		
-/*	name = name_desc = desc = md5_hash = section = lib = synopsis = return_vals =
-	 env = files = exit_status = diagnostics = errors = links = machine = 
-	 file_path = NULL;*/
 	 memset(rec, 0, sizeof(*rec));
 }
 
@@ -1146,7 +1148,7 @@ cleanup(struct mandb_rec *rec)
  *  error. Otherwise, store the data in the database and return 0
  */
 static int
-insert_into_db(sqlite3 *db, struct mandb_rec *rec)
+insert_into_db(sqlite3 *db, mandb_rec *rec)
 {
 	int rc = 0;
 	int idx = -1;
@@ -1165,10 +1167,10 @@ insert_into_db(sqlite3 *db, struct mandb_rec *rec)
 		return -1;
 	}
 
-	/* In case of a mdoc page: (sorry, no better place to put this block of code)
-	 *  parse the comma separated list of names of man pages, the first name will
-	 *  be stored in the mandb table, rest will be treated as links and put in the
-	 *  mandb_links table
+	/* In case of a mdoc page: (sorry, no better place to put this code)
+	 *  parse the comma separated list of names of man pages, the first name 
+	 *  will be stored in the mandb table, rest will be treated as links and put
+	 *  in the mandb_links table
 	 */	
 	if (rec->page_type == MDOC) {
 		rec->links = strdup(rec->name);
