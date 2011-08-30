@@ -82,7 +82,7 @@ static void pman_parse_node(const struct man_node *, char **);
 static void pman_parse_name(const struct man_node *, struct mandb_rec *);
 static void pman_sh(const struct man_node *, struct mandb_rec *);
 static void pman_block(const struct man_node *, struct mandb_rec *);
-static void traversedir(const char *, sqlite3 *, struct mparse *, struct mandb_rec *);
+static void traversedir(const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *string, struct mandb_rec *);
 static void man_parse_section(enum man_sec, const struct man_node *, struct mandb_rec *);
 static void get_machine(const struct mdoc *, struct mandb_rec *);
@@ -347,7 +347,7 @@ main(int argc, char *argv[])
 			line = temp;
 		}
 		/* Traverse the man page directories and parse the pages */
-		traversedir(line, db, mp, &rec);
+		traversedir(line, db, mp);
 		
 		if (temp != NULL) {
 			free(temp);
@@ -387,7 +387,7 @@ main(int argc, char *argv[])
  *  in the way to build_file_cache()
  */
 static void
-traversedir(const char *file, sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
+traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 {
 	struct stat sb;
 	struct dirent *dirp;
@@ -421,7 +421,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp, struct mandb_rec *
 						warn(NULL);
 					continue;
 				}
-				traversedir(buf, db, mp, rec);
+				traversedir(buf, db, mp);
 				free(buf);
 			}
 		}
@@ -555,7 +555,6 @@ update_db(sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
 			if (rc != SQLITE_OK) {
 				warnx("%s", sqlite3_errmsg(db));
 				free(buf);
-				exit(1);
 				continue;
 			}
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":device");
