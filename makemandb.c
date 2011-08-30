@@ -1447,9 +1447,13 @@ insert_into_db(sqlite3 *db)
  *  Generates the md5 hash of the file and checks if it already doesn't exist in 
  *  the table passed as the 3rd parameter. This function is being used to avoid 
  *  hardlinks.
- *  Return values: 
- *		1. md5 hash of the file if the md5 hash does not exist in the table.
- *      2. NULL if the hash exists in the database or in case of an error
+ *  On successful completion it will also set the value of the fourth parameter 
+ *  to the md5 hash of the file which was computed previously. It is the duty of
+ *  the caller to free this buffer.
+ *  Return values:
+ *		-1: If an error occurs somewhere and sets the md5 return buffer to NULL.
+ *		0: If the md5 hash does not exist in the table.
+ *      1: If the hash exists in the database.
  */
 static int
 check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
