@@ -45,53 +45,56 @@ typedef struct makemandb_flags {
 	int limit;	// limit the indexing to only DESCRIPTION section
 } makemandb_flags;
 
+typedef struct mandb_rec {
+	char *name;	// for storing the name of the man page
+	char *name_desc; // for storing the one line description (.Nd)
+	char *desc; // for storing the DESCRIPTION section
+	char *lib; // for the LIBRARY section
+	char *synopsis; // for the SYNOPSIS section
+	char *return_vals; // RETURN VALUES
+	char *env; // ENVIRONMENT
+	char *files; // FILES
+	char *exit_status; // EXIT STATUS
+	char *diagnostics; // DIAGNOSTICS
+	char *errors; // ERRORS
+	char *md5_hash;
+	char *section;
+	char *machine;
+	char *links; //all the links to a page in a space separated form
+	char *file_path;
+	dev_t device;
+	ino_t inode;
+	time_t mtime;
+	int page_type; //Indicates the type of page: mdoc or man
+} mandb_rec;
+
 static int check_md5(const char *, sqlite3 *, const char *, char **);
-static void cleanup(void);
-static void get_section(const struct mdoc *, const struct man *);
-static int insert_into_db(sqlite3 *);
-static	void begin_parse(const char *, struct mparse *);
-static void pmdoc_node(const struct mdoc_node *);
-static void pmdoc_Nm(const struct mdoc_node *);
-static void pmdoc_Nd(const struct mdoc_node *);
-static void pmdoc_Sh(const struct mdoc_node *);
-static void pman_node(const struct man_node *n);
+static void cleanup(struct mandb_rec *);
+static void get_section(const struct mdoc *, const struct man *, struct mandb_rec *);
+static int insert_into_db(sqlite3 *, struct mandb_rec *);
+static	void begin_parse(const char *, struct mparse *, struct mandb_rec *);
+static void pmdoc_node(const struct mdoc_node *, struct mandb_rec *);
+static void pmdoc_Nm(const struct mdoc_node *, struct mandb_rec *);
+static void pmdoc_Nd(const struct mdoc_node *, struct mandb_rec *);
+static void pmdoc_Sh(const struct mdoc_node *, struct mandb_rec *);
+static void pman_node(const struct man_node *n, struct mandb_rec *);
 static void pman_parse_node(const struct man_node *, char **);
-static void pman_parse_name(const struct man_node *);
-static void pman_sh(const struct man_node *);
-static void pman_block(const struct man_node *);
-static void traversedir(const char *, sqlite3 *, struct mparse *);
-static void mdoc_parse_section(enum mdoc_sec, const char *string);
-static void man_parse_section(enum man_sec, const struct man_node *);
-static void get_machine(const struct mdoc *);
+static void pman_parse_name(const struct man_node *, struct mandb_rec *);
+static void pman_sh(const struct man_node *, struct mandb_rec *);
+static void pman_block(const struct man_node *, struct mandb_rec *);
+static void traversedir(const char *, sqlite3 *, struct mparse *, struct mandb_rec *);
+static void mdoc_parse_section(enum mdoc_sec, const char *string, struct mandb_rec *);
+static void man_parse_section(enum man_sec, const struct man_node *, struct mandb_rec *);
+static void get_machine(const struct mdoc *, struct mandb_rec *);
 static void build_file_cache(sqlite3 *, const char *, struct stat *);
-static void update_db(sqlite3 *, struct mparse *);
+static void update_db(sqlite3 *, struct mparse *, struct mandb_rec *);
 static void usage(void);
 static void optimize(sqlite3 *);
 
-static char *name = NULL;	// for storing the name of the man page
-static char *name_desc = NULL; // for storing the one line description (.Nd)
-static char *desc = NULL; // for storing the DESCRIPTION section
-static char *lib = NULL; // for the LIBRARY section
-static char *synopsis = NULL; // for the SYNOPSIS section
-static char *return_vals = NULL; // RETURN VALUES
-static char *env = NULL; // ENVIRONMENT
-static char *files = NULL; // FILES
-static char *exit_status = NULL; // EXIT STATUS
-static char *diagnostics = NULL; // DIAGNOSTICS
-static char *errors = NULL; // ERRORS
-static char *md5_hash = NULL;
-static char *section = NULL;
-static char *machine = NULL;
-static char *links = NULL; //all the links to a page in a space separated form
-static char *file_path = NULL;
-static dev_t device;
-static ino_t inode;
-static time_t mtime;
-static int page_type = MDOC; //Indicates the type of page: mdoc or man
 static makemandb_flags mflags;
 
-typedef	void (*pman_nf)(const struct man_node *n);
-typedef	void (*pmdoc_nf)(const struct mdoc_node *n);
+typedef	void (*pman_nf)(const struct man_node *n, struct mandb_rec *);
+typedef	void (*pmdoc_nf)(const struct mdoc_node *n, struct mandb_rec *);
 static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Ap */
 	NULL, /* Dd */
@@ -266,6 +269,9 @@ main(int argc, char *argv[])
 	struct mparse *mp = NULL;
 	sqlite3 *db;
 	size_t len;
+	struct mandb_rec rec;
+	
+	memset(&rec, 0, sizeof(rec));
 	
 	while ((ch = getopt(argc, argv, "flo")) != -1) {
 		switch (ch) {
@@ -341,7 +347,7 @@ main(int argc, char *argv[])
 			line = temp;
 		}
 		/* Traverse the man page directories and parse the pages */
-		traversedir(line, db, mp);
+		traversedir(line, db, mp, &rec);
 		
 		if (temp != NULL) {
 			free(temp);
@@ -351,11 +357,11 @@ main(int argc, char *argv[])
 	
 	if (pclose(file) == -1) {
 		close_db(db);
-		cleanup();
+		cleanup(&rec);
 		err(EXIT_FAILURE, "pclose error");
 	}
 	
-	update_db(db, mp);
+	update_db(db, mp, &rec);
 	mparse_free(mp);
 	
 	/* Commit the transaction */
@@ -363,7 +369,7 @@ main(int argc, char *argv[])
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
-		cleanup();
+		cleanup(&rec);
 		exit(EXIT_FAILURE);
 	}
 	
@@ -371,7 +377,7 @@ main(int argc, char *argv[])
 		optimize(db);
 	
 	close_db(db);
-	cleanup();
+	cleanup(&rec);
 	return 0;
 }
 
@@ -381,7 +387,7 @@ main(int argc, char *argv[])
  *  in the way to build_file_cache()
  */
 static void
-traversedir(const char *file, sqlite3 *db, struct mparse *mp)
+traversedir(const char *file, sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
 {
 	struct stat sb;
 	struct dirent *dirp;
@@ -415,7 +421,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 						warn(NULL);
 					continue;
 				}
-				traversedir(buf, db, mp);
+				traversedir(buf, db, mp, rec);
 				free(buf);
 			}
 		}
@@ -438,11 +444,10 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	sqlite3_stmt *stmt = NULL;
 	int rc, idx;
 	assert(file != NULL);
-	
-	device = sb->st_dev;
-	inode = sb->st_ino;
-	mtime = sb->st_mtime;
-	
+	dev_t device_cache = sb->st_dev;
+	ino_t inode_cache = sb->st_ino;
+	time_t mtime_cache = sb->st_mtime;
+
 	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode, :mtime, :file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -451,7 +456,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":device");
-	rc = sqlite3_bind_int64(stmt, idx, device);
+	rc = sqlite3_bind_int64(stmt, idx, device_cache);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -459,7 +464,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":inode");
-	rc = sqlite3_bind_int64(stmt, idx, inode);
+	rc = sqlite3_bind_int64(stmt, idx, inode_cache);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -467,7 +472,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":mtime");
-	rc = sqlite3_bind_int64(stmt, idx, mtime);
+	rc = sqlite3_bind_int64(stmt, idx, mtime_cache);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -495,7 +500,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
  *	file_cache.
  */
 static void
-update_db(sqlite3 *db, struct mparse *mp)
+update_db(sqlite3 *db, struct mparse *mp, struct mandb_rec *rec)
 {
 	const char *sqlstr;
 	const char *inner_sqlstr;
@@ -507,9 +512,6 @@ update_db(sqlite3 *db, struct mparse *mp)
 	int new_count = 0, total_count = 0, err_count = 0;
 	int md5_status;
 	int rc, idx;
-	dev_t device_cache;
-	ino_t inode_cache;
-	time_t mtime_cache;
 
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
 				" SELECT device, inode, mtime, file from mandb_meta";
@@ -523,9 +525,9 @@ update_db(sqlite3 *db, struct mparse *mp)
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		total_count++;
-		device_cache = sqlite3_column_int64(stmt, 0);
-		inode_cache = sqlite3_column_int64(stmt, 1);
-		mtime_cache = sqlite3_column_int64(stmt, 2);
+		rec->device = sqlite3_column_int64(stmt, 0);
+		rec->inode = sqlite3_column_int64(stmt, 1);
+		rec->mtime = sqlite3_column_int64(stmt, 2);
 		file = (char *) sqlite3_column_text(stmt, 3);
 		md5_status = check_md5(file, db, "mandb_meta", &buf);
 		assert(buf != NULL);
@@ -557,21 +559,21 @@ update_db(sqlite3 *db, struct mparse *mp)
 				continue;
 			}
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":device");
-			sqlite3_bind_int64(inner_stmt, idx, device_cache);
+			sqlite3_bind_int64(inner_stmt, idx, rec->device);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":inode");
-			sqlite3_bind_int64(inner_stmt, idx, inode_cache);
+			sqlite3_bind_int64(inner_stmt, idx, rec->inode);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime");
-			sqlite3_bind_int64(inner_stmt, idx, mtime_cache);
+			sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":md5");
 			sqlite3_bind_text(inner_stmt, idx, buf, -1, NULL);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":file");
 			sqlite3_bind_text(inner_stmt, idx, file, -1, NULL);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":device2");
-			sqlite3_bind_int64(inner_stmt, idx, device_cache);
+			sqlite3_bind_int64(inner_stmt, idx, rec->device);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":inode2");
-			sqlite3_bind_int64(inner_stmt, idx, inode_cache);
+			sqlite3_bind_int64(inner_stmt, idx, rec->inode);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime2");
-			sqlite3_bind_int64(inner_stmt, idx, mtime_cache);
+			sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
 
 			rc = sqlite3_step(inner_stmt);
 			if (rc != SQLITE_DONE) {
@@ -592,12 +594,12 @@ update_db(sqlite3 *db, struct mparse *mp)
 			 * parsing.
 			 */
 			printf("Parsing: %s\n", file);
-			md5_hash = buf;
-			file_path = estrdup(file);	//freed by insert_into_db itself.
-			begin_parse(file, mp);
-			if (insert_into_db(db) < 0) {
+			rec->md5_hash = buf;
+			rec->file_path = estrdup(file);	//freed by insert_into_db itself.
+			begin_parse(file, mp, rec);
+			if (insert_into_db(db, rec) < 0) {
 				warnx("Error in indexing %s", file);
-				cleanup();
+				cleanup(rec);
 				err_count++;
 				continue;
 			}
@@ -635,7 +637,7 @@ update_db(sqlite3 *db, struct mparse *mp)
  *  parses the man page using libmandoc
  */
 static void
-begin_parse(const char *file, struct mparse *mp)
+begin_parse(const char *file, struct mparse *mp, struct mandb_rec *rec)
 {
 	struct mdoc *mdoc;
 	struct man *man;
@@ -652,15 +654,15 @@ begin_parse(const char *file, struct mparse *mp)
 		return;
 	}
 
-	get_machine(mdoc);
-	get_section(mdoc, man);
+	get_machine(mdoc, rec);
+	get_section(mdoc, man, rec);
 	if (mdoc) {
-		page_type = MDOC;
-		pmdoc_node(mdoc_node(mdoc));
+		rec->page_type = MDOC;
+		pmdoc_node(mdoc_node(mdoc), rec);
 	}
 	else {
-		page_type = MAN;
-		pman_node(man_node(man));
+		rec->page_type = MAN;
+		pman_node(man_node(man), rec);
 	}
 }
 
@@ -670,18 +672,18 @@ begin_parse(const char *file, struct mparse *mp)
  *  (Which should be the first character of the string).
  */
 static void
-get_section(const struct mdoc *md, const struct man *m)
+get_section(const struct mdoc *md, const struct man *m, struct mandb_rec *rec)
 {
-	section = emalloc(2);
+	rec->section = emalloc(2);
 	if (md) {
 		const struct mdoc_meta *md_meta = mdoc_meta(md);
-		memcpy(section, md_meta->msec, 1);
+		memcpy(rec->section, md_meta->msec, 1);
 	}
 	else if (m) {
 		const struct man_meta *m_meta = man_meta(m);
-		memcpy(section, m_meta->msec, 1);
+		memcpy(rec->section, m_meta->msec, 1);
 	}
-	section[1] = '\0';
+	rec->section[1] = '\0';
 }
 
 /*
@@ -689,17 +691,17 @@ get_section(const struct mdoc *md, const struct man *m)
  *  Extracts the machine architecture information if available.
  */
 static void
-get_machine(const struct mdoc *md)
+get_machine(const struct mdoc *md, struct mandb_rec *rec)
 {
 	if (md == NULL)
 		return;
 	const struct mdoc_meta *md_meta = mdoc_meta(md);
 	if (md_meta->arch)
-		machine = estrdup(md_meta->arch);
+		rec->machine = estrdup(md_meta->arch);
 }
 
 static void
-pmdoc_node(const struct mdoc_node *n)
+pmdoc_node(const struct mdoc_node *n, struct mandb_rec *rec)
 {
 	
 	if (n == NULL)
@@ -714,14 +716,14 @@ pmdoc_node(const struct mdoc_node *n)
 		if (mdocs[n->tok] == NULL)
 			break;
 
-		(*mdocs[n->tok])(n);
+		(*mdocs[n->tok])(n, rec);
 		
 	default:
 		break;
 	}
 
-	pmdoc_node(n->child);
-	pmdoc_node(n->next);
+	pmdoc_node(n->child, rec);
+	pmdoc_node(n->next, rec);
 }
 
 /*
@@ -729,12 +731,12 @@ pmdoc_node(const struct mdoc_node *n)
  *  Extracts the Name of the manual page from the .Nm macro
  */
 static void
-pmdoc_Nm(const struct mdoc_node *n)
+pmdoc_Nm(const struct mdoc_node *n, struct mandb_rec *rec)
 {
 	if (n->sec == SEC_NAME) {
 		for (n = n->child; n; n = n->next) {
 			if (n->type == MDOC_TEXT)
-				concat(&name, n->string, strlen(n->string));
+				concat(&rec->name, n->string, strlen(n->string));
 		}
 	}
 }
@@ -744,17 +746,17 @@ pmdoc_Nm(const struct mdoc_node *n)
  *  Extracts the one line description of the man page from the .Nd macro
  */
 static void
-pmdoc_Nd(const struct mdoc_node *n)
+pmdoc_Nd(const struct mdoc_node *n, struct mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
 	if (n->type == MDOC_TEXT) 
-		concat(&name_desc, n->string, strlen(n->string));
+		concat(&(rec->name_desc), n->string, strlen(n->string));
 	
 	if (n->child)
-		pmdoc_Nd(n->child);
+		pmdoc_Nd(n->child, rec);
 	if(n->next)
-		pmdoc_Nd(n->next);
+		pmdoc_Nd(n->next, rec);
 }
 
 /*
@@ -762,21 +764,21 @@ pmdoc_Nd(const struct mdoc_node *n)
  *  Extracts the complete DESCRIPTION section of the man page
  */
 static void
-pmdoc_Sh(const struct mdoc_node *n)
+pmdoc_Sh(const struct mdoc_node *n, struct mandb_rec *rec)
 {
 	for(n = n->child; n; n = n->next) {
 		if (n->type == MDOC_TEXT) {
-			mdoc_parse_section(n->sec, n->string);
+			mdoc_parse_section(n->sec, n->string, rec);
 		}
 		else { 
 			/* On encountering a .Nm macro, substitute it with it's previously
 			 * cached value of the argument
 			 */
-			if (mdocs[n->tok] == pmdoc_Nm && name != NULL)
-				mdoc_parse_section(n->sec, name);
+			if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL)
+				mdoc_parse_section(n->sec, rec->name, rec);
 			/* otherwise call pmdoc_Sh again to handle the nested macros */
 			else
-				pmdoc_Sh(n);
+				pmdoc_Sh(n, rec);
 			
 		}
 	}
@@ -792,7 +794,7 @@ pmdoc_Sh(const struct mdoc_node *n)
  *  The function appends string to the global section buffer and returns.
  */
 static void
-mdoc_parse_section(enum mdoc_sec sec, const char *string)
+mdoc_parse_section(enum mdoc_sec sec, const char *string, struct mandb_rec *rec)
 {
 	/* If the user specified the 'l' flag, then parse and store only the
 	 * NAME section. Ignore the rest.
@@ -802,39 +804,39 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string)
 
 	switch (sec) {
 		case SEC_LIBRARY:
-			concat(&lib, string, strlen(string));
+			concat(&rec->lib, string, strlen(string));
 			break;
 		case SEC_SYNOPSIS:
-			concat(&synopsis, string, strlen(string));
+			concat(&rec->synopsis, string, strlen(string));
 			break;
 		case SEC_RETURN_VALUES:
-			concat(&return_vals, string, strlen(string));
+			concat(&rec->return_vals, string, strlen(string));
 			break;
 		case SEC_ENVIRONMENT:
-			concat(&env, string, strlen(string));
+			concat(&rec->env, string, strlen(string));
 			break;
 		case SEC_FILES:
-			concat(&files, string, strlen(string));
+			concat(&rec->files, string, strlen(string));
 			break;
 		case SEC_EXIT_STATUS:
-			concat(&exit_status, string, strlen(string));
+			concat(&rec->exit_status, string, strlen(string));
 			break;
 		case SEC_DIAGNOSTICS:
-			concat(&diagnostics, string, strlen(string));
+			concat(&rec->diagnostics, string, strlen(string));
 			break;
 		case SEC_ERRORS:
-			concat(&errors, string, strlen(string));
+			concat(&rec->errors, string, strlen(string));
 			break;
 		case SEC_NAME:
 			break;
 		default:
-			concat(&desc, string, strlen(string));
+			concat(&rec->desc, string, strlen(string));
 			break;
 	}
 }
 
 static void
-pman_node(const struct man_node *n)
+pman_node(const struct man_node *n, struct mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
@@ -850,13 +852,13 @@ pman_node(const struct man_node *n)
 		if (mans[n->tok] == NULL)
 			break;
 
-		(*mans[n->tok])(n);
+		(*mans[n->tok])(n, rec);
 	default:
 		break;
 	}
 
-	pman_node(n->child);
-	pman_node(n->next);
+	pman_node(n->child, rec);
+	pman_node(n->next, rec);
 }
 
 /* 
@@ -865,24 +867,24 @@ pman_node(const struct man_node *n)
  *  variable.
  */
 static void
-pman_parse_name(const struct man_node *n)
+pman_parse_name(const struct man_node *n, struct mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
 	if (n->type == MAN_TEXT) 
-		concat(&name_desc, n->string, strlen(n->string));
+		concat(&rec->name_desc, n->string, strlen(n->string));
 	
 	if (n->child)
-		pman_parse_name(n->child);
+		pman_parse_name(n->child, rec);
 	if(n->next)
-		pman_parse_name(n->next);
+		pman_parse_name(n->next, rec);
 }
 
 /* A stub function to be able to parse the macros like .B embedded inside a
  *  section
  */
 static void
-pman_block(const struct man_node *n)
+pman_block(const struct man_node *n, struct mandb_rec *rec)
 {
 // empty stub
 }
@@ -902,7 +904,7 @@ pman_block(const struct man_node *n)
  *     function, passing the enum corresponding that section.
  */
 static void
-pman_sh(const struct man_node *n)
+pman_sh(const struct man_node *n, struct mandb_rec *rec)
 {
 	const struct man_node *head;
 	int sz;
@@ -913,7 +915,7 @@ pman_sh(const struct man_node *n)
 			/* We are in the NAME section. pman_parse_name will put the complete
 			 * content in name_desc
 			 */			
-			pman_parse_name(n);
+			pman_parse_name(n, rec);
 
 			/* Take out the name of the man page. name_desc contains complete
 			 * NAME section content, e.g: "gcc \- GNU project C and C++ compiler"
@@ -922,33 +924,33 @@ pman_sh(const struct man_node *n)
 			 */
 			
 			/* Remove any leading spaces */
-			while (*name_desc == ' ') 
-				name_desc++;
+			while (*(rec->name_desc) == ' ') 
+				rec->name_desc++;
 			
 			/* If the line begins with a "\&", avoid those */
-			if (name_desc[0] == '\\' && name_desc[1] == '&')
-				name_desc += 2;
+			if (rec->name_desc[0] == '\\' && rec->name_desc[1] == '&')
+				rec->name_desc += 2;
 			/* Again remove any leading spaces left */
-			while (*name_desc == ' ') 
-				name_desc++;
+			while (*(rec->name_desc) == ' ') 
+				rec->name_desc++;
 			
 			/* Assuming the name of a man page is a single word, we can easily
 			 * take out the first word out of the string
 			 */
-			char *temp = estrdup(name_desc);
+			char *temp = estrdup(rec->name_desc);
 			char *link;
 			sz = strcspn(temp, " ,\0");
-			name = malloc(sz+1);
+			rec->name = malloc(sz+1);
 			int i;
 			for(i=0; i<sz; i++)
-				name[i] = *temp++;
-			name[i] = 0;
+				rec->name[i] = *temp++;
+			rec->name[i] = 0;
 			
 			/* Build a space separated list of all the links to this page */
 			for(link = strtok(temp, " "); link; link = strtok(NULL, " ")) {
 				if (link[strlen(link)] == ',') {
 					link[strlen(link)] = 0;
-					concat(&links, link, strlen(link));
+					concat(&rec->links, link, strlen(link));
 				}
 				else
 					break;
@@ -957,9 +959,9 @@ pman_sh(const struct man_node *n)
 			/*   The name might be surrounded by escape sequences of the form:
 			 *   \fBname\fR or similar. So remove those as well.
 			 */
-			if (name[0] == '\\' && name[1] != '&') {
-				name += 3;
-				name[strlen(name) -3] = 0;
+			if (rec->name[0] == '\\' && rec->name[1] != '&') {
+				rec->name += 3;
+				rec->name[strlen(rec->name) -3] = 0;
 			}
 			
 			
@@ -976,26 +978,26 @@ pman_sh(const struct man_node *n)
 			 *     e.g.: foo-bar - This is a simple foo-bar utility
 			 * (I hope this covers all possible sane combinations)
 			 */
-			char prev = *name_desc++;
-			while (*name_desc) {
+			char prev = *rec->name_desc++;
+			while (*(rec->name_desc)) {
 				/* case 1 */
-				if (*name_desc == ' ' && prev != ',' && *(name_desc + 1) != '\\') {
-					name_desc++;
+				if (*(rec->name_desc) == ' ' && prev != ',' && *(rec->name_desc + 1) != '\\') {
+					rec->name_desc++;
 					/* Well, there might be a '-' without a leading '\\', 
 					 * get over it 
 					 */
-					if (*name_desc == '-')
-						name_desc += 2;
+					if (*(rec->name_desc) == '-')
+						rec->name_desc += 2;
 					break;
 				}
 				/* case 2 */
-				else if (*name_desc == '-' && prev == '\\' 
-					&& *(name_desc + 1) == ' ') {
-					name_desc += 2;
+				else if (*(rec->name_desc) == '-' && prev == '\\' 
+					&& *(rec->name_desc + 1) == ' ') {
+					rec->name_desc += 2;
 					break;
 				}
-				prev = *name_desc;
-				name_desc++;
+				prev = *(rec->name_desc);
+				rec->name_desc++;
 			}
 		}
 		
@@ -1004,19 +1006,19 @@ pman_sh(const struct man_node *n)
 		 */
 		 
 		else if (strcmp((const char *)head->string, "DESCRIPTION") == 0)
-			man_parse_section(MANSEC_DESCRIPTION, n);
+			man_parse_section(MANSEC_DESCRIPTION, n, rec);
 		
 		else if (strcmp((const char *)head->string, "SYNOPSIS") == 0)
-			man_parse_section(MANSEC_SYNOPSIS, n);
+			man_parse_section(MANSEC_SYNOPSIS, n, rec);
 
 		else if (strcmp((const char *)head->string, "LIBRARY") == 0)
-			man_parse_section(MANSEC_LIBRARY, n);
+			man_parse_section(MANSEC_LIBRARY, n, rec);
 
 		else if (strcmp((const char *)head->string, "ERRORS") == 0)
-			man_parse_section(MANSEC_ERRORS, n);
+			man_parse_section(MANSEC_ERRORS, n, rec);
 
 		else if (strcmp((const char *)head->string, "FILES") == 0)
-			man_parse_section(MANSEC_FILES, n);
+			man_parse_section(MANSEC_FILES, n, rec);
 
 		/* The RETURN VALUE section might be specified in multiple ways */
 		else if (strcmp((const char *) head->string, "RETURN VALUE") == 0
@@ -1024,7 +1026,7 @@ pman_sh(const struct man_node *n)
 			|| (strcmp((const char *)head->string, "RETURN") == 0 && 
 			head->next->type == MAN_TEXT && (strcmp((const char *)head->next->string, "VALUE") == 0 ||
 			strcmp((const char *)head->next->string, "VALUES") == 0)))
-				man_parse_section(MANSEC_RETURN_VALUES, n);
+				man_parse_section(MANSEC_RETURN_VALUES, n, rec);
 
 		/* EXIT STATUS section can also be specified all on one line or on two
 		 * separate lines.
@@ -1033,11 +1035,11 @@ pman_sh(const struct man_node *n)
 			|| (strcmp((const char *) head->string, "EXIT") ==0 &&
 			head->next->type == MAN_TEXT &&
 			strcmp((const char *)head->next->string, "STATUS") == 0))
-			man_parse_section(MANSEC_EXIT_STATUS, n);
+			man_parse_section(MANSEC_EXIT_STATUS, n, rec);
 
 		/* Store the rest of the content in desc */
 		else
-			man_parse_section(MANSEC_NONE, n);
+			man_parse_section(MANSEC_NONE, n, rec);
 	}
 }
 
@@ -1066,7 +1068,7 @@ pman_parse_node(const struct man_node *n, char **s)
  * concatenate the content from that section into the buffer for that section.
  */
 static void
-man_parse_section(enum man_sec sec, const struct man_node *n)
+man_parse_section(enum man_sec sec, const struct man_node *n, struct mandb_rec *rec)
 {
 	/* If the user sepecified the 'l' flag then just parse the NAME
 	 *  section, ignore the rest.
@@ -1076,33 +1078,33 @@ man_parse_section(enum man_sec sec, const struct man_node *n)
 
 	switch (sec) {
 		case MANSEC_LIBRARY:
-			pman_parse_node(n, &lib);
+			pman_parse_node(n, &rec->lib);
 			break;
 		case MANSEC_SYNOPSIS:
-			pman_parse_node(n, &synopsis);
+			pman_parse_node(n, &rec->synopsis);
 			break;
 		case MANSEC_RETURN_VALUES:
-			pman_parse_node(n, &return_vals);
+			pman_parse_node(n, &rec->return_vals);
 			break;
 		case MANSEC_ENVIRONMENT:
-			pman_parse_node(n, &env);
+			pman_parse_node(n, &rec->env);
 			break;
 		case MANSEC_FILES:
-			pman_parse_node(n, &files);
+			pman_parse_node(n, &rec->files);
 			break;
 		case MANSEC_EXIT_STATUS:
-			pman_parse_node(n, &exit_status);
+			pman_parse_node(n, &rec->exit_status);
 			break;
 		case MANSEC_DIAGNOSTICS:
-			pman_parse_node(n, &diagnostics);
+			pman_parse_node(n, &rec->diagnostics);
 			break;
 		case MANSEC_ERRORS:
-			pman_parse_node(n, &errors);
+			pman_parse_node(n, &rec->errors);
 			break;
 		case MANSEC_NAME:
 			break;
 		default:
-			pman_parse_node(n, &desc);
+			pman_parse_node(n, &rec->desc);
 			break;
 	}
 
@@ -1113,44 +1115,29 @@ man_parse_section(enum man_sec sec, const struct man_node *n)
  *  cleans up the global buffers
  */
 static void
-cleanup(void)
+cleanup(struct mandb_rec *rec)
 {
-	if (name)
-		free(name);
-	if (name_desc)
-		free(name_desc);
-	if (desc)
-		free(desc);
-	if (md5_hash)
-		free(md5_hash);
-	if (section)
-		free(section);
-	if (lib)
-		free(lib);
-	if (synopsis)
-		free(synopsis);
-	if (return_vals)
-		free(return_vals);
-	if (env)
-		free(env);
-	if (files)
-		free(files);
-	if (exit_status)
-		free(exit_status);
-	if (diagnostics)
-		free(diagnostics);
-	if (errors)
-		free(errors);
-	if (links)
-		free(links);
-	if (machine)
-		free(machine);
-	if (file_path)
-		free(file_path);
+	free(rec->name);
+	free(rec->name_desc);
+	free(rec->desc);
+	free(rec->md5_hash);
+	free(rec->section);
+	free(rec->lib);
+	free(rec->synopsis);
+	free(rec->return_vals);
+	free(rec->env);
+	free(rec->files);
+	free(rec->exit_status);
+	free(rec->diagnostics);
+	free(rec->errors);
+	free(rec->links);
+	free(rec->machine);
+	free(rec->file_path);
 		
-	name = name_desc = desc = md5_hash = section = lib = synopsis = return_vals =
+/*	name = name_desc = desc = md5_hash = section = lib = synopsis = return_vals =
 	 env = files = exit_status = diagnostics = errors = links = machine = 
-	 file_path = NULL;
+	 file_path = NULL;*/
+	 memset(rec, 0, sizeof(*rec));
 }
 
 /*
@@ -1160,7 +1147,7 @@ cleanup(void)
  *  error. Otherwise, store the data in the database and return 0
  */
 static int
-insert_into_db(sqlite3 *db)
+insert_into_db(sqlite3 *db, struct mandb_rec *rec)
 {
 	int rc = 0;
 	int idx = -1;
@@ -1173,9 +1160,9 @@ insert_into_db(sqlite3 *db)
 	/* At the very minimum we want to make sure that we store the following data:
 	 *  Name, One line description, the section number, and the md5 hash
 	 */		
-	if (name == NULL || name_desc == NULL || md5_hash == NULL 
-		|| section == NULL) {
-		cleanup();
+	if (rec->name == NULL || rec->name_desc == NULL || rec->md5_hash == NULL 
+		|| rec->section == NULL) {
+		cleanup(rec);
 		return -1;
 	}
 
@@ -1184,19 +1171,19 @@ insert_into_db(sqlite3 *db)
 	 *  be stored in the mandb table, rest will be treated as links and put in the
 	 *  mandb_links table
 	 */	
-	if (page_type == MDOC) {
-		links = strdup(name);
-		free(name);
-		int sz = strcspn(links, " \0");
-		name = malloc(sz + 1);
-		memcpy(name, links, sz);
-		if(name[sz - 1] == ',')
-			name[sz - 1] = 0;
+	if (rec->page_type == MDOC) {
+		rec->links = strdup(rec->name);
+		free(rec->name);
+		int sz = strcspn(rec->links, " \0");
+		rec->name = malloc(sz + 1);
+		memcpy(rec->name, rec->links, sz);
+		if(rec->name[sz - 1] == ',')
+			rec->name[sz - 1] = 0;
 		else
-			name[sz] = 0;
-		links += sz;
-		if (*links == ' ')
-			links++;
+			rec->name[sz] = 0;
+		rec->links += sz;
+		if (*(rec->links) == ' ')
+			rec->links++;
 	}
 	
 /*------------------------ Populate the mandb table---------------------------*/
@@ -1207,115 +1194,115 @@ insert_into_db(sqlite3 *db)
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":name");
-	rc = sqlite3_bind_text(stmt, idx, name, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":section");
-	rc = sqlite3_bind_text(stmt, idx, section, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
-	rc = sqlite3_bind_text(stmt, idx, name_desc, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->name_desc, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":desc");
-	rc = sqlite3_bind_text(stmt, idx, desc, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->desc, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":lib");
-	rc = sqlite3_bind_text(stmt, idx, lib, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->lib, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":synopsis");
-	rc = sqlite3_bind_text(stmt, idx, synopsis, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->synopsis, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":return_vals");
-	rc = sqlite3_bind_text(stmt, idx, return_vals, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->return_vals, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":env");
-	rc = sqlite3_bind_text(stmt, idx, env, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->env, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":files");
-	rc = sqlite3_bind_text(stmt, idx, files, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->files, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
-	rc = sqlite3_bind_text(stmt, idx, exit_status, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->exit_status, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":diagnostics");
-	rc = sqlite3_bind_text(stmt, idx, diagnostics, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->diagnostics, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":errors");
-	rc = sqlite3_bind_text(stmt, idx, errors, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->errors, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
@@ -1323,7 +1310,7 @@ insert_into_db(sqlite3 *db)
 	if (rc != SQLITE_DONE) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
@@ -1338,52 +1325,52 @@ insert_into_db(sqlite3 *db)
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":device");
-	rc = sqlite3_bind_int64(stmt, idx, device);
+	rc = sqlite3_bind_int64(stmt, idx, rec->device);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":inode");
-	rc = sqlite3_bind_int64(stmt, idx, inode);
+	rc = sqlite3_bind_int64(stmt, idx, rec->inode);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":mtime");
-	rc = sqlite3_bind_int64(stmt, idx, mtime);
+	rc = sqlite3_bind_int64(stmt, idx, rec->mtime);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":file");
-	rc = sqlite3_bind_text(stmt, idx, file_path, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->file_path, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
-	rc = sqlite3_bind_text(stmt, idx, md5_hash, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
@@ -1392,7 +1379,7 @@ insert_into_db(sqlite3 *db)
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 	
@@ -1400,7 +1387,7 @@ insert_into_db(sqlite3 *db)
 	if (rc != SQLITE_DONE) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup();
+		cleanup(rec);
 		return -1;
 	}
 
@@ -1408,27 +1395,27 @@ insert_into_db(sqlite3 *db)
 	
 /*------------------------ Populate the mandb_links table---------------------*/
 	char *str = NULL;
-	if (links && strlen(links) == 0) {
-		free(links);
-		links = NULL;
+	if (rec->links && strlen(rec->links) == 0) {
+		free(rec->links);
+		rec->links = NULL;
 	}
 		
-	if (links) {
-		if (machine == NULL)
-			easprintf(&machine, "%s", "");
+	if (rec->links) {
+		if (rec->machine == NULL)
+			easprintf(&rec->machine, "%s", "");
 		
-		for(link = strtok(links, " "); link; link = strtok(NULL, " ")) {
+		for(link = strtok(rec->links, " "); link; link = strtok(NULL, " ")) {
 			if (link[0] == ',')
 				link++;
 			if(link[strlen(link) - 1] == ',')
 				link[strlen(link) - 1] = 0;
 			
 			easprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', "
-				"\'%s\', \'%s\')", link, name, section, machine);
+				"\'%s\', \'%s\')", link, rec->name, rec->section, rec->machine);
 			sqlite3_exec(db, str, NULL, NULL, &errmsg);
 			if (errmsg != NULL) {
 				warnx("%s", errmsg);
-				cleanup();
+				cleanup(rec);
 				free(str);
 				free(errmsg);
 				return -1;
@@ -1437,8 +1424,8 @@ insert_into_db(sqlite3 *db)
 		}
 	}
 	
-	cleanup();
-	free(links);
+	cleanup(rec);
+	free(rec->links);
 	return 0;
 }
 
