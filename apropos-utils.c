@@ -154,8 +154,8 @@ create_db(sqlite3 *db)
 				"name_desc, desc, lib, synopsis, return_vals, env, files, "
 				"exit_status, diagnostics, errors, compress=zip, "
 				"uncompress=unzip, tokenize=porter); "	//mandb table
-			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, file, "
-				"md5_hash unique, id  INTEGER PRIMARY KEY); "	//mandb_meta
+			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, file UNIQUE, "
+				"md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "	//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
 				"machine); ";	//mandb_links
 

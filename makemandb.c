@@ -258,6 +258,7 @@ int
 main(int argc, char *argv[])
 {
 	FILE *file;
+	const char *sqlstr;
 	char *line;
 	char *temp = NULL;
 	char *errmsg = NULL;
@@ -313,6 +314,19 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 		
+	sqlstr = "CREATE TABLE IF NOT EXISTS metadb.file_cache(device, inode, "
+				"mtime, file PRIMARY KEY); "
+			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_file_cache_dev ON "
+				"file_cache (device, inode)";
+			
+
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		close_db(db);
+		exit(EXIT_FAILURE);
+	}
 
 	printf("Building temporary file cache\n");	
 	while ((line = fgetln(file, &len)) != NULL) {
@@ -423,34 +437,16 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	const char *sqlstr;
 	sqlite3_stmt *stmt = NULL;
 	int rc, idx;
-	char *md5 = NULL;
-	char *errmsg = NULL;
 	assert(file != NULL);
 	
 	device = sb->st_dev;
 	inode = sb->st_ino;
 	mtime = sb->st_mtime;
 	
-	sqlstr = "CREATE TABLE IF NOT EXISTS metadb.file_cache(device, inode, "
-				"mtime, file PRIMARY KEY); "
-			"CREATE TABLE IF NOT EXISTS metadb.md5_cache(md5_hash PRIMARY KEY); "
-			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_file_cache_dev ON "
-				"file_cache (device, inode)";
-			
-
-	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		close_db(db);
-		exit(EXIT_FAILURE);
-	}
-	
 	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode, :mtime, :file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
-		free(md5);
 		return;
 	}
 
@@ -459,7 +455,6 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		free(md5);
 		return;
 	}
 
@@ -468,7 +463,6 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		free(md5);
 		return;
 	}
 
@@ -477,7 +471,6 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		free(md5);
 		return;
 	}
 
@@ -487,18 +480,11 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		free(md5);
 		return;
 	}
 	
 	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
-		free(md5);
-		return;
-	}
 	sqlite3_finalize(stmt);
-	free(md5);
 }
 
 /* update_db --
@@ -518,16 +504,13 @@ update_db(sqlite3 *db, struct mparse *mp)
 	char *file;
 	char *errmsg = NULL;
 	char *buf = NULL;
-	char *temp = NULL;
-	char *sqlquery;
-	int new_count = 0;
-	int update_count = 0;
-	int md5_status, count = 0;
+	int new_count = 0, total_count = 0, err_count = 0;
+	int md5_status;
 	int rc, idx;
 	dev_t device_cache;
 	ino_t inode_cache;
 	time_t mtime_cache;
-	int link_count = 0;
+
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
 				" SELECT device, inode, mtime, file from mandb_meta";
 	
@@ -539,7 +522,7 @@ update_db(sqlite3 *db, struct mparse *mp)
 	}
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		count++;
+		total_count++;
 		device_cache = sqlite3_column_int64(stmt, 0);
 		inode_cache = sqlite3_column_int64(stmt, 1);
 		mtime_cache = sqlite3_column_int64(stmt, 2);
@@ -550,21 +533,22 @@ update_db(sqlite3 *db, struct mparse *mp)
 			warnx("An error occurred in checking md5 value for file %s", file);
 			continue;
 		}
-			/* The md5 is already present in the database, so simply update the 
-			 * metadata.
-			 */
 		else if (md5_status == 0) {
+			/* The md5 is already present in the database, so simply update the 
+			 * metadata, ignoring symlinks.
+			 */
 			struct stat sb;
 			stat(file, &sb);
-			if (!S_ISLNK(sb.st_mode)) {
+			if (S_ISLNK(sb.st_mode)) {
 				free(buf);
-				link_count++;
 				continue;
 			}
 			
-			inner_sqlstr = "UPDATE mandb_meta SET device = :device, inode = :inode, "
-						"mtime = :mtime WHERE md5_hash = :md5 "
-						" AND file = :file2";
+			inner_sqlstr = "UPDATE mandb_meta SET device = :device, "
+							"inode = :inode, mtime = :mtime WHERE "
+							"md5_hash = :md5 AND file = :file AND "
+							"(device <> :device2 OR "
+							"inode <> :inode2 OR mtime <> :mtime2)";
 			rc = sqlite3_prepare_v2(db, inner_sqlstr, -1, &inner_stmt, NULL);
 			if (rc != SQLITE_OK) {
 				warnx("%s", sqlite3_errmsg(db));
@@ -578,23 +562,27 @@ update_db(sqlite3 *db, struct mparse *mp)
 			sqlite3_bind_int64(inner_stmt, idx, inode_cache);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime");
 			sqlite3_bind_int64(inner_stmt, idx, mtime_cache);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":file");
-			sqlite3_bind_text(inner_stmt, idx, file, -1, NULL);
 			idx = sqlite3_bind_parameter_index(inner_stmt, ":md5");
 			sqlite3_bind_text(inner_stmt, idx, buf, -1, NULL);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":file2");
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":file");
 			sqlite3_bind_text(inner_stmt, idx, file, -1, NULL);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":device2");
+			sqlite3_bind_int64(inner_stmt, idx, device_cache);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":inode2");
+			sqlite3_bind_int64(inner_stmt, idx, inode_cache);
+			idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime2");
+			sqlite3_bind_int64(inner_stmt, idx, mtime_cache);
+
 			rc = sqlite3_step(inner_stmt);
 			if (rc != SQLITE_DONE) {
 				warnx("Could not update the meta data for %s", file);
 				free(buf);
 				sqlite3_finalize(inner_stmt);
-				exit(1);
+				err_count++;
 				continue;
 			}
 			else {
 				printf("Updating %s\n", file);
-				update_count++;
 			}
 			sqlite3_finalize(inner_stmt);
 		}
@@ -604,47 +592,34 @@ update_db(sqlite3 *db, struct mparse *mp)
 			 * parsing.
 			 */
 			printf("Parsing: %s\n", file);
-			md5_hash = estrdup(buf);
-			file_path = estrdup(file);
+			md5_hash = buf;
+			file_path = estrdup(file);	//freed by insert_into_db itself.
 			begin_parse(file, mp);
 			if (insert_into_db(db) < 0) {
 				warnx("Error in indexing %s", file);
 				cleanup();
+				err_count++;
 				continue;
 			}
 			else
 				new_count++;
 		}
-		if (check_md5(file, db, "metadb.md5_cache", &temp) == 1) {
-			easprintf(&sqlquery, "INSERT INTO metadb.md5_cache VALUES (\'%s\')", buf);
-			sqlite3_exec(db, sqlquery, NULL, NULL, &errmsg);
-			if (errmsg != NULL) {
-				warnx("Could not update temporary md5 cache for file: %s\n%s ", 
-				 file, errmsg);
-				free(errmsg);
-				free(buf);
-				free(temp);
-				free(sqlquery);
-				continue;
-			}
-			free(sqlquery);
-		}
-		free(buf);
-		free(temp);
 	}
 	
 	sqlite3_finalize(stmt);
 	
-	printf("%d new manual pages added\n"
-			"%d manual pages updated\nlink count = %d\ntotal = %d\n", new_count, update_count, link_count, count);
+	printf("Total Number of new or updated pages enountered = %d\n"
+			"Total number of pages that were successfully indexed = %d\n"
+			"Total number of pages that could not be indexed due to parsing "
+			"errors = %d\n",
+			total_count, new_count, err_count);
 	
 	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
-		"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
-		"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
-		" metadb.file_cache); "
-		"DROP TABLE metadb.file_cache; "
-		"DROP TABLE metadb.md5_cache";
-	
+				"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
+			"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
+				" metadb.file_cache); "
+			"DROP TABLE metadb.file_cache";
+			
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
 		warnx("Attempt to remove old entries failed. You may want to run: "
