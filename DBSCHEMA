@@ -20,17 +20,22 @@ There are three tables in the database at present:
   11. diagnostics   DIAGNOSTICS section
   12. errors        ERRORS section
 
-(2) mandb_md5:
+(2) mandb_meta:
     This table contains md5 hashes of all the indexed man 
     pages. This is there to make sure we do not index 
     the same man page twice, i.e. to prevent indexing 
     hardlinks.
 
   COLUMN NAME       DESCRIPTION
+  device            (dev_t)Logical device number from stat(2)
+  inode             (ino_t)Inode number from stat(2)
+  mtime             Last modification time from stat(2)
+  file              Absolute path name (UNIQUE constraint)
   md5_hash          MD5 Hash of the man page
   id                A unique integer ID for the page, which
                     refers to a page in mandb (Implicit foreign 
-                    key?)
+                    key?) PRIMARY KEY
+  {device, inode} form a UNIQUE index
 
 (3) mandb_links:
     This is an index of all the hard/soft links of the man 
@@ -38,7 +43,7 @@ There are three tables in the database at present:
     from the multiple .Nm entries in the page.
 
   Column Name       Description
-  1. link           The name of the hard/soft link  
+  1. link           The name of the hard/soft link (UNIQUE index) 
   2. target         Name of the target page to which it points  
   3. section        The section number  
   4. machine        The machine architecture (if any) for which 
