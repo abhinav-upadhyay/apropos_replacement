@@ -48,9 +48,6 @@
 #include "sqlite3.h"
 #include "stopword_tokenizer.h"
 
-static void zip(sqlite3_context *, int, sqlite3_value **);
-static void unzip(sqlite3_context *, int, sqlite3_value **);
-
 typedef struct orig_callback_data {
 	void *data;
 	int (*callback) (void *, int, char **, char **);

@@ -36,7 +36,7 @@
 #include <zlib.h> 
 #include "sqlite3.h"
 
-#define DBPATH "./man.db"
+#define DBPATH "/var/db/man.db"
 #define SECMAX 9
 
 /* Flags for opening the database */
