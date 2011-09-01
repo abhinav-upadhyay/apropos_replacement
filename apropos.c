@@ -58,7 +58,7 @@ main(int argc, char *argv[])
 	char *query = NULL;	// the user query
 	char ch;
 	char *errmsg = NULL;
-	const char *nrec = "10";	// The number of records to fetch from db
+	int nrec = 10;	// The number of records to fetch from db
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
 	FILE *out = stdout;		// the default stream for the search output
 	apropos_flags aflags = {{0}, 0};
@@ -102,6 +102,7 @@ main(int argc, char *argv[])
 			break;
 		case 'p':	//user wants to view more than 10 results and page them
 			aflags.pager = 1;
+			nrec = 0;	// Fetch all records
 			break;
 		case '?':
 		default:
@@ -136,8 +137,6 @@ main(int argc, char *argv[])
 			close_db(db);
 			err(EXIT_FAILURE, "pipe failed");
 		}
-		/* NULL value of nrec means fetch all matching rows */
-		nrec = NULL;
 	}
 
 	query_args args;
