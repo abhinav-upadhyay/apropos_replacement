@@ -516,19 +516,21 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 				 "FROM mandb WHERE mandb MATCH \'%s\'", "",
 				 "", "...", args->search_str);
 
-	for (i = 0; i < SECMAX; i++) {
-		if (args->sec_nums[i]) {
-			if (flag == 0) {
-				concat(&sqlstr, "AND (section LIKE", -1);
-				flag = 1;
+	if (args->sec_nums) {
+		for (i = 0; i < SECMAX; i++) {
+			if (args->sec_nums[i]) {
+				if (flag == 0) {
+					concat(&sqlstr, "AND (section LIKE", -1);
+					flag = 1;
+				}
+				else
+					concat(&sqlstr, "OR section LIKE", -1);
+				concat(&sqlstr, args->sec_nums[i], strlen(args->sec_nums[i]));
 			}
-			else
-				concat(&sqlstr, "OR section LIKE", -1);
-			concat(&sqlstr, args->sec_nums[i], strlen(args->sec_nums[i]));
 		}
+		if (flag)
+			concat(&sqlstr, ")", 1);
 	}
-	if (flag)
-		concat(&sqlstr, ")", 1);
 	concat(&sqlstr, "ORDER BY rank DESC", -1);
 	
 	/* If the user specified a value of nrec, then we need to fetch that many 
