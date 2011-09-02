@@ -75,7 +75,6 @@ callback(enum mg_event event, struct mg_connection *conn,
 	assert(request_info);
 
 	if (event == MG_NEW_REQUEST ) {
-		fprintf(stderr, "%s\n", request_info->uri);
 		if (strcmp(request_info->uri, "/apropos") ==0 ) {
 			mg_printf(conn, "%s", standard_reply);
 			if (mg_get_var(request_info->query_string, strlen(request_info->query_string), 
@@ -89,7 +88,8 @@ callback(enum mg_event event, struct mg_connection *conn,
 			args.callback = &apropos_callback;
 			args.callback_data = &ap_data;
 			args.errmsg = &errmsg;
-			run_query_html(db, &args);
+			if (run_query_html(db, &args) < 0)
+				mg_printf(conn, "<h3>SQL Error</h3>");
 			close_db(db);
 			mg_printf(conn, "</body></html>");
 			return (void *)"";	// Mark as processed*/
