@@ -106,7 +106,10 @@ The sections whose corresponding index element in this array is set to
 are not searched.
 If all the elements in the array are
 .Dv NULL
-then all the sections are searched.
+then all the sections are searched. 
+Alternatively pass
+.Dv NULL
+as the value of this element to search in all the sections.
 .It Li int nrec
 This specifies the number of matching rows to fetch from the database.
 .It Li int (*callback) (void *, int, char **, char **)
