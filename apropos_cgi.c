@@ -35,7 +35,6 @@ callback(enum mg_event event, struct mg_connection *conn,
 	char query[BUFLEN];
 	char *errmsg;
 	query_args args;
-	const char *sec_nums[] = {0,0,0,0,0,0,0,0,0};
 	apropos_data ap_data;
 	ap_data.conn = conn;
 	ap_data.count = 0;
@@ -52,7 +51,7 @@ callback(enum mg_event event, struct mg_connection *conn,
 			
 			db = init_db(DB_READONLY);
 			args.search_str = query;
-			args.sec_nums = sec_nums;
+			args.sec_nums = NULL;
 			args.nrec = 10;
 			args.callback = &apropos_callback;
 			args.callback_data = &ap_data;
