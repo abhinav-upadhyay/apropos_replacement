@@ -546,8 +546,6 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	/* Execute the query, and let the callback handle the output */
 	sqlite3_exec(db, sqlstr, args->callback, args->callback_data, args->errmsg);
 	if (*(args->errmsg) != NULL) {
-		warnx("%s", *(args->errmsg));
-		free(*(args->errmsg));
 		free(sqlstr);
 		return -1;
 	}
