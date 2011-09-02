@@ -6,4 +6,5 @@
 *.html*
 makemandb
 apropos
+apropos_cgi
 
