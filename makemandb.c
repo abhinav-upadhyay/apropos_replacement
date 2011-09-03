@@ -77,6 +77,8 @@ static void pmdoc_node(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_Nm(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_Nd(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_Sh(const struct mdoc_node *, mandb_rec *);
+static void pmdoc_Xr(const struct mdoc_node *, mandb_rec *);
+static void pmdoc_stub(const struct mdoc_node *, mandb_rec *);
 static void pman_node(const struct man_node *n, mandb_rec *);
 static void pman_parse_node(const struct man_node *, char **);
 static void pman_parse_name(const struct man_node *, mandb_rec *);
@@ -136,7 +138,7 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* St */ 
 	NULL, /* Va */
 	NULL, /* Vt */ 
-	NULL, /* Xr */ 
+	pmdoc_stub, /* Xr */ 
 	NULL, /* %A */
 	NULL, /* %B */
 	NULL, /* %D */
@@ -760,6 +762,58 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 }
 
 /*
+ * pmdoc_stub--
+ *  An empty stub function. It is used simply to detect if we have encountered 
+ *  a specific macro which needs special parsing code. 
+ *  For example pmdoc_Sh is using it to call pmdoc_Xr function to parse the .Xr 
+ *  macros.
+ */
+static void
+pmdoc_stub(const struct mdoc_node *n, mandb_rec *rec)
+{
+}
+
+/*
+ * pmdoc_Xr--
+ *  Parse the man page references. Basically the .Xr macros are used like this:
+ *  .Xr ls 1
+ *  and parsed like this:
+ *  ls(1)
+ *  Prepare a buffer to format the data like the above example and call 
+ *  pmdoc_parse_section to append it.
+ */
+static void
+pmdoc_Xr(const struct mdoc_node *n, mandb_rec *rec)
+{
+	assert(n);
+	char *buf = NULL;
+	size_t len;
+	n = n->child;
+	while (n->type != MDOC_TEXT && n->next)
+		n = n->next;
+	if (n && n->type == MDOC_TEXT) {
+		len = strlen(n->string);
+		concat(&buf, n->string, len);
+		if (n->next)
+			n = n->next;
+	}
+	else
+		return;
+
+	while (n->type != MDOC_TEXT && n->next)
+		n = n->next;
+	if (n && n->type == MDOC_TEXT) {
+		buf = (char *) erealloc(buf, len + 4);
+		buf[len] = '(';
+		buf[len + 1] = n->string[0];
+		buf[len + 2] = ')';
+		buf[len + 3] = 0;
+		mdoc_parse_section(n->sec, buf, rec);
+	}
+	free(buf);
+}
+
+/*
  * pmdoc_Sh --
  *  Extracts the complete DESCRIPTION section of the man page
  */
@@ -776,6 +830,8 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 			 */
 			if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL)
 				mdoc_parse_section(n->sec, rec->name, rec);
+			else if(mdocs[n->tok] == pmdoc_stub)
+				pmdoc_Xr(n, rec);
 			/* otherwise call pmdoc_Sh again to handle the nested macros */
 			else
 				pmdoc_Sh(n, rec);
