@@ -88,6 +88,7 @@ callback(enum mg_event event, struct mg_connection *conn,
 			args.callback = &apropos_callback;
 			args.callback_data = &ap_data;
 			args.errmsg = &errmsg;
+			mg_printf(conn, "%s", html_template);
 			if (run_query_html(db, &args) < 0)
 				mg_printf(conn, "<h3>SQL Error</h3>");
 			close_db(db);
