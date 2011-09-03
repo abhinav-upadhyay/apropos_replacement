@@ -7,4 +7,4 @@
 makemandb
 apropos
 apropos_cgi
-
+!*.html
