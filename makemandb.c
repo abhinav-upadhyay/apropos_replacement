@@ -815,7 +815,10 @@ pmdoc_Xr(const struct mdoc_node *n, mandb_rec *rec)
 
 /*
  * pmdoc_Sh --
- *  Extracts the complete DESCRIPTION section of the man page
+ *  Called when a .Sh macro is encountered and loops through it's body, calling 
+ *  mdoc_parse_section to append the data to the section specific buffer. 
+ *  Two special macros which may occur inside the body of Sh are .Nm and .Xr and 
+ *  the need special handling, thus the separate if branches for them.
  */
 static void
 pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)

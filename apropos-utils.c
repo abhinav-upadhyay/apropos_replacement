@@ -505,7 +505,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	 */
 	if (snippet_args)
 		easprintf(&sqlstr, "SELECT section, name, name_desc, "
-				"snippet(mandb, \"%s\", \"%s\", \"%s\", -1, 40 ), "
+				"snippet(desc, \"%s\", \"%s\", \"%s\", -1, 40 ), "
 				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
 				 "FROM mandb WHERE mandb MATCH \'%s\'", snippet_args[0],
 				 snippet_args[1], snippet_args[2], args->search_str);
