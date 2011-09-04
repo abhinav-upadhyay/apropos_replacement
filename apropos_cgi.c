@@ -63,8 +63,8 @@ static const char *html_start_template = "<html>\n<head>\n<title>\napropos\n</ti
 	"</tr>\n"
 	"</form>\n"
 	"</table>\n"
-	"</div>\n"
-	"<div>\n";
+	"</div>\n";
+	
 
 static const char *html_end_template = "</div>\n"
 	"</center>\n"
@@ -76,7 +76,7 @@ apropos_callback(void *data, int ncol, char **col_values, char **col_names)
 {
 	apropos_data *ap_data = (apropos_data *) data;
 	ap_data->count++;
-	mg_printf(ap_data->conn, "%s", col_values[0]);
+	mg_printf(ap_data->conn, "<div><tr> <td> %s </td> </tr></div>", col_values[0]);
 	return 0;
 }
 
@@ -108,11 +108,13 @@ callback(enum mg_event event, struct mg_connection *conn,
 			args.callback_data = &ap_data;
 			args.errmsg = &errmsg;
 			mg_printf(conn, "%s", html_start_template);
+			mg_printf(conn, "<table>\n");
 			if (run_query_html(db, &args) < 0)
 				mg_printf(conn, "<h3>SQL Error</h3>");
 			if (ap_data.count == 0)
 				mg_printf(conn, "<h3> No results</h3>\n");
 			close_db(db);
+			mg_printf(conn, "</table>\n");
 			mg_printf(conn, "%s", html_end_template);
 			return (void *)"";	// Mark as processed*/
 		}
