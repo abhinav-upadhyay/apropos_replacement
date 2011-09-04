@@ -50,22 +50,19 @@ static const char *standard_reply = "HTTP/1.1 200 OK\r\n"
   "Connection: close\r\n\r\n";
 
 static const char *html_start_template = "<html>\n<head>\n<title>\napropos\n</title>"
+	"<style type = \"text/css\">\n"
+	"table.results { width: 60%; margin: 10px; padding: 0px\n}"
+	"div.results {margin: 10px; padding: 5px}\n"
+	"</style>\n"
 	"</head>\n"
 	"<body>\n"
-	"<br><br><br><br><br>\n"
 	"<center>\n"
 	"<div>\n"
-	"<table>\n"
-	"<form action=\"/apropos\">\n"
-	"<tr>\n"
-	"<td> <input type = \"text\" name = \"q\"> </td>\n"
-	"<td> <input type=\"submit\" value = \"Search\"> </td>\n"
-	"</tr>\n"
-	"</form>\n"
-	"</table>\n"
-	"</div>\n";
+	"<table style = \"margin: 10px;\">\n"
+	"<tr> \n"
+	"<td colspan = \"2\"> <img src = \"./images/NetBSD.png\" height = \"200\" width = \"200\" />\n"
+	"</td>\n";
 	
-
 static const char *html_end_template = "</div>\n"
 	"</center>\n"
 	"</body>\n"
@@ -76,7 +73,7 @@ apropos_callback(void *data, int ncol, char **col_values, char **col_names)
 {
 	apropos_data *ap_data = (apropos_data *) data;
 	ap_data->count++;
-	mg_printf(ap_data->conn, "<div><tr> <td> %s </td> </tr></div>", col_values[0]);
+	mg_printf(ap_data->conn, "<div ><tr > <td> %s </td> </tr></div>\n", col_values[0]);
 	return 0;
 }
 
@@ -84,7 +81,7 @@ static void *
 callback(enum mg_event event, struct mg_connection *conn,
 		const struct mg_request_info *request_info)
 {
-	char query[BUFLEN];
+	char query[BUFLEN] = {0};
 	char *errmsg;
 	query_args args;
 	apropos_data ap_data;
@@ -94,27 +91,45 @@ callback(enum mg_event event, struct mg_connection *conn,
 	assert(request_info);
 
 	if (event == MG_NEW_REQUEST ) {
+		
 		if (strcmp(request_info->uri, "/apropos") ==0 ) {
-			mg_printf(conn, "%s", standard_reply);
-			if (mg_get_var(request_info->query_string, strlen(request_info->query_string), 
-				"q", query, BUFLEN) == -1)
-				return NULL;
+			if (request_info->query_string && 
+				mg_get_var(request_info->query_string, strlen(request_info->query_string), 
+			"q", query, BUFLEN) == -1)
+			return NULL;
 
-			db = init_db(DB_READONLY);
-			args.search_str = query;
-			args.sec_nums = NULL;
-			args.nrec = 10;
-			args.callback = &apropos_callback;
-			args.callback_data = &ap_data;
-			args.errmsg = &errmsg;
+			mg_printf(conn, "%s", standard_reply);
 			mg_printf(conn, "%s", html_start_template);
-			mg_printf(conn, "<table>\n");
-			if (run_query_html(db, &args) < 0)
-				mg_printf(conn, "<h3>SQL Error</h3>");
-			if (ap_data.count == 0)
-				mg_printf(conn, "<h3> No results</h3>\n");
-			close_db(db);
-			mg_printf(conn, "</table>\n");
+			mg_printf(conn,	"<form action=\"/apropos\">\n"
+							"<tr>\n"
+							"<td>\n"
+							"<input type = \"text\" name = \"q\" value = \"%s\">\n"
+							"</td>\n"
+							"<td>\n"
+							"<input type=\"submit\" value = \"Search\"> </td>\n"
+							"</tr>\n"
+							"</form>\n"
+							"</table>\n"
+							"</div>\n",
+					strlen(query)?query:"");
+			if (strlen(query)) {
+				mg_printf(conn, "<table  cellspacing = \"10px\" class = \"results\">\n");
+				db = init_db(DB_READONLY);
+				args.search_str = query;
+				args.sec_nums = NULL;
+				args.nrec = 10;
+				args.callback = &apropos_callback;
+				args.callback_data = &ap_data;
+				args.errmsg = &errmsg;
+
+				if (run_query_html(db, &args) < 0)
+					mg_printf(conn, "<h3>SQL Error</h3>");
+				if (ap_data.count == 0)
+					mg_printf(conn, "<h3> No results</h3>\n");
+				close_db(db);
+				mg_printf(conn, "</table>\n");
+			}
+						
 			mg_printf(conn, "%s", html_end_template);
 			return (void *)"";	// Mark as processed*/
 		}
@@ -128,7 +143,8 @@ int
 main(void)
 {
 	struct mg_context *ctx;
-	const char *options[] = {"document_root", "./www", "listening_ports", "8080", NULL};
+	const char *options[] = {"document_root", "./www", "listening_ports", "8080",
+							NULL};
 	ctx = mg_start(&callback, NULL, options);
 	getchar();	// Wait until user hits "enter"
 	mg_stop(ctx);
