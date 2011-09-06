@@ -579,8 +579,8 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 	strvis(html_output, buf, VIS_CSTYLE);
 	
 	for (i = 0; i < ncol; i++) {
-		strcpy(html_col_names[i], col_names[i]);
-		strcpy(html_col_values[i], col_values[i]);
+		html_col_names[i] = col_names[i];
+		html_col_values[i] = col_values[i];
 	}
 	html_col_names[ncol] = (char *) "html_result";
 	html_col_values[ncol] = html_output;
