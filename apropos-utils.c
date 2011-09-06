@@ -537,7 +537,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	*  number of rows
 	*/
 	if (nrec) {
-		easprintf(&temp, "LIMIT %s OFFSET 0", nrec);
+		easprintf(&temp, "LIMIT %s OFFSET %d", nrec, args->offset);
 		concat(&sqlstr, temp, strlen(temp));
 		free(temp);
 		free(nrec);

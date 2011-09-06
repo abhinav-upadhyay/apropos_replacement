@@ -112,6 +112,12 @@ Alternatively pass
 as the value of this element to search in all the sections.
 .It Li int nrec
 This specifies the number of matching rows to fetch from the database.
+.It Li int offset
+This specifies the offset within the result-set. Use it to specify the position
+from where to start processing the result-set.
+For example if the value of nrec is m and value of offset is n, then the first 
+n records from the result-set will be omitted and rest m-n (or less) records will
+be available for processing inside the callback.
 .It Li int (*callback) (void *, int, char **, char **)
 This is the callback function which will
 be called for each row retrieved from the database.

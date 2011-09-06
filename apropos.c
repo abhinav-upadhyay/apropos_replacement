@@ -143,6 +143,7 @@ main(int argc, char *argv[])
 	args.search_str = query;
 	args.sec_nums = aflags.sec_nums;
 	args.nrec = nrec;
+	args.offset = 0;
 	args.callback = &query_callback;
 	args.callback_data = out;
 	args.errmsg = &errmsg;

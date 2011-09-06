@@ -47,20 +47,26 @@ The
 .Fn run_query_html
 is very much similar to
 .Fn run_query
-but with the following two differences.
+but with the following three differences.
 .Bl -enum -offset indent
-.It Li
+.It
 .Nm
 takes only two arguments.
-.It Li
+.It
+The result set returned by
 .Nm
-will return a single column result set, unlike
-.Xr run_query 3
-which returns a 5 column result set.
-.It Li
-The value returned by
+contains one new column, the ordering of the columns in the result set is same
+as in
+.Xr run_query 3 .
+This new column has the name html_result and appears as the last column of
+the result set.
+It combines the complete result in a logical form enclosed between <p> and </p> 
+tags.
+.It
+The snippet returned by
 .Nm
-in the callback function is in HTML format, enclosed between <p> and </p> tags.
+uses <b> and </b> tags to highlight the matching pieces of text so that it 
+appears bold in a web browser.
 .El
 For more details, refer to the manual page of
 .Xr run_query 3 .
@@ -98,7 +104,7 @@ free(errmsg);
 static int
 query_callback(void *data, int ncol, char **col_values, char **col_names)
 {
-	char *html_result = col_values[0];
+	char *html_result = col_values[ncol - 1];
 	fprintf(stdout, "%s\en", html_result);
 	return 0;
 }
