@@ -358,34 +358,6 @@ init_db(int db_flag)
 }
 
 /*
- * itoa --
- *  Converts an int to an ASCII string.
- *  The maximum number of digits allowed in the supplied int value is 10.
- *  Basically this function is required to convert the user supplied value of 
- *  the argument "nrec" in the function run_query() to a string so that it can 
- *  be easily embedded inside an SQL query which is itself a string.
- */
-static char *
-itoa(int i)
-{
-	char *a = NULL;
-	int rem[10];
-	int j = 0;
-	int k = 0;
-	while (i) {
-		rem[j++] = i % 10;
-		i /= 10;
-		if (j >= 10)
-			return NULL;
-	}
-	a = (char *) emalloc(sizeof(char) * (j + 1));
-	while (--j >= 0)
-		a[k++] = '0' + rem[j];
-	a[k] = 0;
-	return a;
-}
-
-/*
  * rank_func --
  *  Sqlite user defined function for ranking the documents.
  *  For each phrase of the query, it computes the tf and idf and adds them over.
@@ -474,16 +446,10 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 
 	char *sqlstr = NULL;
 	char *temp = NULL;
-	char *nrec = NULL;
 	int rc;
 	int i;
 	int flag = 0;
 	inverse_document_frequency idf = {0, 0};
-
-	if (args->nrec) {
-		if ((nrec = itoa(args->nrec)) == NULL)
-			errx(EXIT_FAILURE, "Too big a value supplied for nrec");
-	}
 
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
@@ -536,12 +502,9 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	/* If the user specified a value of nrec, then we need to fetch that many 
 	*  number of rows
 	*/
-	if (nrec) {
-		easprintf(&temp, "LIMIT %s OFFSET %d", nrec, args->offset);
-		concat(&sqlstr, temp, strlen(temp));
-		free(temp);
-		free(nrec);
-	}
+	easprintf(&temp, "LIMIT %d OFFSET %d", args->nrec, args->offset);
+	concat(&sqlstr, temp, strlen(temp));
+	free(temp);
 	
 	/* Execute the query, and let the callback handle the output */
 	sqlite3_exec(db, sqlstr, args->callback, args->callback_data, args->errmsg);
