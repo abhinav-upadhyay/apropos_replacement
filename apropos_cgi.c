@@ -33,6 +33,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "apropos-utils.h"
@@ -96,6 +97,8 @@ callback(enum mg_event event, struct mg_connection *conn,
 {
 	char query[BUFLEN] = {0};
 	char *errmsg;
+	char p[5];	//I doubt there will ever be more than 99,999 result pages
+	int page = 1;
 	query_args args;
 	apropos_data ap_data;
 	ap_data.conn = conn;
@@ -111,6 +114,9 @@ callback(enum mg_event event, struct mg_connection *conn,
 			"q", query, BUFLEN) == -1)
 			return NULL;
 
+			if (mg_get_var(request_info->query_string, strlen(request_info->query_string),
+				"p", p, 5) != -1)
+				page = atoi(p);
 			mg_printf(conn, "%s", standard_reply);
 			mg_printf(conn, "%s", html_start_template);
 			mg_printf(conn,	"<form action=\"/apropos\">\n"
@@ -130,7 +136,8 @@ callback(enum mg_event event, struct mg_connection *conn,
 				db = init_db(DB_READONLY);
 				args.search_str = query;
 				args.sec_nums = NULL;
-				args.nrec = 10;
+				args.nrec = page * 10;
+				args.offset = args.nrec - 10;
 				args.callback = &apropos_callback;
 				args.callback_data = &ap_data;
 				args.errmsg = &errmsg;
@@ -139,8 +146,16 @@ callback(enum mg_event event, struct mg_connection *conn,
 					mg_printf(conn, "<h3>SQL Error</h3>");
 				if (ap_data.count == 0)
 					mg_printf(conn, "<h3> No results</h3>\n");
-				close_db(db);
+				else if (ap_data.count == 10)			
+					mg_printf(conn, "<div>\n"
+							"<tr colspan=\"2\">\n\t"
+							"<td>\n\t<h3>"
+							"<a href=\"/apropos?q=%s&p=%d\">Next</a>"
+							"</h3>\n</td>"
+							"</tr>"
+							"</div>", query, ++page);
 				mg_printf(conn, "</table>\n");
+				close_db(db);
 			}
 						
 			mg_printf(conn, "%s", html_end_template);
