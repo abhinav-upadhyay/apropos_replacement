@@ -49,10 +49,10 @@ is very much similar to
 .Fn run_query
 but with the following three differences.
 .Bl -enum -offset indent
-.It Li
+.It
 .Nm
 takes only two arguments.
-.It Li
+.It
 The result set returned by
 .Nm
 contains one new column, the ordering of the columns in the result set is same
@@ -62,7 +62,7 @@ This new column has the name html_result and appears as the last column of
 the result set.
 It combines the complete result in a logical form enclosed between <p> and </p> 
 tags.
-.It Li
+.It
 The snippet returned by
 .Nm
 uses <b> and </b> tags to highlight the matching pieces of text so that it 
