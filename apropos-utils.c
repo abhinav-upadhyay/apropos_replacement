@@ -564,6 +564,7 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 	char *html_col_values[ncol + 1];
 	char *html_col_names[ncol + 1];
 	int i;
+	const char *tab = "&nbsp;&nbsp;&nbsp;&nbsp;";
 	char *section =  col_values[0];
 	char *name = col_values[1];
 	char *name_desc = col_values[2];
@@ -573,7 +574,7 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	int (*callback) (void *, int, char **, char **) = orig_data->callback;
 	
-	easprintf(&buf, "<p> <b>%s(%s)</b>\t%s <br />\n%s</p>", name, section, 
+	easprintf(&buf, "<p> <b>%s(%s)</b>%s %s %s <br />\n%s</p>", name, section, tab, tab,
 				name_desc, snippet);
 	html_output = emalloc(strlen(buf) * 4 + 1);
 	strvis(html_output, buf, VIS_CSTYLE);

@@ -71,9 +71,22 @@ static const char *html_end_template = "</div>\n"
 static int
 apropos_callback(void *data, int ncol, char **col_values, char **col_names)
 {
+	const char *tab = "&nbsp;&nbsp;&nbsp;&nbsp;";
+	char *section =  col_values[0];
+	char *name = col_values[1];
+	char *name_desc = col_values[2];
+	char *snippet = col_values[3];
 	apropos_data *ap_data = (apropos_data *) data;
 	ap_data->count++;
-	mg_printf(ap_data->conn, "<div ><tr > <td> %s </td> </tr></div>\n", col_values[0]);
+	mg_printf(ap_data->conn, "<div>\n"
+				"<tr>\n\t"
+				"<td><b><a href=\"/html%s/%s.html\">%s(%s)</a></b>%s%s %s</td>\n"
+				"</tr>\n"
+				"<tr>\n\t"
+				"<td>%s</td>\n"
+				"</tr>\n"
+				"</div>", section, name, name, section, tab, tab, 
+				name_desc, snippet);
 	return 0;
 }
 
@@ -143,7 +156,17 @@ int
 main(void)
 {
 	struct mg_context *ctx;
-	const char *options[] = {"document_root", "./www", "listening_ports", "8080",
+	const char *options[] = {"document_root", "./www,"
+											"/html1=/usr/share/man/html1,"
+											"/html2=/usr/share/man/html2,"
+											"/html3=/usr/share/man/html3,"
+											"/html4=/usr/share/man/html4,"
+											"/html5=/usr/share/man/html5,"
+											"/html6=/usr/share/man/html6,"
+											"/html7=/usr/share/man/html7,"
+											"/html8=/usr/share/man/html8,"
+											"/html9=/usr/share/man/html9,",
+							"listening_ports", "8080",
 							NULL};
 	ctx = mg_start(&callback, NULL, options);
 	getchar();	// Wait until user hits "enter"
