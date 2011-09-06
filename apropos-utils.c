@@ -561,7 +561,9 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 static int
 callback_html(void *data, int ncol, char **col_values, char **col_names)
 {
-	char *html_col_names[] = {(char *)"result"};
+	char *html_col_values[ncol + 1];
+	char *html_col_names[ncol + 1];
+	int i;
 	char *section =  col_values[0];
 	char *name = col_values[1];
 	char *name_desc = col_values[2];
@@ -575,7 +577,15 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 				name_desc, snippet);
 	html_output = emalloc(strlen(buf) * 4 + 1);
 	strvis(html_output, buf, VIS_CSTYLE);
-	(*callback)(orig_data->data, 1, &html_output, html_col_names);
+	
+	for (i = 0; i < ncol; i++) {
+		strcpy(html_col_names[i], col_names[i]);
+		strcpy(html_col_values[i], col_values[i]);
+	}
+	html_col_names[ncol] = (char *) "html_result";
+	html_col_values[ncol] = html_output;
+	ncol++;	
+	(*callback)(orig_data->data, ncol, html_col_values, html_col_names);
 	free(buf);
 	free(html_output);
 	return 0;
