@@ -142,8 +142,17 @@ callback(enum mg_event event, struct mg_connection *conn,
 				args.callback_data = &ap_data;
 				args.errmsg = &errmsg;
 
-				if (run_query_html(db, &args) < 0)
-					mg_printf(conn, "<h3>SQL Error</h3>");
+				if (run_query_html(db, &args) < 0) {
+					mg_printf(conn, "<h3>SQL Error</h3>\n"
+								"</table>");
+					return NULL;
+				}
+				if (errmsg != NULL) {
+					mg_printf(conn, "An error occurred while executing the "
+							"query\n </table>");
+					free(errmsg);
+					return NULL;
+				}
 				if (ap_data.count == 0)
 					mg_printf(conn, "<h3> No results</h3>\n");
 				else if (ap_data.count == 10)			
