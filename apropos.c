@@ -102,7 +102,7 @@ main(int argc, char *argv[])
 			break;
 		case 'p':	//user wants to view more than 10 results and page them
 			aflags.pager = 1;
-			nrec = 0;	// Fetch all records
+			nrec = -1;	// Fetch all records
 			break;
 		case '?':
 		default:

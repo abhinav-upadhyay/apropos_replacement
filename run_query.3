@@ -112,12 +112,14 @@ Alternatively pass
 as the value of this element to search in all the sections.
 .It Li int nrec
 This specifies the number of matching rows to fetch from the database.
+Specifiy a negative value to fetch all the matching rows.
 .It Li int offset
 This specifies the offset within the result-set. Use it to specify the position
 from where to start processing the result-set.
 For example if the value of nrec is m and value of offset is n, then the first 
 n records from the result-set will be omitted and rest m-n (or less) records will
 be available for processing inside the callback.
+Use a negative value if you don't wish to offset any records.
 .It Li int (*callback) (void *, int, char **, char **)
 This is the callback function which will
 be called for each row retrieved from the database.
@@ -191,6 +193,7 @@ const char **sec_nums = {NULL, "2", "3", NULL, NULL, NULL, NULL, NULL, NULL};
 args.search_str = argv[1];
 args.sec_nums = sec_nums;
 args.nrec = 10;
+args.offset = -1;
 args.callback = &query_callback;
 args.callback_data = NULL;
 args.errmsg = &errmsg;
