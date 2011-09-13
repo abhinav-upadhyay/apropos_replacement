@@ -43,6 +43,7 @@
 typedef struct makemandb_flags {
 	int optimize;
 	int limit;	// limit the indexing to only DESCRIPTION section
+	int f;		// force removal of old database
 } makemandb_flags;
 
 typedef struct mandb_rec {
@@ -278,6 +279,7 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "flo")) != -1) {
 		switch (ch) {
 		case 'f':
+			mflags.f = 1;
 			remove(DBPATH);
 			break;
 		case 'l':
@@ -617,20 +619,22 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		"Total number of pages that could not be indexed due to parsing "
 		"errors = %d\n",
 		total_count, new_count, err_count);
-	
-	sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
-				"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
-			"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
-				" metadb.file_cache); "
-			"DROP TABLE metadb.file_cache";
+
+	if (mflags.f) {	
+		sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
+					"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
+				"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
+					" metadb.file_cache); "
+				"DROP TABLE metadb.file_cache";
 			
-	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("Attempt to remove old entries failed. You may want to run: "
-			"makemandb -f to prune and rebuild the database from scratch");
-		warnx("%s", errmsg);
-		free(errmsg);
-		return;
+		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+		if (errmsg != NULL) {
+			warnx("Attempt to remove old entries failed. You may want to run: "
+				"makemandb -f to prune and rebuild the database from scratch");
+			warnx("%s", errmsg);
+			free(errmsg);
+			return;
+		}
 	}
 }
 	
