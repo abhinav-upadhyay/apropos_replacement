@@ -633,7 +633,8 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		"errors = %d\n",
 		total_count, new_count, err_count);
 
-	if (mflags.f) {	
+	if (!mflags.f) {
+		printf("Deleting stale index entries\n");	
 		sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
 					"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
 				"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
