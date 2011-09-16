@@ -1028,8 +1028,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			for(i=0; i<sz; i++)
 				rec->name[i] = *temp++;
 			rec->name[i] = 0;
-			//append(&rec->name, temp, sz);
-			//append(&rec->name, "\0", 1);
+			
 			/* Build a space separated list of all the links to this page */
 			for(link = strtok(temp, " "); link; link = strtok(NULL, " ")) {
 				if (link[strlen(link)] == ',') {
@@ -1494,7 +1493,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 	
 	cleanup(rec);
-	free(rec->links);
 	return 0;
 }
 
