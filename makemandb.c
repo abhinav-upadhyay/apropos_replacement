@@ -1681,6 +1681,10 @@ free_secbuffs(mandb_rec *rec)
  *  In case the size of the data to be appended exceeds the number of bytes left 
  *  in the buffer, it reallocates buflen number of bytes and then continues.
  *  Value of offset field should be adjusted as new data is written.
+ *
+ *  NOTE: This function does not write the null byte at the end of the buffers, 
+ *  write a null byte at the position pointed to by offset before inserting data 
+ *  in the db.
  */
 static void
 append(secbuff *sbuff, const char *src, int srclen)
