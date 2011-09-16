@@ -911,6 +911,11 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 			append(&rec->errors, string, strlen(string));
 			break;
 		case SEC_NAME:
+		case SEC_EXAMPLES:
+		case SEC_STANDARDS:
+		case SEC_HISTORY:
+		case SEC_AUTHORS:
+		case SEC_BUGS:
 			break;
 		default:
 			append(&rec->desc, string, strlen(string));
@@ -1118,11 +1123,26 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		/* EXIT STATUS section can also be specified all on one line or on two
 		 * separate lines.
 		 */
-		else if (strcmp((const char *)head->string, "EXIT STATUS") == 0
+		else if (strcmp((const char *) head->string, "EXIT STATUS") == 0
 			|| (strcmp((const char *) head->string, "EXIT") ==0 &&
 			head->next->type == MAN_TEXT &&
-			strcmp((const char *)head->next->string, "STATUS") == 0))
+			strcmp((const char *) head->next->string, "STATUS") == 0))
 			man_parse_section(MANSEC_EXIT_STATUS, n, rec);
+		
+		else if (strcmp((const char *) head->string, "EXAMPLES") == 0)
+			man_parse_section(MANSEC_EXAMPLES, n, rec);
+		
+		else if (strcmp((const char *) head->string, "STANDARDS") == 0)
+			man_parse_section(MANSEC_STANDARDS, n , rec);
+		
+		else if (strcmp((const char *) head->string, "HISTORY") == 0)
+			man_parse_section(MANSEC_HISTORY, n, rec);
+		
+		else if (strcmp((const char *) head->string, "BUGS") == 0)
+			man_parse_section(MANSEC_BUGS, n, rec);
+		
+		else if (strcmp((const char *)head->string, "AUTHORS") == 0)
+			man_parse_section(MANSEC_AUTHORS, n, rec);
 
 		/* Store the rest of the content in desc */
 		else
@@ -1189,6 +1209,11 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 			pman_parse_node(n, &rec->errors);
 			break;
 		case MANSEC_NAME:
+		case MANSEC_EXAMPLES:
+		case MANSEC_STANDARDS:
+		case MANSEC_HISTORY:
+		case MANSEC_BUGS:
+		case MANSEC_AUTHORS:
 			break;
 		default:
 			pman_parse_node(n, &rec->desc);
