@@ -1607,9 +1607,19 @@ cleanup(mandb_rec *rec)
 	rec->file_path = NULL;
 }
 
+/*
+ * init_secbuffs--
+ *  Sets the value of buflen for all the sec_buff field of rec. And then 
+ *  allocate memory to each sec_buff member of rec.
+ */
 static void
 init_secbuffs(mandb_rec *rec)
 {
+    /* Some sec_buff might need more memory, for example desc which stores the 
+     * data of the DESCRIPTION section, while some might need very small amount 
+     * of memory. Therefore explicitly setting the value of buflen field for 
+     * each sec_buff
+     */
 	rec->desc.buflen = 10 * BUFLEN;
 	rec->lib.buflen = BUFLEN / 2;
 	rec->synopsis.buflen = 2 * BUFLEN;
@@ -1621,25 +1631,32 @@ init_secbuffs(mandb_rec *rec)
 	rec->errors.buflen = BUFLEN;
 
 	rec->desc.data = (char *) emalloc(rec->desc.buflen);
-	rec->desc.offset = 0;
 	rec->synopsis.data = (char *) emalloc(rec->synopsis.buflen);
-	rec->synopsis.offset = 0;
 	rec->lib.data = (char *) emalloc(rec->lib.buflen);
-	rec->lib.offset = 0;
 	rec->env.data = (char *) emalloc(rec->env.buflen);
-	rec->env.offset = 0;
 	rec->return_vals.data = (char *) emalloc(rec->return_vals.buflen);
-	rec->return_vals.offset = 0;
 	rec->exit_status.data = (char *) emalloc(rec->exit_status.buflen);
-	rec->exit_status.offset = 0;
 	rec->files.data = (char *) emalloc(rec->files.buflen);
-	rec->files.offset = 0;
 	rec->errors.data = (char *) emalloc(rec->errors.buflen);
-	rec->errors.offset = 0;
 	rec->diagnostics.data = (char *) emalloc(rec->diagnostics.buflen);
+
+	rec->desc.offset = 0;
+	rec->synopsis.offset = 0;
+	rec->lib.offset = 0;
+	rec->env.offset = 0;
+	rec->return_vals.offset = 0;
+	rec->exit_status.offset = 0;
+	rec->files.offset = 0;
+	rec->errors.offset = 0;
 	rec->diagnostics.offset = 0;
 }
 
+/*
+ * free_secbuffs--
+ *  This function should be called at the end, when all the pages have been 
+ *  parsed.
+ *  It frees the memory allocated to sec_buffs by init_secbuffs in the starting.
+ */
 static void
 free_secbuffs(mandb_rec *rec)
 {
@@ -1654,6 +1671,17 @@ free_secbuffs(mandb_rec *rec)
 	free(rec->errors.data);
 }
 
+/*
+ * append--
+ *  Concatenates a space and src at the end of sbuff->data (much like concat in 
+ *  apropos-utils.c).
+ *  Rather than reallocating space for writing data, it uses the value of the 
+ *  offset field of sec_buff to write new data at the free space left in the 
+ *  buffer.
+ *  In case the size of the data to be appended exceeds the number of bytes left 
+ *  in the buffer, it reallocates buflen number of bytes and then continues.
+ *  Value of offset field should be adjusted as new data is written.
+ */
 static void
 append(secbuff *sbuff, const char *src, int srclen)
 {
@@ -1673,13 +1701,13 @@ append(secbuff *sbuff, const char *src, int srclen)
 		flag++;
 	}
 		
-	/* Append a space at the end of dst */
+	/* Append a space at the end of the buffer */
 	if (sbuff->offset || flag) {
 		memcpy(sbuff->data + sbuff->offset, " ", 1);
 		sbuff->offset++;
 	}
 	
-	/* Now, copy src at the end of dst */	
+	/* Now, copy src at the end of the buffer */	
 	memcpy(sbuff->data + sbuff->offset, src, srclen);
 	sbuff->offset += srclen;
 	return;
