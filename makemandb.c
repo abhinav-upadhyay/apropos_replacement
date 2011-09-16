@@ -57,6 +57,7 @@ typedef struct makemandb_flags {
 } makemandb_flags;
 
 typedef struct mandb_rec {
+	/* Fields for mandb table */
 	char *name;	// for storing the name of the man page
 	char *name_desc; // for storing the one line description (.Nd)
 	secbuff desc; // for storing the DESCRIPTION section
@@ -68,19 +69,26 @@ typedef struct mandb_rec {
 	secbuff exit_status; // EXIT STATUS
 	secbuff diagnostics; // DIAGNOSTICS
 	secbuff errors; // ERRORS
-	char *md5_hash;
 	char *section;
-	char *machine;
-	char *links; //all the links to a page in a space separated form
-	char *file_path;
+	
+	/* Fields for mandb_meta table */
+	char *md5_hash;
 	dev_t device;
 	ino_t inode;
 	time_t mtime;
+	
+	/* Fields for mandb_links table */
+	char *machine;
+	char *links; //all the links to a page in a space separated form
+	char *file_path;
+	
+	/* Non-db fields */
 	int page_type; //Indicates the type of page: mdoc or man
 } mandb_rec;
 
 static void append(secbuff *sbuff, const char *src, int srclen);
 static void init_secbuffs(mandb_rec *);
+static void free_secbuffs(mandb_rec *);
 static int check_md5(const char *, sqlite3 *, const char *, char **);
 static void cleanup(mandb_rec *);
 static void get_section(const struct mdoc *, const struct man *, mandb_rec *);
@@ -374,18 +382,19 @@ main(int argc, char *argv[])
 	if (pclose(file) == -1) {
 		close_db(db);
 		cleanup(&rec);
+		free_secbuffs(&rec);
 		err(EXIT_FAILURE, "pclose error");
 	}
 	
 	update_db(db, mp, &rec);
 	mparse_free(mp);
+	free_secbuffs(&rec);
 	
 	/* Commit the transaction */
 	sqlite3_exec(db, "COMMIT", NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
-		cleanup(&rec);
 		exit(EXIT_FAILURE);
 	}
 	
@@ -393,7 +402,6 @@ main(int argc, char *argv[])
 		optimize(db);
 	
 	close_db(db);
-	cleanup(&rec);
 	return 0;
 }
 
@@ -542,7 +550,6 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		total_count++;
-		fprintf(stderr, "new row\n");
 		rec->device = sqlite3_column_int64(stmt, 0);
 		rec->inode = sqlite3_column_int64(stmt, 1);
 		rec->mtime = sqlite3_column_int64(stmt, 2);
@@ -554,7 +561,6 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			continue;
 		}
 		else if (md5_status == 0) {
-			fprintf(stderr, "update\n");
 			/* The md5 is already present in the database, so simply update the 
 			 * metadata, ignoring symlinks.
 			 */
@@ -1133,14 +1139,12 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 static void
 pman_parse_node(const struct man_node *n, secbuff *s)
 {
-	fprintf(stderr, "parse_node\n");
 	for (n = n->child; n; n = n->next) {
 		if (n->type == MAN_TEXT)
 			append(s, n->string, strlen(n->string));
 		else
 			pman_parse_node(n, s);
 	}
-	fprintf(stderr, "leaving parse_node\n");
 }
 
 /*
@@ -1163,41 +1167,32 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 	switch (sec) {
 		case MANSEC_LIBRARY:
 			pman_parse_node(n, &rec->lib);
-			fprintf(stderr, "lib\n");
 			break;
 		case MANSEC_SYNOPSIS:
 			pman_parse_node(n, &rec->synopsis);
-			fprintf(stderr, "syn\n");
 			break;
 		case MANSEC_RETURN_VALUES:
 			pman_parse_node(n, &rec->return_vals);
-			fprintf(stderr, "ret\n");			
 			break;
 		case MANSEC_ENVIRONMENT:
 			pman_parse_node(n, &rec->env);
-			fprintf(stderr, "env\n");			
 			break;
 		case MANSEC_FILES:
 			pman_parse_node(n, &rec->files);
-			fprintf(stderr, "files\n");			
 			break;
 		case MANSEC_EXIT_STATUS:
 			pman_parse_node(n, &rec->exit_status);
-			fprintf(stderr, "exit\n");			
 			break;
 		case MANSEC_DIAGNOSTICS:
 			pman_parse_node(n, &rec->diagnostics);
-			fprintf(stderr, "diag\n");			
 			break;
 		case MANSEC_ERRORS:
 			pman_parse_node(n, &rec->errors);
-			fprintf(stderr, "errs\n");		
 			break;
 		case MANSEC_NAME:
 			break;
 		default:
 			pman_parse_node(n, &rec->desc);
-			fprintf(stderr, "desc\n");
 			break;
 	}
 
@@ -1212,7 +1207,6 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 static int
 insert_into_db(sqlite3 *db, mandb_rec *rec)
 {
-	fprintf(stderr, "insert_into_db\n");
 	int rc = 0;
 	int idx = -1;
 	const char *sqlstr = NULL;
@@ -1229,7 +1223,8 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	
+
+	/* Write null byte at the end of all the sec_buffs */	
 	rec->desc.data[rec->desc.offset] = 0;
 	rec->lib.data[rec->lib.offset] = 0;
 	rec->synopsis.data[rec->synopsis.offset] = 0;
@@ -1240,7 +1235,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	rec->diagnostics.data[rec->diagnostics.offset] = 0;
 	rec->errors.data[rec->errors.offset] = 0;
 	
-	fprintf(stderr, "page ok\n");
 	/* In case of a mdoc page: (sorry, no better place to put this code)
 	 *  parse the comma separated list of names of man pages, the first name 
 	 *  will be stored in the mandb table, rest will be treated as links and put
@@ -1249,7 +1243,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	if (rec->page_type == MDOC) {
 		rec->links = strdup(rec->name);
 		free(rec->name);
-//		rec->name.offset = 0;
 		int sz = strcspn(rec->links, " \0");
 		rec->name = emalloc(sz + 1);
 		memcpy(rec->name, rec->links, sz);
@@ -1260,7 +1253,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		rec->links += sz;
 		if (*(rec->links) == ' ')
 			rec->links++;
-		fprintf(stderr, "links prepared\n");
 	}
 	
 /*------------------------ Populate the mandb table---------------------------*/
@@ -1283,7 +1275,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound\n");
+
 	idx = sqlite3_bind_parameter_index(stmt, ":section");
 	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1292,7 +1284,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound2\n");
+
 	idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
 	rc = sqlite3_bind_text(stmt, idx, rec->name_desc, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1301,7 +1293,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound3\n");
+
 	idx = sqlite3_bind_parameter_index(stmt, ":desc");
 	rc = sqlite3_bind_text(stmt, idx, rec->desc.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1310,7 +1302,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound4\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":lib");
 	rc = sqlite3_bind_text(stmt, idx, rec->lib.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1319,7 +1311,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound5\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":synopsis");
 	rc = sqlite3_bind_text(stmt, idx, rec->synopsis.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1328,7 +1320,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound6\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":return_vals");
 	rc = sqlite3_bind_text(stmt, idx, rec->return_vals.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1337,7 +1329,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound7\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":env");
 	rc = sqlite3_bind_text(stmt, idx, rec->env.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1346,7 +1338,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound8\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":files");
 	rc = sqlite3_bind_text(stmt, idx, rec->files.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1355,7 +1347,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound9\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
 	rc = sqlite3_bind_text(stmt, idx, rec->exit_status.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1364,7 +1356,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound10\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":diagnostics");
 	rc = sqlite3_bind_text(stmt, idx, rec->diagnostics.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1373,7 +1365,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound11\n");	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":errors");
 	rc = sqlite3_bind_text(stmt, idx, rec->errors.data, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1382,7 +1374,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "name bound12\n");
+
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
 		warnx("%s", sqlite3_errmsg(db));
@@ -1390,7 +1382,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		cleanup(rec);
 		return -1;
 	}
-	fprintf(stderr, "inserted\n");
+
 	sqlite3_finalize(stmt);
 	
 	/* Get the row id of the last inserted row */
@@ -1503,7 +1495,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	
 	cleanup(rec);
 	free(rec->links);
-	fprintf(stderr, "leaving insert_into_db\n");
 	return 0;
 }
 
@@ -1591,30 +1582,6 @@ optimize(sqlite3 *db)
 static void
 cleanup(mandb_rec *rec)
 {
-	fprintf(stderr, "cleanup\n");
-	/*free(rec->name);
-	rec->name = NULL;
-	free(rec->name_desc);
-	rec->name_desc = NULL;
-	free(rec->desc.data);
-	free(rec->md5_hash);
-	free(rec->section);
-	free(rec->lib.data);
-	free(rec->synopsis.data);
-	free(rec->return_vals.data);
-	free(rec->env.data);
-	free(rec->files.data);
-	free(rec->exit_status.data);
-	free(rec->diagnostics.data);
-	free(rec->errors.data);
-	free(rec->links);
-	free(rec->machine);
-	free(rec->file_path);
-	memset(rec, 0, sizeof(*rec));
-	init_secbuffs(rec);*/
-	//rec->name.offset = 0;
-	free(rec->name_desc);
-	rec->name_desc = NULL;
 	rec->desc.offset = 0;
 	rec->synopsis.offset = 0;
 	rec->lib.offset = 0;
@@ -1624,36 +1591,27 @@ cleanup(mandb_rec *rec)
 	rec->diagnostics.offset = 0;
 	rec->errors.offset = 0;
 	rec->files.offset = 0;
-	free(rec->md5_hash);
-	fprintf(stderr, "cleanup end1\n");
-	free(rec->machine);
-	fprintf(stderr, "cleanup end2\n");
-	free(rec->section);
-	fprintf(stderr, "cleanup end3\n");
-	free(rec->links);
-	fprintf(stderr, "cleanup end4\n");
-	free(rec->file_path);
-	fprintf(stderr, "cleanup end5\n");
-	free(rec->name);
-	fprintf(stderr, "cleanup end6\n");
-	rec->name = NULL;
-	fprintf(stderr, "cleanup end7\n");
-	rec->md5_hash = NULL;
-	fprintf(stderr, "cleanup end8\n");
-	rec->machine = NULL;
-	fprintf(stderr, "cleanup end9\n");
-	rec->section = NULL;
-	fprintf(stderr, "cleanup end10\n");
-	rec->links = NULL;
-	fprintf(stderr, "cleanup end11\n");
 	
+	free(rec->md5_hash);
+	free(rec->machine);
+	free(rec->section);
+	free(rec->links);
+	free(rec->file_path);
+	free(rec->name);
+	free(rec->name_desc);
+	
+	rec->name_desc = NULL;
+	rec->name = NULL;
+	rec->md5_hash = NULL;
+	rec->machine = NULL;
+	rec->section = NULL;
+	rec->links = NULL;
+	rec->file_path = NULL;
 }
 
 static void
 init_secbuffs(mandb_rec *rec)
 {
-//	rec->name.buflen = BUFLEN;
-//	rec->name_desc.buflen = BUFLEN;
 	rec->desc.buflen = 10 * BUFLEN;
 	rec->lib.buflen = BUFLEN / 2;
 	rec->synopsis.buflen = 2 * BUFLEN;
@@ -1664,10 +1622,6 @@ init_secbuffs(mandb_rec *rec)
 	rec->diagnostics.buflen = BUFLEN;
 	rec->errors.buflen = BUFLEN;
 
-//	rec->name.data = (char *) emalloc(rec->name.buflen);
-//	rec->name.offset = 0;
-//	rec->name_desc.data = (char *) emalloc(rec->name_desc.buflen);
-//	rec->name_desc.offset = 0;
 	rec->desc.data = (char *) emalloc(rec->desc.buflen);
 	rec->desc.offset = 0;
 	rec->synopsis.data = (char *) emalloc(rec->synopsis.buflen);
@@ -1680,22 +1634,32 @@ init_secbuffs(mandb_rec *rec)
 	rec->return_vals.offset = 0;
 	rec->exit_status.data = (char *) emalloc(rec->exit_status.buflen);
 	rec->exit_status.offset = 0;
-	rec->env.data = (char *) emalloc(rec->env.buflen);
-	rec->env.offset = 0;
 	rec->files.data = (char *) emalloc(rec->files.buflen);
 	rec->files.offset = 0;
 	rec->errors.data = (char *) emalloc(rec->errors.buflen);
 	rec->errors.offset = 0;
 	rec->diagnostics.data = (char *) emalloc(rec->diagnostics.buflen);
 	rec->diagnostics.offset = 0;
-	fprintf(stderr, "init\n");
-	
 }
+
+static void
+free_secbuffs(mandb_rec *rec)
+{
+	free(rec->desc.data);
+	free(rec->lib.data);
+	free(rec->synopsis.data);
+	free(rec->return_vals.data);
+	free(rec->exit_status.data);
+	free(rec->env.data);
+	free(rec->files.data);
+	free(rec->diagnostics.data);
+	free(rec->errors.data);
+}
+
 static void
 append(secbuff *sbuff, const char *src, int srclen)
 {
 	short flag = 0;
-	fprintf(stderr, "append\n");
 	assert(src != NULL);
 	if (srclen == -1)
 		srclen = strlen(src);
@@ -1707,6 +1671,7 @@ append(secbuff *sbuff, const char *src, int srclen)
 	
 	if ((srclen + 2) >= (sbuff->buflen - sbuff->offset)) {
 		sbuff->data = (char *) erealloc(sbuff->data, sbuff->buflen + sbuff->offset);
+		sbuff->buflen += sbuff->buflen;
 		flag++;
 	}
 		
