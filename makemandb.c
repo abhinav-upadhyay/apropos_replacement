@@ -62,7 +62,6 @@ typedef struct mandb_rec {
 	char *name_desc; // for storing the one line description (.Nd)
 	secbuff desc; // for storing the DESCRIPTION section
 	secbuff lib; // for the LIBRARY section
-	secbuff synopsis; // for the SYNOPSIS section
 	secbuff return_vals; // RETURN VALUES
 	secbuff env; // ENVIRONMENT
 	secbuff files; // FILES
@@ -889,9 +888,6 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 		case SEC_LIBRARY:
 			append(&rec->lib, string, strlen(string));
 			break;
-		case SEC_SYNOPSIS:
-			append(&rec->synopsis, string, strlen(string));
-			break;
 		case SEC_RETURN_VALUES:
 			append(&rec->return_vals, string, strlen(string));
 			break;
@@ -911,6 +907,7 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 			append(&rec->errors, string, strlen(string));
 			break;
 		case SEC_NAME:
+		case SEC_SYNOPSIS:
 		case SEC_EXAMPLES:
 		case SEC_STANDARDS:
 		case SEC_HISTORY:
@@ -1187,9 +1184,6 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 		case MANSEC_LIBRARY:
 			pman_parse_node(n, &rec->lib);
 			break;
-		case MANSEC_SYNOPSIS:
-			pman_parse_node(n, &rec->synopsis);
-			break;
 		case MANSEC_RETURN_VALUES:
 			pman_parse_node(n, &rec->return_vals);
 			break;
@@ -1209,6 +1203,7 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 			pman_parse_node(n, &rec->errors);
 			break;
 		case MANSEC_NAME:
+		case MANSEC_SYNOPSIS:
 		case MANSEC_EXAMPLES:
 		case MANSEC_STANDARDS:
 		case MANSEC_HISTORY:
@@ -1251,7 +1246,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	/* Write null byte at the end of all the sec_buffs */	
 	rec->desc.data[rec->desc.offset] = 0;
 	rec->lib.data[rec->lib.offset] = 0;
-	rec->synopsis.data[rec->synopsis.offset] = 0;
 	rec->env.data[rec->env.offset] = 0;
 	rec->return_vals.data[rec->return_vals.offset] = 0;
 	rec->exit_status.data[rec->exit_status.offset] = 0;
@@ -1281,7 +1275,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	
 /*------------------------ Populate the mandb table---------------------------*/
 	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc, "
-			":lib, :synopsis, :return_vals, :env, :files, :exit_status, "
+			":lib, :return_vals, :env, :files, :exit_status, "
 			":diagnostics, :errors)";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -1329,15 +1323,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 
 	idx = sqlite3_bind_parameter_index(stmt, ":lib");
 	rc = sqlite3_bind_text(stmt, idx, rec->lib.data, -1, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":synopsis");
-	rc = sqlite3_bind_text(stmt, idx, rec->synopsis.data, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
@@ -1606,7 +1591,6 @@ static void
 cleanup(mandb_rec *rec)
 {
 	rec->desc.offset = 0;
-	rec->synopsis.offset = 0;
 	rec->lib.offset = 0;
 	rec->return_vals.offset = 0;
 	rec->env.offset = 0;
@@ -1647,7 +1631,6 @@ init_secbuffs(mandb_rec *rec)
      */
 	rec->desc.buflen = 10 * BUFLEN;
 	rec->lib.buflen = BUFLEN / 2;
-	rec->synopsis.buflen = 2 * BUFLEN;
 	rec->return_vals.buflen = BUFLEN;
 	rec->exit_status.buflen = BUFLEN;
 	rec->env.buflen = BUFLEN;
@@ -1656,7 +1639,6 @@ init_secbuffs(mandb_rec *rec)
 	rec->errors.buflen = BUFLEN;
 
 	rec->desc.data = (char *) emalloc(rec->desc.buflen);
-	rec->synopsis.data = (char *) emalloc(rec->synopsis.buflen);
 	rec->lib.data = (char *) emalloc(rec->lib.buflen);
 	rec->env.data = (char *) emalloc(rec->env.buflen);
 	rec->return_vals.data = (char *) emalloc(rec->return_vals.buflen);
@@ -1666,7 +1648,6 @@ init_secbuffs(mandb_rec *rec)
 	rec->diagnostics.data = (char *) emalloc(rec->diagnostics.buflen);
 
 	rec->desc.offset = 0;
-	rec->synopsis.offset = 0;
 	rec->lib.offset = 0;
 	rec->env.offset = 0;
 	rec->return_vals.offset = 0;
@@ -1687,7 +1668,6 @@ free_secbuffs(mandb_rec *rec)
 {
 	free(rec->desc.data);
 	free(rec->lib.data);
-	free(rec->synopsis.data);
 	free(rec->return_vals.data);
 	free(rec->exit_status.data);
 	free(rec->env.data);
