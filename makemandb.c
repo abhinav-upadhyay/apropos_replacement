@@ -318,6 +318,15 @@ main(int argc, char *argv[])
 	
 	if ((db = init_db(DB_CREATE)) == NULL)
 		errx(EXIT_FAILURE, "%s", "Could not initialize the database");
+	
+	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 
+				&errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		close_db(db);
+		exit(EXIT_FAILURE);
+	}
 
 	sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL, 
 				&errmsg);
