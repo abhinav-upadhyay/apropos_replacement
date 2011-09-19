@@ -41,7 +41,6 @@
 #include "apropos-utils.h"
 #include "fts3_tokenizer.h"
 #include "sqlite3.h"
-#include "stopword_tokenizer.h"
 
 typedef struct apropos_flags {
 	const char *sec_nums[SECMAX];
