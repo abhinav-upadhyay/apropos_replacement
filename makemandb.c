@@ -287,12 +287,12 @@ main(int argc, char *argv[])
 	FILE *file;
 	const char *sqlstr;
 	char *line;
-	char *temp = NULL;
 	char *errmsg = NULL;
 	char ch;
 	struct mparse *mp = NULL;
 	sqlite3 *db;
-	size_t len;
+	ssize_t len = 0;
+	size_t linesize = 0;
 	struct mandb_rec rec;
 	
 	while ((ch = getopt(argc, argv, "flo")) != -1) {
@@ -369,25 +369,13 @@ main(int argc, char *argv[])
 	}
 
 	printf("Building temporary file cache\n");	
-	while ((line = fgetln(file, &len)) != NULL) {
+	while ((len = getline(&line, &linesize, file)) != -1) {
 		/* Replace the new line character at the end of string with '\0' */
-		if (line[len - 1] == '\n')
-			line[len - 1] = '\0';
-		/* Last line will not contain a new line character, so a work around */
-		else {
-			temp = (char *) emalloc(len + 1);
-			memcpy(temp, line, len);
-			temp[len] = '\0';
-			line = temp;
-		}
+		line[len - 1] = '\0';
 		/* Traverse the man page directories and parse the pages */
 		traversedir(line, db, mp);
-		
-		if (temp != NULL) {
-			free(temp);
-			temp = NULL;
-		}
 	}
+	free(line);
 	
 	if (pclose(file) == -1) {
 		close_db(db);
