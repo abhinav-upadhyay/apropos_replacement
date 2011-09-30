@@ -58,6 +58,18 @@ typedef struct inverse_document_frequency {
 	int status;
 } inverse_document_frequency;
 
+typedef struct set {
+	char *a;
+	char *b;
+} set;
+
+typedef struct candidates {
+	char *deletes[255];
+	char *transposes[255];
+	char *replaces[26*255];
+	char *inserts[26*255];
+} candidates;
+
 /* weights for individual columns */
 static const double col_weights[] = {
 	2.0,	// NAME
@@ -149,11 +161,12 @@ create_db(sqlite3 *db)
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 				"name_desc, desc, lib, return_vals, env, files, "
 				"exit_status, diagnostics, errors, compress=zip, "
-				"uncompress=unzip, tokenize=porter); "	//mandb table
+				"uncompress=unzip, tokenize=simple); "	//mandb table
 			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, file UNIQUE, "
 				"md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "	//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-				"machine); ";	//mandb_links
+				"machine); "	//mandb_links
+			"CREATE VIRTUAL TABLE mandb_aux USING fts4aux(mandb)";
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
@@ -684,3 +697,118 @@ int run_query_pager(sqlite3 *db, query_args *args)
 	return 0;
 
 }
+
+static void
+edits1 (char *word, candidates *cand)
+{
+	int i, j, len_a, len_b;
+	char alphabet;
+	fprintf(stderr, "%s\n", word);
+	int n = strlen(word);
+	set splits[n];
+
+	for (i = 1; i < n + 1; i++) {
+		splits[i - 1].a = (char *) emalloc(i + 1);
+		splits[i - 1].b = (char *) emalloc(n - i + 1);
+		memcpy(splits[i - 1].a, word, i);
+		memcpy(splits[i - 1].b, word + i, n - i + 1);
+		splits[i - 1].a[i] = 0;
+	}
+
+	for (i = 0; i < n; i++) {
+		len_a = strlen(splits[i].a);
+		len_b = strlen(splits[i].b);
+		assert(len_a + len_b == n);
+		cand->deletes[i] = emalloc(n+1);
+		memcpy(cand->deletes[i], splits[i].a, len_a);
+		if (len_b >= 1)
+		memcpy(cand->deletes[i] + len_a - 1, splits[i].b + 1, len_b - 1);
+		cand->deletes[i][n] =0;
+		cand->transposes[i] = emalloc(n+1);
+		memcpy(cand->transposes[i], splits[i].a, len_a);
+		if (len_b >= 1)
+		memcpy(cand->transposes[i] + len_a, splits[i].b + 1, 1);
+		if (len_b >= 1)
+		memcpy(cand->transposes[i] + len_a + 1, splits[i].b, 1);
+		if (len_b >= 2)
+		memcpy(cand->transposes[i] + len_a + 2, splits[i].b + 2, len_b - 2);
+		cand->transposes[i][n] = 0;
+		
+		for (alphabet = 'a', j = 0; alphabet <= 'z'; alphabet++, j++) {
+			cand->replaces[i*j] = emalloc(n+1);
+			cand->inserts[i*j] = emalloc(n+2);
+			memcpy(cand->replaces[i*j], splits[i].a, len_a);
+			memcpy(cand->replaces[i*j] + len_a, &alphabet, 1);
+			if (len_b >= 1)
+			memcpy(cand->replaces[i*j] + len_a + 1, splits[i].b + 1, len_b - 1);
+			cand->replaces[i*j][n] = 0;
+			memcpy(cand->inserts[i*j], splits[i].a, len_a);
+			memcpy(cand->inserts[i*j] + len_a, &alphabet, 1);
+			memcpy(cand->inserts[i*j] + len_a + 1, splits[i].b, len_b);
+			cand->inserts[i*j][n + 1] = 0;
+		}
+	}
+}
+
+static char *
+known_word(sqlite3 *db, char **list, int n)
+{
+	int i, rc;
+	int flag = 0;
+	char *temp, *sqlstr, *termlist, *correct = NULL;
+	sqlite3_stmt *stmt;
+	easprintf(&termlist, "(");
+	for (i = 0; i < n; i++) {
+		if (list[i] == NULL)
+			continue;
+		else if (flag)
+			concat(&termlist, ",", 1);
+		easprintf(&temp, "\'%s\'", list[i]);
+		concat(&termlist, temp, -1);
+		flag = 1;
+		free(temp);
+	}
+	concat(&termlist, ")", 1);
+	easprintf(&sqlstr, "SELECT term FROM mandb_aux WHERE col = \'*\' AND "
+						"occurrences = (SELECT MAX(occurrences) from mandb_aux "
+						"WHERE col=\'*\' AND term IN %s) AND term in %s", termlist, termlist);
+	fprintf(stderr, "%s\n", sqlstr);
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		return NULL;
+	}
+	
+	if (sqlite3_step(stmt) == SQLITE_ROW)
+			correct = strdup((char *) sqlite3_column_text(stmt, 0));
+	
+	sqlite3_finalize(stmt);
+	free(sqlstr);
+	free(termlist);
+	fprintf(stderr, "%s\n", correct);
+	return (correct);
+}
+
+char *
+spell(sqlite3 *db, char *word)
+{
+	candidates cand;
+	edits1(word, &cand);
+	int n = strlen(word);
+	char *matches[4];
+	char *correct;
+	matches[0]  = known_word(db, cand.deletes, n);
+	matches[1] = known_word(db, cand.transposes, n);
+	matches[2] = known_word(db, cand.replaces, 26*n);
+	matches[3] = known_word(db, cand.inserts, 26*n);
+	correct = known_word(db, matches, 4);
+	free(matches[0]);
+	free(matches[1]);
+	free(matches[2]);
+	free(matches[3]);
+	return correct;
+
+	
+}
+
+
