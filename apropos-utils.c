@@ -702,6 +702,7 @@ static void
 edits1 (char *word, candidates *cand)
 {
 	int i, j, len_a, len_b;
+	int k = 0;
 	char alphabet;
 	fprintf(stderr, "%s\n", word);
 	int n = strlen(word);
@@ -722,7 +723,7 @@ edits1 (char *word, candidates *cand)
 		cand->deletes[i] = emalloc(n+1);
 		memcpy(cand->deletes[i], splits[i].a, len_a);
 		if (len_b >= 1)
-		memcpy(cand->deletes[i] + len_a - 1, splits[i].b + 1, len_b - 1);
+		memcpy(cand->deletes[i] + len_a , splits[i].b + 1, len_b - 1);
 		cand->deletes[i][n] =0;
 		cand->transposes[i] = emalloc(n+1);
 		memcpy(cand->transposes[i], splits[i].a, len_a);
@@ -735,18 +736,19 @@ edits1 (char *word, candidates *cand)
 		cand->transposes[i][n] = 0;
 		
 		for (alphabet = 'a', j = 0; alphabet <= 'z'; alphabet++, j++) {
-			cand->replaces[i*j] = emalloc(n+1);
-			cand->inserts[i*j] = emalloc(n+2);
-			memcpy(cand->replaces[i*j], splits[i].a, len_a);
-			memcpy(cand->replaces[i*j] + len_a, &alphabet, 1);
-			if (len_b >= 1)
-			memcpy(cand->replaces[i*j] + len_a + 1, splits[i].b + 1, len_b - 1);
-			cand->replaces[i*j][n] = 0;
-			memcpy(cand->inserts[i*j], splits[i].a, len_a);
-			memcpy(cand->inserts[i*j] + len_a, &alphabet, 1);
-			memcpy(cand->inserts[i*j] + len_a + 1, splits[i].b, len_b);
-			cand->inserts[i*j][n + 1] = 0;
+			cand->replaces[k+j] = emalloc(n+1);
+			cand->inserts[k+j] = emalloc(n+2);
+			memcpy(cand->replaces[k+j], splits[i].a, len_a);
+			memcpy(cand->replaces[k+j] + len_a, &alphabet, 1);
+			if (len_b - 1 >= 1)
+			memcpy(cand->replaces[k+j] + len_a + 1, splits[i].b + 1, len_b - 1);
+			cand->replaces[k+j][n] = 0;
+			memcpy(cand->inserts[k+j], splits[i].a, len_a);
+			memcpy(cand->inserts[k+j] + len_a, &alphabet, 1);
+			memcpy(cand->inserts[k+j] + len_a + 1, splits[i].b, len_b);
+			cand->inserts[k+j][n + 1] = 0;
 		}
+		k += 26;
 	}
 }
 
