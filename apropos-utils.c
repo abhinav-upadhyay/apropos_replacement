@@ -63,13 +63,6 @@ typedef struct set {
 	char *b;
 } set;
 
-typedef struct candidates {
-	char *deletes[255];
-	char *transposes[255];
-	char *replaces[26*255];
-	char *inserts[26*255];
-} candidates;
-
 /* weights for individual columns */
 static const double col_weights[] = {
 	2.0,	// NAME
@@ -698,15 +691,15 @@ int run_query_pager(sqlite3 *db, query_args *args)
 
 }
 
-static void
-edits1 (char *word, candidates *cand)
+static char **
+edits1 (char *word)
 {
 	int i, j, len_a, len_b;
-	int k = 0;
+	int counter = 0;
 	char alphabet;
-	fprintf(stderr, "%s\n", word);
 	int n = strlen(word);
 	set splits[n + 1];
+	char **candidates = emalloc ((n + n - 1 + 26 * n + 26 * (n + 1)) * sizeof(char *));
 
 	for (i = 0; i < n + 1; i++) {
 		splits[i].a = (char *) emalloc(i + 1);
@@ -720,62 +713,98 @@ edits1 (char *word, candidates *cand)
 		len_a = strlen(splits[i].a);
 		len_b = strlen(splits[i].b);
 		assert(len_a + len_b == n);
-		cand->deletes[i] = emalloc(n+1);
-		memcpy(cand->deletes[i], splits[i].a, len_a);
-		if (len_b >= 1)
-			memcpy(cand->deletes[i] + len_a , splits[i].b + 1, len_b - 1);
-		cand->deletes[i][n] =0;
-		cand->transposes[i] = emalloc(n+1);
-		memcpy(cand->transposes[i], splits[i].a, len_a);
-		if (len_b >= 1)
-			memcpy(cand->transposes[i] + len_a, splits[i].b + 1, 1);
-		if (len_b >= 1)
-			memcpy(cand->transposes[i] + len_a + 1, splits[i].b, 1);
-		if (len_b >= 2)
-			memcpy(cand->transposes[i] + len_a + 2, splits[i].b + 2, len_b - 2);
-		cand->transposes[i][n] = 0;
+		
+		/* Deletes */
+		if (i < n) {
+			candidates[counter] = emalloc(n);
+			memcpy(candidates[counter], splits[i].a, len_a);
+			if (len_b -1 > 0)
+				memcpy(candidates[counter] + len_a , splits[i].b + 1, len_b - 1);
+			candidates[counter][n - 1] =0;
+			counter++;
+		}
+		
+		/* Transposes */
+		if (i < n - 1) {
+			candidates[counter] = emalloc(n + 1);
+			memcpy(candidates[counter], splits[i].a, len_a);
+			if (len_b >= 1)
+				memcpy(candidates[counter] + len_a, splits[i].b + 1, 1);
+			if (len_b >= 1)
+				memcpy(candidates[counter] + len_a + 1, splits[i].b, 1);
+			if (len_b >= 2)
+				memcpy(candidates[counter] + len_a + 2, splits[i].b + 2, len_b - 2);
+			candidates[counter][n] = 0;
+			counter++;
+		}
 		
 		for (alphabet = 'a', j = 0; alphabet <= 'z'; alphabet++, j++) {
-			cand->replaces[k+j] = emalloc(n+1);
-			cand->inserts[k+j] = emalloc(n+2);
-			memcpy(cand->replaces[k+j], splits[i].a, len_a);
-			memcpy(cand->replaces[k+j] + len_a, &alphabet, 1);
-			if (len_b >= 1)
-				memcpy(cand->replaces[k+j] + len_a + 1, splits[i].b + 1, len_b - 1);
-			cand->replaces[k+j][n] = 0;
-			memcpy(cand->inserts[k+j], splits[i].a, len_a);
-			memcpy(cand->inserts[k+j] + len_a, &alphabet, 1);
+			/* Replaces */
+			if (i < n) {
+				candidates[counter] = emalloc(n + 1);
+				memcpy(candidates[counter], splits[i].a, len_a);
+				memcpy(candidates[counter] + len_a, &alphabet, 1);
+				if (len_b - 1 >= 1)
+					memcpy(candidates[counter] + len_a + 1, splits[i].b + 1, len_b - 1);
+				candidates[counter][n] = 0;
+				counter++;
+			}
+			
+			/* Inserts */
+			candidates[counter] = emalloc(n + 2);
+			memcpy(candidates[counter], splits[i].a, len_a);
+			memcpy(candidates[counter] + len_a, &alphabet, 1);
 			if (len_b >=1)
-				memcpy(cand->inserts[k+j] + len_a + 1, splits[i].b, len_b);
-			cand->inserts[k+j][n + 1] = 0;
+				memcpy(candidates[counter] + len_a + 1, splits[i].b, len_b);
+			candidates[counter][n + 1] = 0;
+			counter++;
 		}
-		k += 26;
 	}
+	return candidates;
 }
 
 static char *
 known_word(sqlite3 *db, char **list, int n)
 {
 	int i, rc;
-	int flag = 0;
-	char *temp, *sqlstr, *termlist, *correct = NULL;
+	char *temp = NULL, *sqlstr, *termlist = NULL, *correct = NULL;
 	sqlite3_stmt *stmt;
-	easprintf(&termlist, "(");
+	int total_len = 20048;
+	termlist = emalloc (total_len);
+	int offset = 0;
+	int len;
+	termlist[0] = '(';
+	offset++;
+	
 	for (i = 0; i < n; i++) {
-		if (list[i] == NULL)
-			continue;
-		else if (flag)
-			concat(&termlist, ",", 1);
-		easprintf(&temp, "\'%s\'", list[i]);
-		concat(&termlist, temp, -1);
-		flag = 1;
-		free(temp);
+		int d = strlen(list[i]);
+		if (total_len - offset < d + 3) {
+			termlist = erealloc(termlist, offset + total_len);
+			total_len *= 2;
+		}
+		memcpy(termlist + offset, "\'", 1);
+		offset++;
+		memcpy(termlist + offset, list[i], d);
+		offset += d;
+
+		if (i == n -1) {
+			memcpy(termlist + offset, "\'", 1);
+			offset++;
+		}
+		else {
+			memcpy(termlist + offset, "\',", 2);
+			offset += 2;
+		}
+			
 	}
-	concat(&termlist, ")", 1);
-	easprintf(&sqlstr, "SELECT term FROM mandb_aux WHERE col = \'*\' AND "
-						"occurrences = (SELECT MAX(occurrences) from mandb_aux "
-						"WHERE col=\'*\' AND term IN %s) AND term in %s", termlist, termlist);
-	fprintf(stderr, "%s\n", sqlstr);
+	if (total_len - offset > 3)
+		memcpy(termlist + offset, ")", 2);
+	else
+		concat(&termlist, ")", 1);
+
+	easprintf(&sqlstr, "SELECT term FROM metadb.dict WHERE "
+						"occurrences = (SELECT MAX(occurrences) from metadb.dict "
+						"WHERE term IN %s) AND term in %s", termlist, termlist);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
@@ -788,30 +817,59 @@ known_word(sqlite3 *db, char **list, int n)
 	sqlite3_finalize(stmt);
 	free(sqlstr);
 	free(termlist);
-	fprintf(stderr, "%s\n", correct);
 	return (correct);
 }
 
 char *
 spell(sqlite3 *db, char *word)
 {
-	candidates cand;
-	edits1(word, &cand);
+	char **candidates;
+	candidates = edits1(word);
 	int n = strlen(word);
-	char *matches[4];
+	int i;
 	char *correct;
-	matches[0]  = known_word(db, cand.deletes, n);
-	matches[1] = known_word(db, cand.transposes, n - 1);
-	matches[2] = known_word(db, cand.replaces, 26*n);
-	matches[3] = known_word(db, cand.inserts, 26*(n+1));
-	correct = known_word(db, matches, 4);
-	free(matches[0]);
-	free(matches[1]);
-	free(matches[2]);
-	free(matches[3]);
+	int count = n + n -1 + 26 * n + 26 * (n + 1);
+	int count2;
+	char **cand2 = NULL;
+	char *errmsg;
+	char *sqlstr;
+	
+	sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL, 
+				&errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		close_db(db);
+		exit(EXIT_FAILURE);
+	}
+	
+	sqlstr = "CREATE TABLE metadb.dict AS SELECT term, occurrences FROM mandb_aux WHERE col=\'*\' ;"
+			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_term ON "
+				"dict (term)";
+			
+
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		close_db(db);
+		exit(EXIT_FAILURE);
+	}
+	
+	correct = known_word(db, candidates, count);
+	if (correct == NULL) {	
+		for (i = 0; i < count; i++) {
+			n = strlen(candidates[i]);
+			count2 = n + n - 1 + 26 * n + 26 * (n + 1);
+			cand2 = edits1(candidates[i]);
+			free(candidates[i]);
+			if ((correct = known_word(db, cand2, count2)))
+				break;
+		}
+		free(candidates);
+		candidates = NULL;
+	}
 	return correct;
 
 	
 }
-
-
