@@ -706,33 +706,33 @@ edits1 (char *word, candidates *cand)
 	char alphabet;
 	fprintf(stderr, "%s\n", word);
 	int n = strlen(word);
-	set splits[n];
+	set splits[n + 1];
 
-	for (i = 1; i < n + 1; i++) {
-		splits[i - 1].a = (char *) emalloc(i + 1);
-		splits[i - 1].b = (char *) emalloc(n - i + 1);
-		memcpy(splits[i - 1].a, word, i);
-		memcpy(splits[i - 1].b, word + i, n - i + 1);
-		splits[i - 1].a[i] = 0;
+	for (i = 0; i < n + 1; i++) {
+		splits[i].a = (char *) emalloc(i + 1);
+		splits[i].b = (char *) emalloc(n - i + 1);
+		memcpy(splits[i].a, word, i);
+		memcpy(splits[i].b, word + i, n - i + 1);
+		splits[i].a[i] = 0;
 	}
 
-	for (i = 0; i < n; i++) {
+	for (i = 0; i < n + 1; i++) {
 		len_a = strlen(splits[i].a);
 		len_b = strlen(splits[i].b);
 		assert(len_a + len_b == n);
 		cand->deletes[i] = emalloc(n+1);
 		memcpy(cand->deletes[i], splits[i].a, len_a);
 		if (len_b >= 1)
-		memcpy(cand->deletes[i] + len_a , splits[i].b + 1, len_b - 1);
+			memcpy(cand->deletes[i] + len_a , splits[i].b + 1, len_b - 1);
 		cand->deletes[i][n] =0;
 		cand->transposes[i] = emalloc(n+1);
 		memcpy(cand->transposes[i], splits[i].a, len_a);
 		if (len_b >= 1)
-		memcpy(cand->transposes[i] + len_a, splits[i].b + 1, 1);
+			memcpy(cand->transposes[i] + len_a, splits[i].b + 1, 1);
 		if (len_b >= 1)
-		memcpy(cand->transposes[i] + len_a + 1, splits[i].b, 1);
+			memcpy(cand->transposes[i] + len_a + 1, splits[i].b, 1);
 		if (len_b >= 2)
-		memcpy(cand->transposes[i] + len_a + 2, splits[i].b + 2, len_b - 2);
+			memcpy(cand->transposes[i] + len_a + 2, splits[i].b + 2, len_b - 2);
 		cand->transposes[i][n] = 0;
 		
 		for (alphabet = 'a', j = 0; alphabet <= 'z'; alphabet++, j++) {
@@ -740,12 +740,13 @@ edits1 (char *word, candidates *cand)
 			cand->inserts[k+j] = emalloc(n+2);
 			memcpy(cand->replaces[k+j], splits[i].a, len_a);
 			memcpy(cand->replaces[k+j] + len_a, &alphabet, 1);
-			if (len_b - 1 >= 1)
-			memcpy(cand->replaces[k+j] + len_a + 1, splits[i].b + 1, len_b - 1);
+			if (len_b >= 1)
+				memcpy(cand->replaces[k+j] + len_a + 1, splits[i].b + 1, len_b - 1);
 			cand->replaces[k+j][n] = 0;
 			memcpy(cand->inserts[k+j], splits[i].a, len_a);
 			memcpy(cand->inserts[k+j] + len_a, &alphabet, 1);
-			memcpy(cand->inserts[k+j] + len_a + 1, splits[i].b, len_b);
+			if (len_b >=1)
+				memcpy(cand->inserts[k+j] + len_a + 1, splits[i].b, len_b);
 			cand->inserts[k+j][n + 1] = 0;
 		}
 		k += 26;
@@ -800,9 +801,9 @@ spell(sqlite3 *db, char *word)
 	char *matches[4];
 	char *correct;
 	matches[0]  = known_word(db, cand.deletes, n);
-	matches[1] = known_word(db, cand.transposes, n);
+	matches[1] = known_word(db, cand.transposes, n - 1);
 	matches[2] = known_word(db, cand.replaces, 26*n);
-	matches[3] = known_word(db, cand.inserts, 26*n);
+	matches[3] = known_word(db, cand.inserts, 26*(n+1));
 	correct = known_word(db, matches, 4);
 	free(matches[0]);
 	free(matches[1]);
