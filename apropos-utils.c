@@ -48,6 +48,8 @@
 #include "sqlite3.h"
 #include "stopword_tokenizer.h"
 
+#define BUFLEN 1024
+
 typedef struct orig_callback_data {
 	void *data;
 	int (*callback) (void *, int, char **, char **);
@@ -546,7 +548,7 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 				name_desc, snippet);
 	html_output = emalloc(strlen(buf) * 4 + 1);
 	strvis(html_output, buf, VIS_CSTYLE);
-	
+
 	for (i = 0; i < ncol; i++) {
 		html_col_names[i] = col_names[i];
 		html_col_values[i] = col_values[i];
@@ -672,7 +674,7 @@ int run_query_pager(sqlite3 *db, query_args *args)
 	/* initialize the hash table for stop words */
 	if (!hcreate(10))
 		return -1;
-	
+
 	/* store the query words in the hashtable as key and their equivalent
 	 * bold text representation as their values.
 	 */	
@@ -743,7 +745,7 @@ edits1 (char *word)
 		len_a = strlen(splits[i].a);
 		len_b = strlen(splits[i].b);
 		assert(len_a + len_b == n);
-		
+
 		/* Deletes */
 		if (i < n) {
 			candidates[counter] = emalloc(n);
@@ -753,7 +755,7 @@ edits1 (char *word)
 			candidates[counter][n - 1] =0;
 			counter++;
 		}
-		
+
 		/* Transposes */
 		if (i < n - 1) {
 			candidates[counter] = emalloc(n + 1);
@@ -767,7 +769,7 @@ edits1 (char *word)
 			candidates[counter][n] = 0;
 			counter++;
 		}
-		
+
 		/* For replaces and inserts, run a loop from 'a' to 'z' */
 		for (alphabet = 'a'; alphabet <= 'z'; alphabet++) {
 			/* Replaces */
@@ -780,7 +782,7 @@ edits1 (char *word)
 				candidates[counter][n] = 0;
 				counter++;
 			}
-			
+
 			/* Inserts */
 			candidates[counter] = emalloc(n + 2);
 			memcpy(candidates[counter], splits[i].a, len_a);
@@ -809,12 +811,16 @@ known_word(sqlite3 *db, char **list, int n)
 	char *termlist = NULL;
 	char *correct = NULL;
 	sqlite3_stmt *stmt;
-	int total_len = 20048;
+
+	/* Build termlist: a comma separated list of all the words in the list for 
+	 * use in the SQL query later.
+	 */
+	int total_len = BUFLEN * 20;	/* total bytes allocated to termlist */
 	termlist = emalloc (total_len);
-	int offset = 0;
+	int offset = 0;	/* Next byte to write at in termlist */
 	termlist[0] = '(';
 	offset++;
-	
+
 	for (i = 0; i < n; i++) {
 		int d = strlen(list[i]);
 		if (total_len - offset < d + 3) {
@@ -834,7 +840,7 @@ known_word(sqlite3 *db, char **list, int n)
 			memcpy(termlist + offset, "\',", 2);
 			offset += 2;
 		}
-			
+
 	}
 	if (total_len - offset > 3)
 		memcpy(termlist + offset, ")", 2);
@@ -852,7 +858,7 @@ known_word(sqlite3 *db, char **list, int n)
 	
 	if (sqlite3_step(stmt) == SQLITE_ROW)
 			correct = strdup((char *) sqlite3_column_text(stmt, 0));
-	
+
 	sqlite3_finalize(stmt);
 	free(sqlstr);
 	free(termlist);
@@ -906,7 +912,6 @@ spell(sqlite3 *db, char *word)
 			"mandb_aux WHERE col=\'*\' ;"
 			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_term ON "
 				"dict (term)";
-			
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
@@ -914,7 +919,7 @@ spell(sqlite3 *db, char *word)
 		free(errmsg);
 		return NULL;
 	}
-	
+
 	correct = known_word(db, candidates, count);
 	if (correct == NULL) {	
 		for (i = 0; i < count; i++) {
@@ -931,5 +936,14 @@ spell(sqlite3 *db, char *word)
 	}
 	free_list(candidates, count);
 	free_list(cand2, count2);
+
+	sqlite3_exec(db, "DETACH DATABASE metadb", NULL, NULL, 
+				&errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		close_db(db);
+		exit(EXIT_FAILURE);
+	}
 	return correct;
 }
