@@ -691,16 +691,43 @@ int run_query_pager(sqlite3 *db, query_args *args)
 
 }
 
+/*
+ * Following is an implmentation of a spell corrector based on Peter Norvig's 
+ * article: <http://norvig.com/spell-correct.html>. This C implementation is 
+ * written completely by me from scratch.
+ */
+
+/*
+ * edits1--
+ *  edits1 generates all permutations of a given word at maximum edit distance 
+ *  of 1. All details are in the above article but basically it generates 4 
+ *  types of possible permutations in a given word, stores them in an array and 
+ *  at the end returns that array to the caller. The 4 different permutations 
+ *  are: (n = strlen(word) in the following description)
+ *  1. Deletes: Delete one character at a time: n possible permutations
+ *  2. Trasnposes: Change positions of two adjacent characters: n -1 permutations
+ *  3. Replaces: Replace each character by one of the 26 alphabetes in English:
+ *      26 * n possible permutations
+ *  4. Inserts: Insert an alphabet at each of the character positions (one at a
+ *      time. 26 * (n + 1) possible permutations.
+ */
 static char **
 edits1 (char *word)
 {
-	int i, j, len_a, len_b;
+	int i;
+	int j;
+	int len_a;
+	int len_b;
 	int counter = 0;
 	char alphabet;
 	int n = strlen(word);
 	set splits[n + 1];
-	char **candidates = emalloc ((n + n - 1 + 26 * n + 26 * (n + 1)) * sizeof(char *));
+	
+	/* calculate number of possible permutations and allocate memory */
+	size_t size = n + n -1 + 26 * n + 26 * (n + 1);
+	char **candidates = emalloc (size * sizeof(char *));
 
+	/* Start by generating a split up of the characters in the word */
 	for (i = 0; i < n + 1; i++) {
 		splits[i].a = (char *) emalloc(i + 1);
 		splits[i].b = (char *) emalloc(n - i + 1);
@@ -709,6 +736,10 @@ edits1 (char *word)
 		splits[i].a[i] = 0;
 	}
 
+	/* Now generate all the permutations at maximum edit distance of 1.
+	 * counter keeps track of the current index position in the array candidates
+	 * where the next permutation needs to be stored.
+	 */
 	for (i = 0; i < n + 1; i++) {
 		len_a = strlen(splits[i].a);
 		len_b = strlen(splits[i].b);
@@ -738,7 +769,8 @@ edits1 (char *word)
 			counter++;
 		}
 		
-		for (alphabet = 'a', j = 0; alphabet <= 'z'; alphabet++, j++) {
+		/* For replaces and inserts, run a loop from 'a' to 'z' */
+		for (alphabet = 'a'; alphabet <= 'z'; alphabet++) {
 			/* Replaces */
 			if (i < n) {
 				candidates[counter] = emalloc(n + 1);
@@ -763,6 +795,13 @@ edits1 (char *word)
 	return candidates;
 }
 
+/*
+ * known_word--
+ *  Pass an array of strings to this function and it will return the word with 
+ *  maximum frequency in the dictionary. If no word in the array list is found 
+ *  in the dictionary, it returns NULL
+ *  #TODO rename this function
+ */
 static char *
 known_word(sqlite3 *db, char **list, int n)
 {
@@ -820,6 +859,13 @@ known_word(sqlite3 *db, char **list, int n)
 	return (correct);
 }
 
+/*
+ * spell--
+ *  The API exposed to the user. Returns the most closely matched word from the 
+ *  dictionary. It will first search for all possible words at distance 1, if no
+ *  matches are found, it goes further and tries to look for words at edit 
+ *  distance 2 as well. If no matches are found at all, it returns NULL.
+ */
 char *
 spell(sqlite3 *db, char *word)
 {
@@ -870,6 +916,4 @@ spell(sqlite3 *db, char *word)
 		candidates = NULL;
 	}
 	return correct;
-
-	
 }
