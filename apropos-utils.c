@@ -942,8 +942,6 @@ spell(sqlite3 *db, char *word)
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
-		close_db(db);
-		exit(EXIT_FAILURE);
 	}
 	return correct;
 }
