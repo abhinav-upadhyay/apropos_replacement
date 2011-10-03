@@ -62,8 +62,12 @@ main(int argc, char *argv[])
 	char *query = NULL;	// the user query
 	char ch;
 	char *errmsg = NULL;
+	char *word;
+	char *correct;
+	char *correct_query = NULL;
 	callback_data cbdata;
 	int nrec = 10;	// The number of records to fetch from db
+	int flag = 0;
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
 	cbdata.out = stdout;		// the default stream for the search output
 	cbdata.count = 0;
@@ -120,7 +124,7 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;		
 	query = *argv;
-	if ((db = init_db(DB_READONLY)) == NULL)
+	if ((db = init_db(DB_WRITE)) == NULL)
 		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
 			"first and then try again");
 
@@ -162,12 +166,29 @@ main(int argc, char *argv[])
 			errx(EXIT_FAILURE, "%s", errmsg);
 	}
 		
-	if (cbdata.count == 0)
-		warnx("No relevant results obtained.\n"
-				"Please make sure that you spelled all the terms correctly\n"
-				"Or try using better keywords. For example:\n"
-				"\"removing files\" instead of \"deleting files\"");
+	if (cbdata.count == 0) {
+		for (word = strtok(query, " "); word; word = strtok(NULL, " ")) {
+			correct = spell(db, word);
+			if (correct) {
+				flag = 1;
+				concat(&correct_query, correct, -1);
+				free(correct);
+			}
+			else
+				concat(&correct_query, word, -1);
+		}
+		
+		if (flag)
+			printf("Did you mean \"%s\" ?\n", correct_query);
+		else
+			warnx("No relevant results obtained.\n"
+					"Please make sure that you spelled all the terms correctly\n"
+					"Or try using better keywords. For example:\n"
+					"\"removing files\" instead of \"deleting files\"");
+	}
+
 	free(query);
+	free(correct_query);
 	free(errmsg);
 	if (aflags.pager)
 		pclose(cbdata.out);
