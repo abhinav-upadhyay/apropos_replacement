@@ -891,6 +891,7 @@ spell(sqlite3 *db, char *word)
 	int i;
 	char *correct;
 	char **candidates;
+	lower(word);
 	candidates = edits1(word);
 	int n = strlen(word);
 	int count = n + n -1 + 26 * n + 26 * (n + 1);
