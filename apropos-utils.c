@@ -891,15 +891,12 @@ spell(sqlite3 *db, char *word)
 	int i;
 	char *correct;
 	char **candidates;
-	lower(word);
-	candidates = edits1(word);
-	int n = strlen(word);
-	int count = n + n -1 + 26 * n + 26 * (n + 1);
 	int count2;
 	char **cand2 = NULL;
 	char *errmsg;
 	const char *sqlstr;
-	
+	int n;
+	int count;
 	sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL, 
 				&errmsg);
 	if (errmsg != NULL) {
@@ -920,29 +917,37 @@ spell(sqlite3 *db, char *word)
 		free(errmsg);
 		return NULL;
 	}
-
-	correct = known_word(db, candidates, count);
-	/* No matches found ? Let's go further and find matches at edit distance 2.
-	 * To make the search fast we use a heuristic. Take one word at a time from 
-	 * candidates, generate it's permutations and look if a match is found.
-	 * If a match is found, exit the loop. Works reasonable fast but accuracy 
-	 * is not quite there in some cases.
-	 */
-	if (correct == NULL) {	
-		for (i = 0; i < count; i++) {
-			n = strlen(candidates[i]);
-			count2 = n + n - 1 + 26 * n + 26 * (n + 1);
-			cand2 = edits1(candidates[i]);
-			if ((correct = known_word(db, cand2, count2)))
-				break;
-			else {
-				free_list(cand2, count2);
-				cand2 = NULL;
+	
+	lower(word);
+	correct = known_word(db, &word, 1);
+	
+	if (!correct) {
+		n = strlen(word);
+		count = n + n -1 + 26 * n + 26 * (n + 1);
+		candidates = edits1(word);
+		correct = known_word(db, candidates, count);
+		/* No matches found ? Let's go further and find matches at edit distance 2.
+		 * To make the search fast we use a heuristic. Take one word at a time from 
+		 * candidates, generate it's permutations and look if a match is found.
+		 * If a match is found, exit the loop. Works reasonable fast but accuracy 
+		 * is not quite there in some cases.
+		 */
+		if (correct == NULL) {	
+			for (i = 0; i < count; i++) {
+				n = strlen(candidates[i]);
+				count2 = n + n - 1 + 26 * n + 26 * (n + 1);
+				cand2 = edits1(candidates[i]);
+				if ((correct = known_word(db, cand2, count2)))
+					break;
+				else {
+					free_list(cand2, count2);
+					cand2 = NULL;
+				}
 			}
 		}
+		free_list(candidates, count);
+		free_list(cand2, count2);
 	}
-	free_list(candidates, count);
-	free_list(cand2, count2);
 
 	sqlite3_exec(db, "DETACH DATABASE metadb", NULL, NULL, 
 				&errmsg);
