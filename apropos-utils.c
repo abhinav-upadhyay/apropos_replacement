@@ -922,6 +922,12 @@ spell(sqlite3 *db, char *word)
 	}
 
 	correct = known_word(db, candidates, count);
+	/* No matches found ? Let's go further and find matches at edit distance 2.
+	 * To make the search fast we use a heuristic. Take one word at a time from 
+	 * candidates, generate it's permutations and look if a match is found.
+	 * If a match is found, exit the loop. Works reasonable fast but accuracy 
+	 * is not quite there in some cases.
+	 */
 	if (correct == NULL) {	
 		for (i = 0; i < count; i++) {
 			n = strlen(candidates[i]);
