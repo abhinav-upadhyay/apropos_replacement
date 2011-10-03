@@ -41,12 +41,16 @@
 #include "apropos-utils.h"
 #include "fts3_tokenizer.h"
 #include "sqlite3.h"
-#include "stopword_tokenizer.h"
 
 typedef struct apropos_flags {
 	const char *sec_nums[SECMAX];
 	int pager;
 } apropos_flags;
+
+typedef struct callback_data {
+	int count;
+	FILE *out;
+} callback_data;
 
 static void remove_stopwords(char **);
 static int query_callback(void *, int , char **, char **);
@@ -58,9 +62,11 @@ main(int argc, char *argv[])
 	char *query = NULL;	// the user query
 	char ch;
 	char *errmsg = NULL;
+	callback_data cbdata;
 	int nrec = 10;	// The number of records to fetch from db
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
-	FILE *out = stdout;		// the default stream for the search output
+	cbdata.out = stdout;		// the default stream for the search output
+	cbdata.count = 0;
 	apropos_flags aflags = {{0}, 0};
 	sqlite3 *db;	
 	setprogname(argv[0]);
@@ -133,7 +139,7 @@ main(int argc, char *argv[])
 	/* If user wants to page the output, then set some settings */
 	if (aflags.pager) {
 		/* Open a pipe to the pager */
-		if ((out = popen("more", "w")) == NULL) {
+		if ((cbdata.out = popen("more", "w")) == NULL) {
 			close_db(db);
 			err(EXIT_FAILURE, "pipe failed");
 		}
@@ -145,7 +151,7 @@ main(int argc, char *argv[])
 	args.nrec = nrec;
 	args.offset = 0;
 	args.callback = &query_callback;
-	args.callback_data = out;
+	args.callback_data = &cbdata;
 	args.errmsg = &errmsg;
 	if (aflags.pager) {
 		if (run_query_pager(db, &args) < 0)
@@ -156,11 +162,15 @@ main(int argc, char *argv[])
 			errx(EXIT_FAILURE, "%s", errmsg);
 	}
 		
-
+	if (cbdata.count == 0)
+		warnx("No relevant results obtained.\n"
+				"Please make sure that you spelled all the terms correctly\n"
+				"Or try using better keywords. For example:\n"
+				"\"removing files\" instead of \"deleting files\"");
 	free(query);
 	free(errmsg);
 	if (aflags.pager)
-		pclose(out);
+		pclose(cbdata.out);
 	close_db(db);
 	return 0;
 }
@@ -179,7 +189,9 @@ query_callback(void *data, int ncol, char **col_values, char **col_names)
 	char *section = NULL;
 	char *snippet = NULL;
 	char *name_desc = NULL;
-	FILE *out = (FILE *) data;
+	callback_data *cbdata = (callback_data *) data;
+	FILE *out = cbdata->out;
+	cbdata->count++;
 
 	section =  col_values[0];
 	name = col_values[1];

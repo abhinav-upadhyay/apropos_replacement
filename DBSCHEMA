@@ -12,13 +12,12 @@ There are three tables in the database at present:
                     section and any other section which 
                     is not indexed in a separate column.
   5. lib            The LIBRARY section
-  6. synopsis       SYNOPSIS section
-  7. return_vals    RETURN VALUES section
-  8. env            ENVIRONMENT section
-  9. files          FILES section
-  10. exit_status   EXIT STATUS section
-  11. diagnostics   DIAGNOSTICS section
-  12. errors        ERRORS section
+  6. return_vals    RETURN VALUES section
+  7. env            ENVIRONMENT section
+  8. files          FILES section
+  9. exit_status   EXIT STATUS section
+  10. diagnostics   DIAGNOSTICS section
+  11. errors        ERRORS section
 
 (2) mandb_meta:
     This table contains md5 hashes of all the indexed man 

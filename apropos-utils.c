@@ -63,8 +63,7 @@ static const double col_weights[] = {
 	2.0,	// NAME
 	2.00,	// Name-description
 	0.55,	// DESCRIPTION
-	0.25,	// LIBRARY
-	0.10,	//SYNOPSIS
+	0.10,	// LIBRARY
 	0.001,	//RETURN VALUES
 	0.20,	//ENVIRONMENT
 	0.01,	//FILES
@@ -148,7 +147,7 @@ create_db(sqlite3 *db)
 /*------------------------ Create the tables------------------------------*/
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
-				"name_desc, desc, lib, synopsis, return_vals, env, files, "
+				"name_desc, desc, lib, return_vals, env, files, "
 				"exit_status, diagnostics, errors, compress=zip, "
 				"uncompress=unzip, tokenize=porter); "	//mandb table
 			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, file UNIQUE, "
