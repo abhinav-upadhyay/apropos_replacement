@@ -11,6 +11,7 @@ SRCS.test-spell=	test-spell.c sqlite3.c sqlite3.h apropos-utils.c apropos-utils.
 MAN=	makemandb.1 apropos.1 apropos-utils.3 init_db.3 close_db.3 run_query.3 run_query_html.3 run_query_pager.3
 
 .PATH:	${MDIST}
+CPPFLAGS+=-g
 CPPFLAGS+=-I${MDIST}
 CPPFLAGS+=-DSQLITE_ENABLE_FTS3
 CPPFLAGS+=-DSQLITE_ENABLE_FTS3_PARENTHESIS

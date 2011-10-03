@@ -96,9 +96,13 @@ callback(enum mg_event event, struct mg_connection *conn,
 		const struct mg_request_info *request_info)
 {
 	char query[BUFLEN] = {0};
+	char *correct_query = NULL;
+	char *word;
+	char *correct;
 	char *errmsg;
 	char p[5];	//I doubt there will ever be more than 99,999 result pages
 	int page = 1;
+	int flag = 0;
 	query_args args;
 	apropos_data ap_data;
 	ap_data.conn = conn;
@@ -108,13 +112,13 @@ callback(enum mg_event event, struct mg_connection *conn,
 
 	if (event == MG_NEW_REQUEST ) {
 		
-		if (strcmp(request_info->uri, "/apropos") ==0 ) {
+		if (strcmp(request_info->uri, "/apropos") == 0 ) {
 			if (request_info->query_string && 
 				mg_get_var(request_info->query_string, strlen(request_info->query_string), 
 			"q", query, BUFLEN) == -1)
 			return NULL;
 
-			if (mg_get_var(request_info->query_string, strlen(request_info->query_string),
+			if (request_info->query_string && mg_get_var(request_info->query_string, strlen(request_info->query_string),
 				"p", p, 5) != -1)
 				page = atoi(p);
 			mg_printf(conn, "%s", standard_reply);
@@ -131,9 +135,9 @@ callback(enum mg_event event, struct mg_connection *conn,
 							"</table>\n"
 							"</div>\n",
 					strlen(query)?query:"");
-			if (strlen(query)) {
+			if (query) {
 				mg_printf(conn, "<table  cellspacing = \"10px\" class = \"results\">\n");
-				db = init_db(DB_READONLY);
+				db = init_db(DB_WRITE);
 				args.search_str = query;
 				args.sec_nums = NULL;
 				args.nrec = page * 10;
@@ -153,8 +157,25 @@ callback(enum mg_event event, struct mg_connection *conn,
 					free(errmsg);
 					return NULL;
 				}
-				if (ap_data.count == 0)
-					mg_printf(conn, "<h3> No results</h3>\n");
+				if (ap_data.count == 0) {
+					for (word = strtok(query, " "); word; 
+						word = strtok(NULL, " ")) {
+						correct = spell(db, word);
+						if (correct) {
+							concat(&correct_query, correct, -1);
+							flag = 1;
+							free(correct);
+						}
+						else
+							concat(&correct_query, word, -1);
+					}
+					
+					if (flag)
+						mg_printf(conn, "<h3>Did you mean \"%s\" ?\n", 
+									correct_query);
+					else
+						mg_printf(conn, "<h3> No results</h3>\n");
+				}
 				else if (ap_data.count == 10)			
 					mg_printf(conn, "<div>\n"
 							"<tr colspan=\"2\">\n\t"
