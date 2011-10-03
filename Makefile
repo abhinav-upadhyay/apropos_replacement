@@ -3,10 +3,11 @@
 MDIST=	${NETBSDSRCDIR}/external/bsd/mdocml/dist
 MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
 
-PROGS=	makemandb apropos apropos_cgi
+PROGS=	makemandb apropos apropos_cgi test-spell
 SRCS.makemandb=		makemandb.c sqlite3.c apropos-utils.c apropos-utils.h stopword_tokenizer.c stopword_tokenizer.h
 SRCS.apropos=	apropos.c sqlite3.c apropos-utils.c apropos-utils.h stopword_tokenizer.c stopword_tokenizer.h
 SRCS.apropos_cgi=	apropos_cgi.c mongoose.h mongoose.c apropos-utils.c apropos-utils.h sqlite3.c sqlite3.h stopword_tokenizer.h stopword_tokenizer.c
+SRCS.test-spell=	test-spell.c sqlite3.c sqlite3.h apropos-utils.c apropos-utils.h stopwword_tokenizer.h stopword_tokenizer.c
 MAN=	makemandb.1 apropos.1 apropos-utils.3 init_db.3 close_db.3 run_query.3 run_query_html.3 run_query_pager.3
 
 .PATH:	${MDIST}

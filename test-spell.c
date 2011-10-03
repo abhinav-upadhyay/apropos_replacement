@@ -30,59 +30,29 @@
  * SUCH DAMAGE.
  */
 
-#ifndef APROPOS_UTILS_H
-#define APROPOS_UTILS_H
-
-#include <zlib.h> 
-#include "sqlite3.h"
-
-#define DBPATH "/var/db/man.db"
-#define SECMAX 9
-
-/* Flags for opening the database */
-#define DB_READONLY SQLITE_OPEN_READONLY
-#define DB_WRITE SQLITE_OPEN_READWRITE
-#define DB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
-
 /*
- * Used to identify the section of a man(7) page.
- * This is similar to the enum mdoc_sec defined in mdoc.h from mdocml project.
+ * This is a simple test program to test the spell function of apropos-utils.c
+ *  and it will be dropped at any point of time.
  */
-enum man_sec {
-	MANSEC_NAME = 0,
-	MANSEC_SYNOPSIS,
-	MANSEC_LIBRARY,
-	MANSEC_ERRORS,
-	MANSEC_FILES,
-	MANSEC_RETURN_VALUES,
-	MANSEC_EXIT_STATUS,
-	MANSEC_DESCRIPTION,
-	MANSEC_ENVIRONMENT,
-	MANSEC_DIAGNOSTICS,
-	MANSEC_EXAMPLES,
-	MANSEC_STANDARDS,
-	MANSEC_HISTORY,
-	MANSEC_BUGS,
-	MANSEC_AUTHORS,
-	MANSEC_NONE
-};
 
-typedef struct query_args {
-	const char *search_str;		// user query
-	const char **sec_nums;		// Section in which to do the search
-	int nrec;			// number of records to fetch
-	int offset;		//From which position to start processing the records
-	int (*callback) (void *, int, char **, char **);	// The callback function
-	void *callback_data;	// data to pass to the callback function
-	char **errmsg;		// buffer for storing the error msg
-} query_args;
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-char *lower(char *);
-void concat(char **, const char *, int);
-sqlite3 *init_db(int);
-void close_db(sqlite3 *);
-int run_query(sqlite3 *, const char *[3], query_args *);
-int run_query_html(sqlite3 *, query_args *);
-int run_query_pager(sqlite3 *, query_args *);
-char *spell(sqlite3 *, char *);
-#endif 
+#include "apropos-utils.h"
+
+int
+main(int argc, char **argv)
+{
+	char *word = argv[1];
+	sqlite3 *db = init_db(DB_WRITE);
+	assert(db);
+	char *correct = spell(db, word);
+	if (correct)
+		printf("Did you mean %s ?\n", correct);
+	else
+		printf("Sorry, no matches found.\n");
+	free(correct);
+	close_db(db);
+	return 0;
+}
