@@ -715,7 +715,6 @@ static char **
 edits1 (char *word)
 {
 	int i;
-	int j;
 	int len_a;
 	int len_b;
 	int counter = 0;
@@ -806,12 +805,13 @@ static char *
 known_word(sqlite3 *db, char **list, int n)
 {
 	int i, rc;
-	char *temp = NULL, *sqlstr, *termlist = NULL, *correct = NULL;
+	char *sqlstr;
+	char *termlist = NULL;
+	char *correct = NULL;
 	sqlite3_stmt *stmt;
 	int total_len = 20048;
 	termlist = emalloc (total_len);
 	int offset = 0;
-	int len;
 	termlist[0] = '(';
 	offset++;
 	
@@ -859,6 +859,19 @@ known_word(sqlite3 *db, char **list, int n)
 	return (correct);
 }
 
+static void
+free_list(char **list, int n)
+{
+	int i = 0;
+	if (list == NULL)
+		return;
+
+	while (i < n) {
+		free(list[i]);
+		i++;
+	}
+}
+
 /*
  * spell--
  *  The API exposed to the user. Returns the most closely matched word from the 
@@ -869,16 +882,16 @@ known_word(sqlite3 *db, char **list, int n)
 char *
 spell(sqlite3 *db, char *word)
 {
+	int i;
+	char *correct;
 	char **candidates;
 	candidates = edits1(word);
 	int n = strlen(word);
-	int i;
-	char *correct;
 	int count = n + n -1 + 26 * n + 26 * (n + 1);
 	int count2;
 	char **cand2 = NULL;
 	char *errmsg;
-	char *sqlstr;
+	const char *sqlstr;
 	
 	sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL, 
 				&errmsg);
@@ -889,7 +902,8 @@ spell(sqlite3 *db, char *word)
 		exit(EXIT_FAILURE);
 	}
 	
-	sqlstr = "CREATE TABLE metadb.dict AS SELECT term, occurrences FROM mandb_aux WHERE col=\'*\' ;"
+	sqlstr = "CREATE TABLE metadb.dict AS SELECT term, occurrences FROM "
+			"mandb_aux WHERE col=\'*\' ;"
 			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_term ON "
 				"dict (term)";
 			
@@ -898,8 +912,7 @@ spell(sqlite3 *db, char *word)
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
-		close_db(db);
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 	
 	correct = known_word(db, candidates, count);
@@ -908,12 +921,15 @@ spell(sqlite3 *db, char *word)
 			n = strlen(candidates[i]);
 			count2 = n + n - 1 + 26 * n + 26 * (n + 1);
 			cand2 = edits1(candidates[i]);
-			free(candidates[i]);
 			if ((correct = known_word(db, cand2, count2)))
 				break;
+			else {
+				free_list(cand2, count2);
+				cand2 = NULL;
+			}
 		}
-		free(candidates);
-		candidates = NULL;
 	}
+	free_list(candidates, count);
+	free_list(cand2, count2);
 	return correct;
 }
