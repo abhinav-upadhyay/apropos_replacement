@@ -91,22 +91,88 @@ apropos_callback(void *data, int ncol, char **col_values, char **col_names)
 	return 0;
 }
 
+static void
+run_apropos(struct mg_connection *conn, sqlite3 *db, char *query, int page)
+{
+	apropos_data ap_data;
+	query_args args;
+	char *errmsg = NULL;
+	char *word;
+	char *correct_query = NULL;
+	char *correct = NULL;
+	int flag = 0;
+	ap_data.conn = conn;
+	ap_data.count = 0;
+	
+	if (query) {
+		mg_printf(conn, "<table  cellspacing = \"10px\" class = \"results\">\n");
+		db = init_db(DB_WRITE);
+		args.search_str = query;
+		args.sec_nums = NULL;
+		args.nrec = page * 10;
+		args.offset = args.nrec - 10;
+		args.callback = &apropos_callback;
+		args.callback_data = &ap_data;
+		args.errmsg = &errmsg;
+
+		if (run_query_html(db, &args) < 0) {
+			mg_printf(conn, "<h3>SQL Error</h3>\n"
+						"</table>");
+			return;
+		}
+		if (errmsg != NULL) {
+			mg_printf(conn, "An error occurred while executing the "
+					"query\n </table>");
+			free(errmsg);
+			return ;
+		}
+		if (ap_data.count == 0) {
+			for (word = strtok(query, " "); word; 
+				word = strtok(NULL, " ")) {
+				correct = spell(db, word);
+				if (correct) {
+					concat(&correct_query, correct, -1);
+					flag = 1;
+					free(correct);
+				}
+				else
+					concat(&correct_query, word, -1);
+			}
+			
+			if (flag) {
+				mg_printf(conn, "<h3>Did you mean \"%s\" ?\n", 
+							correct_query);
+				run_apropos(conn, db, correct_query, page);
+			}
+			else
+				mg_printf(conn, "<h3> No results</h3>\n");
+		}
+		else if (ap_data.count == 10)			
+			mg_printf(conn, "<div>\n"
+					"<tr colspan=\"2\">\n\t"
+					"<td>\n\t<h3>"
+					"<a href=\"/apropos?q=%s&p=%d\">Next</a>"
+					"</h3>\n</td>"
+					"</tr>"
+					"</div>", query, ++page);
+		mg_printf(conn, "</table>\n");
+		close_db(db);
+	}
+				
+	mg_printf(conn, "%s", html_end_template);
+	return ;
+}
+
+
+
 static void *
 callback(enum mg_event event, struct mg_connection *conn,
 		const struct mg_request_info *request_info)
 {
 	char query[BUFLEN] = {0};
-	char *correct_query = NULL;
-	char *word;
-	char *correct;
-	char *errmsg;
 	char p[5];	//I doubt there will ever be more than 99,999 result pages
 	int page = 1;
-	int flag = 0;
-	query_args args;
-	apropos_data ap_data;
-	ap_data.conn = conn;
-	ap_data.count = 0;
+	
 	sqlite3 *db;
 	assert(request_info);
 
@@ -114,13 +180,18 @@ callback(enum mg_event event, struct mg_connection *conn,
 		
 		if (strcmp(request_info->uri, "/apropos") == 0 ) {
 			if (request_info->query_string && 
-				mg_get_var(request_info->query_string, strlen(request_info->query_string), 
-			"q", query, BUFLEN) == -1)
+				mg_get_var(request_info->query_string, 
+				strlen(request_info->query_string), 
+				"q", query, BUFLEN) == -1)
 			return NULL;
 
-			if (request_info->query_string && mg_get_var(request_info->query_string, strlen(request_info->query_string),
-				"p", p, 5) != -1)
+			if (request_info->query_string && 
+				mg_get_var(request_info->query_string, 
+				strlen(request_info->query_string),
+				"p", p, 5) != -1) {
 				page = atoi(p);
+			}
+			
 			mg_printf(conn, "%s", standard_reply);
 			mg_printf(conn, "%s", html_start_template);
 			mg_printf(conn,	"<form action=\"/apropos\">\n"
@@ -136,65 +207,17 @@ callback(enum mg_event event, struct mg_connection *conn,
 							"</div>\n",
 					strlen(query)?query:"");
 			if (query) {
-				mg_printf(conn, "<table  cellspacing = \"10px\" class = \"results\">\n");
 				db = init_db(DB_WRITE);
-				args.search_str = query;
-				args.sec_nums = NULL;
-				args.nrec = page * 10;
-				args.offset = args.nrec - 10;
-				args.callback = &apropos_callback;
-				args.callback_data = &ap_data;
-				args.errmsg = &errmsg;
-
-				if (run_query_html(db, &args) < 0) {
-					mg_printf(conn, "<h3>SQL Error</h3>\n"
-								"</table>");
-					return NULL;
-				}
-				if (errmsg != NULL) {
-					mg_printf(conn, "An error occurred while executing the "
-							"query\n </table>");
-					free(errmsg);
-					return NULL;
-				}
-				if (ap_data.count == 0) {
-					for (word = strtok(query, " "); word; 
-						word = strtok(NULL, " ")) {
-						correct = spell(db, word);
-						if (correct) {
-							concat(&correct_query, correct, -1);
-							flag = 1;
-							free(correct);
-						}
-						else
-							concat(&correct_query, word, -1);
-					}
-					
-					if (flag)
-						mg_printf(conn, "<h3>Did you mean \"%s\" ?\n", 
-									correct_query);
-					else
-						mg_printf(conn, "<h3> No results</h3>\n");
-				}
-				else if (ap_data.count == 10)			
-					mg_printf(conn, "<div>\n"
-							"<tr colspan=\"2\">\n\t"
-							"<td>\n\t<h3>"
-							"<a href=\"/apropos?q=%s&p=%d\">Next</a>"
-							"</h3>\n</td>"
-							"</tr>"
-							"</div>", query, ++page);
-				mg_printf(conn, "</table>\n");
+				run_apropos(conn, db, query, page);
 				close_db(db);
 			}
-						
-			mg_printf(conn, "%s", html_end_template);
-			return (void *)"";	// Mark as processed*/
-		}
+			
 		else
 			return (void *)NULL;
+		}
+	return (void *)NULL;
 	}
-	return NULL;
+	return (void *) NULL;
 }
 
 int
