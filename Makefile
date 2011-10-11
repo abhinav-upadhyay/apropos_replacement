@@ -4,8 +4,8 @@ MDIST=	${NETBSDSRCDIR}/external/bsd/mdocml/dist
 MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
 
 PROGS=	makemandb apropos
-SRCS.makemandb=		makemandb.c sqlite3.c apropos-utils.c apropos-utils.h stopword_tokenizer.c stopword_tokenizer.h
-SRCS.apropos=	apropos.c sqlite3.c apropos-utils.c apropos-utils.h stopword_tokenizer.c stopword_tokenizer.h
+SRCS.makemandb=		makemandb.c sqlite3.c apropos-utils.c apropos-utils.h
+SRCS.apropos=	apropos.c sqlite3.c apropos-utils.c apropos-utils.h
 MAN=	makemandb.1 apropos.1 apropos-utils.3 init_db.3 close_db.3 run_query.3 run_query_html.3 run_query_pager.3
 
 .PATH:	${MDIST}
