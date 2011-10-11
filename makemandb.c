@@ -318,7 +318,7 @@ main(int argc, char *argv[])
 	init_secbuffs(&rec);
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
-	if ((db = init_db(DB_CREATE)) == NULL)
+	if ((db = init_db(MANDB_CREATE)) == NULL)
 		errx(EXIT_FAILURE, "%s", "Could not initialize the database");
 	
 	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 

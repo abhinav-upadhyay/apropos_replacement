@@ -265,7 +265,7 @@ init_db(int db_flag)
 		/* Database does not exist, check if DB_CREATE was specified, and set
 		 * flag to create the database schema
 		 */
-		if (db_flag == (DB_CREATE))
+		if (db_flag == (MANDB_CREATE))
 			create_db_flag = 1;
 		else
 		/* db does not exist and DB_CREATE was also not specified, return NULL */
