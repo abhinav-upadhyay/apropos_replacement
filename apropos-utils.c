@@ -44,9 +44,7 @@
 #include <vis.h>
 
 #include "apropos-utils.h"
-#include "fts3_tokenizer.h"
 #include "sqlite3.h"
-#include "stopword_tokenizer.h"
 
 typedef struct orig_callback_data {
 	void *data;
@@ -253,7 +251,6 @@ init_db(int db_flag)
 {
 	sqlite3 *db = NULL;
 	struct stat sb;
-	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	const char *sqlstr;
 	int rc;
 	int idx;
@@ -300,50 +297,6 @@ init_db(int db_flag)
 		sqlite3_shutdown();
 		errx(EXIT_FAILURE, "Not able to register function: uncompress");
 	}
-	
-	/* Register the stopword tokenizer */
-	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
-	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **) 
-		&stopword_tokenizer_module);
-
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
-	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
-		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_ROW) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	sqlite3_finalize(stmt);
 	
 	if (create_db_flag) {
 		if (create_db(db) < 0) {

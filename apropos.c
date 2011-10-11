@@ -39,7 +39,6 @@
 #include <util.h>
 
 #include "apropos-utils.h"
-#include "fts3_tokenizer.h"
 #include "sqlite3.h"
 
 typedef struct apropos_flags {
