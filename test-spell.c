@@ -45,7 +45,7 @@ int
 main(int argc, char **argv)
 {
 	char *word = argv[1];
-	sqlite3 *db = init_db(DB_WRITE);
+	sqlite3 *db = init_db(MANDB_WRITE);
 	assert(db);
 	char *correct = spell(db, word);
 	if (correct)
