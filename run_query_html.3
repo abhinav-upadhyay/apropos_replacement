@@ -87,7 +87,7 @@ can be used.
 #include <apropos-utils.h>
 query_args args;
 char *errmsg = NULL;
-const char **sec_nums = {NULL, "2", "3", NULL, NULL, NULL, NULL, NULL, NULL};
+int *sec_nums = {0, 1, 1, 0, 0, 0, 0, 0, 0};
 args.search_str = argv[1];
 args.sec_nums = sec_nums;
 args.nrec = 10;

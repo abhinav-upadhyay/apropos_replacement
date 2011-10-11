@@ -44,9 +44,7 @@
 #include <vis.h>
 
 #include "apropos-utils.h"
-#include "fts3_tokenizer.h"
 #include "sqlite3.h"
-#include "stopword_tokenizer.h"
 
 #define BUFLEN 1024
 
@@ -261,7 +259,6 @@ init_db(int db_flag)
 {
 	sqlite3 *db = NULL;
 	struct stat sb;
-	const sqlite3_tokenizer_module *stopword_tokenizer_module;
 	const char *sqlstr;
 	int rc;
 	int idx;
@@ -273,7 +270,7 @@ init_db(int db_flag)
 		/* Database does not exist, check if DB_CREATE was specified, and set
 		 * flag to create the database schema
 		 */
-		if (db_flag == (DB_CREATE))
+		if (db_flag == (MANDB_CREATE))
 			create_db_flag = 1;
 		else
 		/* db does not exist and DB_CREATE was also not specified, return NULL */
@@ -308,50 +305,6 @@ init_db(int db_flag)
 		sqlite3_shutdown();
 		errx(EXIT_FAILURE, "Not able to register function: uncompress");
 	}
-	
-	/* Register the stopword tokenizer */
-	sqlstr = "select fts3_tokenizer(:tokenizer_name, :tokenizer_ptr)";
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_name");
-	rc = sqlite3_bind_text(stmt, idx, "stopword_tokenizer", -1, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	sqlite3Fts3PorterTokenizerModule((const sqlite3_tokenizer_module **) 
-		&stopword_tokenizer_module);
-
-	idx = sqlite3_bind_parameter_index(stmt, ":tokenizer_ptr");
-	rc = sqlite3_bind_blob(stmt, idx, &stopword_tokenizer_module, 
-		sizeof(stopword_tokenizer_module), SQLITE_STATIC);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_ROW) {
-		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		exit(EXIT_FAILURE);
-	}
-	sqlite3_finalize(stmt);
 	
 	if (create_db_flag) {
 		if (create_db(db) < 0) {
@@ -493,19 +446,23 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		for (i = 0; i < SECMAX; i++) {
 			if (args->sec_nums[i]) {
 				if (flag == 0) {
-					concat(&sqlstr, "AND (section LIKE", -1);
+					easprintf(&temp, "AND (section LIKE \'%d\'", i + 1);
+					concat(&sqlstr, temp, -1);
+					free(temp);
 					flag = 1;
 				}
-				else
-					concat(&sqlstr, "OR section LIKE", -1);
-				concat(&sqlstr, args->sec_nums[i], strlen(args->sec_nums[i]));
+				else {
+					easprintf(&temp, "OR SECTION LIKE \'%d\'", i + 1);
+					concat(&sqlstr, temp, -1);
+					free(temp);
+				}
 			}
 		}
 		if (flag)
 			concat(&sqlstr, ")", 1);
 	}
 	concat(&sqlstr, "ORDER BY rank DESC", -1);
-	
+	fprintf(stderr, "%s\n", sqlstr);
 	/* If the user specified a value of nrec, then we need to fetch that many 
 	*  number of rows
 	*/

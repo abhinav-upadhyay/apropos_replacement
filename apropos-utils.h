@@ -40,9 +40,9 @@
 #define SECMAX 9
 
 /* Flags for opening the database */
-#define DB_READONLY SQLITE_OPEN_READONLY
-#define DB_WRITE SQLITE_OPEN_READWRITE
-#define DB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+#define MANDB_READONLY SQLITE_OPEN_READONLY
+#define MANDB_WRITE SQLITE_OPEN_READWRITE
+#define MANDB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
 
 /*
  * Used to identify the section of a man(7) page.
@@ -69,7 +69,7 @@ enum man_sec {
 
 typedef struct query_args {
 	const char *search_str;		// user query
-	const char **sec_nums;		// Section in which to do the search
+	int *sec_nums;		// Section in which to do the search
 	int nrec;			// number of records to fetch
 	int offset;		//From which position to start processing the records
 	int (*callback) (void *, int, char **, char **);	// The callback function

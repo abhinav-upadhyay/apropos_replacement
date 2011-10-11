@@ -39,11 +39,10 @@
 #include <util.h>
 
 #include "apropos-utils.h"
-#include "fts3_tokenizer.h"
 #include "sqlite3.h"
 
 typedef struct apropos_flags {
-	const char *sec_nums[SECMAX];
+	int sec_nums[SECMAX];
 	int pager;
 } apropos_flags;
 
@@ -67,11 +66,13 @@ main(int argc, char *argv[])
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
 	cbdata.out = stdout;		// the default stream for the search output
 	cbdata.count = 0;
-	apropos_flags aflags = {{0}, 0};
+	apropos_flags aflags;
 	sqlite3 *db;	
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
+
+	memset(&aflags, 0, sizeof(aflags));
 	
 	/*If the user specifies a section number as an option, the corresponding 
 	 * index element in sec_nums is set to the string representing that 
@@ -80,31 +81,31 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "123456789p")) != -1) {
 	switch (ch) {
 		case '1':
-			aflags.sec_nums[0] = "1";
+			aflags.sec_nums[0] = 1;
 			break;
 		case '2':
-			aflags.sec_nums[1] = "2";
+			aflags.sec_nums[1] = 2;
 			break;
 		case '3':
-			aflags.sec_nums[2] = "3";
+			aflags.sec_nums[2] = 3;
 			break;
 		case '4':
-			aflags.sec_nums[3] = "4";
+			aflags.sec_nums[3] = 4;
 			break;
 		case '5':
-			aflags.sec_nums[4] = "5";
+			aflags.sec_nums[4] = 5;
 			break;
 		case '6':
-			aflags.sec_nums[5] = "6";
+			aflags.sec_nums[5] = 6;
 			break;
 		case '7':
-			aflags.sec_nums[6] = "7";
+			aflags.sec_nums[6] = 7;
 			break;
 		case '8':
-			aflags.sec_nums[7] = "8";
+			aflags.sec_nums[7] = 8;
 			break;
 		case '9':
-			aflags.sec_nums[8] = "9";
+			aflags.sec_nums[8] = 9;
 			break;
 		case 'p':	//user wants to view more than 10 results and page them
 			aflags.pager = 1;
@@ -120,7 +121,7 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;		
 	query = *argv;
-	if ((db = init_db(DB_READONLY)) == NULL)
+	if ((db = init_db(MANDB_READONLY)) == NULL)
 		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
 			"first and then try again");
 

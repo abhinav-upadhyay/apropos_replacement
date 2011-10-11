@@ -30,12 +30,10 @@
 #include <util.h>
 
 #include "apropos-utils.h"
-#include "fts3_tokenizer.h"
 #include "man.h"
 #include "mandoc.h"
 #include "mdoc.h"
 #include "sqlite3.h"
-#include "stopword_tokenizer.h"
 
 #define BUFLEN 1024
 #define MDOC 0	//If the page is of mdoc(7) type
@@ -318,7 +316,7 @@ main(int argc, char *argv[])
 	init_secbuffs(&rec);
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 	
-	if ((db = init_db(DB_CREATE)) == NULL)
+	if ((db = init_db(MANDB_CREATE)) == NULL)
 		errx(EXIT_FAILURE, "%s", "Could not initialize the database");
 	
 	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 
@@ -511,7 +509,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 		return;
 	}
 	
-	rc = sqlite3_step(stmt);
+	sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
 }
 

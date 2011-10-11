@@ -96,20 +96,20 @@ It has the following fields:
 .It Li const char *search_str
 This is the query as entered by the user.
 You may want to pre-process it to do sanitization etc.
-.It Li const char **sec_nums
+.It Li int *sec_nums
 This is an array of
-.Ft char *
+.Ft int
 wherein each index element represents the
 section number in which search should be performed.
 The sections whose corresponding index element in this array is set to
 .Dv NULL
 are not searched.
 If all the elements in the array are
-.Dv NULL
+.Dv 0
 then all the sections are searched. 
 Alternatively pass
 .Dv NULL
-as the value of this element to search in all the sections.
+as to search in all the sections.
 .It Li int nrec
 This specifies the number of matching rows to fetch from the database.
 Specifiy a negative value to fetch all the matching rows.
@@ -189,7 +189,7 @@ uses
 #include <apropos-utils.h>
 query_args args;
 char *errmsg = NULL;
-const char **sec_nums = {NULL, "2", "3", NULL, NULL, NULL, NULL, NULL, NULL};
+int *sec_nums = {0, 1, 1, 0, 0, 0, 0, 0, 0};
 args.search_str = argv[1];
 args.sec_nums = sec_nums;
 args.nrec = 10;
