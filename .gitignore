@@ -2,6 +2,7 @@
 *.core
 .gdbinit
 *.db
+*.plist
 *.cat*
 *.html*
 makemandb
