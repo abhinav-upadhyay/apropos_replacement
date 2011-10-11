@@ -485,19 +485,23 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		for (i = 0; i < SECMAX; i++) {
 			if (args->sec_nums[i]) {
 				if (flag == 0) {
-					concat(&sqlstr, "AND (section LIKE", -1);
+					easprintf(&temp, "AND (section LIKE \'%d\'", i + 1);
+					concat(&sqlstr, temp, -1);
+					free(temp);
 					flag = 1;
 				}
-				else
-					concat(&sqlstr, "OR section LIKE", -1);
-				concat(&sqlstr, args->sec_nums[i], strlen(args->sec_nums[i]));
+				else {
+					easprintf(&temp, "OR SECTION LIKE \'%d\'", i + 1);
+					concat(&sqlstr, temp, -1);
+					free(temp);
+				}
 			}
 		}
 		if (flag)
 			concat(&sqlstr, ")", 1);
 	}
 	concat(&sqlstr, "ORDER BY rank DESC", -1);
-	
+	fprintf(stderr, "%s\n", sqlstr);
 	/* If the user specified a value of nrec, then we need to fetch that many 
 	*  number of rows
 	*/
