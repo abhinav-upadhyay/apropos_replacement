@@ -282,9 +282,9 @@ static	const pman_nf mans[MAN_MAX] = {
 int
 main(int argc, char *argv[])
 {
-	FILE *file;
+	FILE *file = NULL;
 	const char *sqlstr;
-	char *line;
+	char *line = NULL;
 	char *errmsg = NULL;
 	char ch;
 	struct mparse *mp = NULL;
@@ -296,8 +296,8 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "flo")) != -1) {
 		switch (ch) {
 		case 'f':
-			mflags.f = 1;
 			remove(DBPATH);
+			mflags.f = 1;
 			break;
 		case 'l':
 			mflags.limit = 1;
@@ -311,6 +311,7 @@ main(int argc, char *argv[])
 			break;
 		}
 	}
+
 	memset(&rec, 0, sizeof(rec));
 	
 	init_secbuffs(&rec);
