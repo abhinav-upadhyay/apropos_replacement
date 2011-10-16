@@ -1033,6 +1033,9 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 {
 	const struct man_node *head;
 	int sz;
+	char *link;
+	char *temp;
+	char *s;
 
 	if ((head = n->parent->head) != NULL &&	(head = head->child) != NULL &&
 		head->type ==  MAN_TEXT) {
@@ -1062,8 +1065,12 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			/* Assuming the name of a man page is a single word, we can easily
 			 * take out the first word out of the string
 			 */
-			char *temp = estrdup(rec->name_desc);
-			char *link;
+			temp = estrdup(rec->name_desc);
+			/* temp will be modified, use s as a backup for freeing up later
+			 * so that we don't leak memory
+			 */
+			s = temp;
+			
 			sz = strcspn(temp, " ,\0");
 			rec->name = malloc(sz+1);
 			int i;
@@ -1080,7 +1087,8 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				else
 					break;
 			}
-			free(temp);
+			free(s);
+
 			/*   The name might be surrounded by escape sequences of the form:
 			 *   \fBname\fR or similar. So remove those as well.
 			 */
