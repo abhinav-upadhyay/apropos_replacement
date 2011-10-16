@@ -534,6 +534,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	int new_count = 0, total_count = 0, err_count = 0;
 	int md5_status;
 	int rc, idx;
+	int update_count;
 
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
 			" SELECT device, inode, mtime, file from mandb_meta";
@@ -567,7 +568,9 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 				free(buf);
 				continue;
 			}
-			
+
+			update_count = sqlite3_total_changes(db);
+
 			inner_sqlstr = "UPDATE mandb_meta SET device = :device, "
 							"inode = :inode, mtime = :mtime WHERE "
 							"md5_hash = :md5 AND file = :file AND "
@@ -597,17 +600,19 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
 
 			rc = sqlite3_step(inner_stmt);
-			if (rc != SQLITE_DONE) {
-				warnx("Could not update the meta data for %s", file);
-				free(buf);
-				sqlite3_finalize(inner_stmt);
-				err_count++;
-				continue;
+			if (rc == SQLITE_DONE) {
+				if (update_count != sqlite3_total_changes(db)) {
+					printf("Updated %s\n", file);
+					new_count++;
+				}
 			}
 			else {
-				printf("Updating %s\n", file);
+				warnx("Could not update the meta data for %s", file);
+				err_count++;
 			}
+			free(buf);
 			sqlite3_finalize(inner_stmt);
+			continue;
 		}
 		else if (md5_status == 1) {
 			/* The md5 was not present in the database, which means this is 
