@@ -672,7 +672,7 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 	mparse_reset(mp);
 
 	if (mparse_readfd(mp, -1, file) >= MANDOCLEVEL_FATAL) {
-		warn("%s: Parse failure", file);
+		warnx("%s: Parse failure", file);
 		return;
 	}
 
