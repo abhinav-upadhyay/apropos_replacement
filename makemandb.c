@@ -531,10 +531,13 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	char *file;
 	char *errmsg = NULL;
 	char *buf = NULL;
-	int new_count = 0, total_count = 0, err_count = 0;
+	int new_count = 0;	/* Counter for counting newly indexed/updated pages */
+	int total_count = 0;	/* Counter for counting total number of pages */
+	int err_count = 0;	/* Counter for counting number of failed pages */
+	int link_count = 0;	/* Counter for counting number of hard/sym links */
 	int md5_status;
 	int rc, idx;
-	int update_count;	/* Total number of updates since opening the connection */
+	int update_count;  /*Total number of updates since opening the connection */
 
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
 			" SELECT device, inode, mtime, file from mandb_meta";
@@ -556,6 +559,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		assert(buf != NULL);
 		if (md5_status == -1) {
 			warnx("An error occurred in checking md5 value for file %s", file);
+			err_count++;
 			continue;
 		}
 		else if (md5_status == 0) {
@@ -566,6 +570,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			stat(file, &sb);
 			if (S_ISLNK(sb.st_mode)) {
 				free(buf);
+				link_count++;
 				continue;
 			}
 
@@ -606,6 +611,9 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 					printf("Updated %s\n", file);
 					new_count++;
 				}
+				else
+					/* otherwise it was a hardlink; update the counter */
+					link_count++;
 			}
 			else {
 				warnx("Could not update the meta data for %s", file);
@@ -637,10 +645,10 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	sqlite3_finalize(stmt);
 	
 	printf("Total Number of new or updated pages enountered = %d\n"
-		"Total number of pages that were successfully indexed = %d\n"
-		"Total number of pages that could not be indexed due to parsing "
-		"errors = %d\n",
-		total_count, new_count, err_count);
+		"Total number of pages that were successfully indexed/updated = %d\n"
+		"Total number of (hard or symbolic) links found = %d\n"
+		"Total number of pages that could not be indexed due to errors = %d\n",
+		total_count, new_count, link_count, err_count);
 
 	if (!mflags.f) {
 		printf("Deleting stale index entries\n");	
