@@ -534,7 +534,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	int new_count = 0, total_count = 0, err_count = 0;
 	int md5_status;
 	int rc, idx;
-	int update_count;
+	int update_count;	/* Total number of updates since opening the connection */
 
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
 			" SELECT device, inode, mtime, file from mandb_meta";
@@ -601,6 +601,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 
 			rc = sqlite3_step(inner_stmt);
 			if (rc == SQLITE_DONE) {
+				/* check if an update has been performed in the db or not */
 				if (update_count != sqlite3_total_changes(db)) {
 					printf("Updated %s\n", file);
 					new_count++;
@@ -1540,10 +1541,10 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 /*
  * check_md5--
  *  Generates the md5 hash of the file and checks if it already doesn't exist in 
- *  the table passed as the 3rd parameter. This function is being used to avoid 
+ *  the table (passed as the 3rd parameter). This function is being used to avoid 
  *  hardlinks.
  *  On successful completion it will also set the value of the fourth parameter 
- *  to the md5 hash of the file which was computed previously. It is the duty of
+ *  to the md5 hash of the file (computed previously). It is the duty of
  *  the caller to free this buffer.
  *  Return values:
  *		-1: If an error occurs somewhere and sets the md5 return buffer to NULL.
