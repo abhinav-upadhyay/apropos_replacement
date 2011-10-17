@@ -110,7 +110,7 @@ static void man_parse_section(enum man_sec, const struct man_node *, mandb_rec *
 static void get_machine(const struct mdoc *, mandb_rec *);
 static void build_file_cache(sqlite3 *, const char *, struct stat *);
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
-static void usage(void);
+__dead static void usage(void);
 static void optimize(sqlite3 *);
 
 static makemandb_flags mflags;
