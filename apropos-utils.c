@@ -259,11 +259,8 @@ init_db(int db_flag)
 {
 	sqlite3 *db = NULL;
 	struct stat sb;
-	const char *sqlstr;
 	int rc;
-	int idx;
 	int create_db_flag = 0;
-	sqlite3_stmt *stmt = NULL;
 
 	/* Check if the databse exists or not */
 	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode))) {

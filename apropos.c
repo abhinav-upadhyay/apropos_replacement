@@ -53,7 +53,7 @@ typedef struct callback_data {
 
 static void remove_stopwords(char **);
 static int query_callback(void *, int , char **, char **);
-static void usage(void);
+__dead static void usage(void);
 
 int
 main(int argc, char *argv[])

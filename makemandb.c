@@ -110,7 +110,7 @@ static void man_parse_section(enum man_sec, const struct man_node *, mandb_rec *
 static void get_machine(const struct mdoc *, mandb_rec *);
 static void build_file_cache(sqlite3 *, const char *, struct stat *);
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
-static void usage(void);
+__dead static void usage(void);
 static void optimize(sqlite3 *);
 
 static makemandb_flags mflags;
@@ -531,9 +531,13 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	char *file;
 	char *errmsg = NULL;
 	char *buf = NULL;
-	int new_count = 0, total_count = 0, err_count = 0;
+	int new_count = 0;	/* Counter for counting newly indexed/updated pages */
+	int total_count = 0;	/* Counter for counting total number of pages */
+	int err_count = 0;	/* Counter for counting number of failed pages */
+	int link_count = 0;	/* Counter for counting number of hard/sym links */
 	int md5_status;
 	int rc, idx;
+	int update_count;  /*Total number of updates since opening the connection */
 
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
 			" SELECT device, inode, mtime, file from mandb_meta";
@@ -555,6 +559,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		assert(buf != NULL);
 		if (md5_status == -1) {
 			warnx("An error occurred in checking md5 value for file %s", file);
+			err_count++;
 			continue;
 		}
 		else if (md5_status == 0) {
@@ -565,9 +570,12 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			stat(file, &sb);
 			if (S_ISLNK(sb.st_mode)) {
 				free(buf);
+				link_count++;
 				continue;
 			}
-			
+
+			update_count = sqlite3_total_changes(db);
+
 			inner_sqlstr = "UPDATE mandb_meta SET device = :device, "
 							"inode = :inode, mtime = :mtime WHERE "
 							"md5_hash = :md5 AND file = :file AND "
@@ -597,17 +605,23 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
 
 			rc = sqlite3_step(inner_stmt);
-			if (rc != SQLITE_DONE) {
-				warnx("Could not update the meta data for %s", file);
-				free(buf);
-				sqlite3_finalize(inner_stmt);
-				err_count++;
-				continue;
+			if (rc == SQLITE_DONE) {
+				/* check if an update has been performed in the db or not */
+				if (update_count != sqlite3_total_changes(db)) {
+					printf("Updated %s\n", file);
+					new_count++;
+				}
+				else
+					/* otherwise it was a hardlink; update the counter */
+					link_count++;
 			}
 			else {
-				printf("Updating %s\n", file);
+				warnx("Could not update the meta data for %s", file);
+				err_count++;
 			}
+			free(buf);
 			sqlite3_finalize(inner_stmt);
+			continue;
 		}
 		else if (md5_status == 1) {
 			/* The md5 was not present in the database, which means this is 
@@ -631,10 +645,10 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	sqlite3_finalize(stmt);
 	
 	printf("Total Number of new or updated pages enountered = %d\n"
-		"Total number of pages that were successfully indexed = %d\n"
-		"Total number of pages that could not be indexed due to parsing "
-		"errors = %d\n",
-		total_count, new_count, err_count);
+		"Total number of pages that were successfully indexed/updated = %d\n"
+		"Total number of (hard or symbolic) links found = %d\n"
+		"Total number of pages that could not be indexed due to errors = %d\n",
+		total_count, new_count, link_count, err_count);
 
 	if (!mflags.f) {
 		printf("Deleting stale index entries\n");	
@@ -667,7 +681,7 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 	mparse_reset(mp);
 
 	if (mparse_readfd(mp, -1, file) >= MANDOCLEVEL_FATAL) {
-		warn("%s: Parse failure", file);
+		warnx("%s: Parse failure", file);
 		return;
 	}
 
@@ -1019,6 +1033,9 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 {
 	const struct man_node *head;
 	int sz;
+	char *link;
+	char *temp;
+	char *s;
 
 	if ((head = n->parent->head) != NULL &&	(head = head->child) != NULL &&
 		head->type ==  MAN_TEXT) {
@@ -1048,8 +1065,12 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			/* Assuming the name of a man page is a single word, we can easily
 			 * take out the first word out of the string
 			 */
-			char *temp = estrdup(rec->name_desc);
-			char *link;
+			temp = estrdup(rec->name_desc);
+			/* temp will be modified, use s as a backup for freeing up later
+			 * so that we don't leak memory
+			 */
+			s = temp;
+			
 			sz = strcspn(temp, " ,\0");
 			rec->name = malloc(sz+1);
 			int i;
@@ -1066,7 +1087,8 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				else
 					break;
 			}
-			free(temp);
+			free(s);
+
 			/*   The name might be surrounded by escape sequences of the form:
 			 *   \fBname\fR or similar. So remove those as well.
 			 */
@@ -1535,10 +1557,10 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 /*
  * check_md5--
  *  Generates the md5 hash of the file and checks if it already doesn't exist in 
- *  the table passed as the 3rd parameter. This function is being used to avoid 
+ *  the table (passed as the 3rd parameter). This function is being used to avoid 
  *  hardlinks.
  *  On successful completion it will also set the value of the fourth parameter 
- *  to the md5 hash of the file which was computed previously. It is the duty of
+ *  to the md5 hash of the file (computed previously). It is the duty of
  *  the caller to free this buffer.
  *  Return values:
  *		-1: If an error occurs somewhere and sets the md5 return buffer to NULL.
