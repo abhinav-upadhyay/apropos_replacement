@@ -451,7 +451,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 			concat(&sqlstr, ")", 1);
 	}
 	concat(&sqlstr, "ORDER BY rank DESC", -1);
-	fprintf(stderr, "%s\n", sqlstr);
+
 	/* If the user specified a value of nrec, then we need to fetch that many 
 	*  number of rows
 	*/
