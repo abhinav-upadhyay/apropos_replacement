@@ -184,23 +184,18 @@ create_db(sqlite3 *db)
 static void
 zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {	
-	int nin, nout;
-	long int nout2;
+	int nin;
+	long int nout;
 	const unsigned char * inbuf;
 	unsigned char *outbuf;
+
 	assert(nval == 1);
 	nin = sqlite3_value_bytes(apval[0]);
 	inbuf = (const unsigned char *) sqlite3_value_blob(apval[0]);
 	nout = nin + 13 + (nin + 999) / 1000;
-	outbuf = malloc(nout + 4);
-	outbuf[0] = nin >> 24 & 0xff;
-	outbuf[1] = nin >> 16 & 0xff;
-	outbuf[2] = nin >> 8 & 0xff;
-	outbuf[3] = nin & 0xff;
-	nout2 = (long int) nout;
-	compress(&outbuf[4], (unsigned long *) &nout2, inbuf, nin);
-	sqlite3_result_blob(pctx, outbuf, nout2 + 4, free);
-	return;
+	outbuf = emalloc(nout);
+	compress(outbuf, (unsigned long *) &nout, inbuf, nin);
+	sqlite3_result_blob(pctx, outbuf, nout, free);
 }
 
 /*
@@ -209,26 +204,41 @@ zip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
  */
 static void
 unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
-{	
-	unsigned int nin, nout, rc;
-	const unsigned char * inbuf;
+{
+	unsigned int rc;
 	unsigned char *outbuf;
-	long int nout2;
-	
+	z_stream stream;
+
 	assert(nval == 1);
-	nin = sqlite3_value_bytes(apval[0]);
-	if (nin <= 4) 
-		return;
-	inbuf = sqlite3_value_blob(apval[0]);
-	nout = (inbuf[0] << 24) + (inbuf[1] << 16) + (inbuf[2] << 8) + inbuf[3];
-	outbuf = malloc(nout);
-	nout2 = (long int) nout;
-	rc = uncompress(outbuf, (unsigned long *) &nout2, &inbuf[4], nin);
-	if (rc != Z_OK)
+	stream.next_in = __UNCONST(sqlite3_value_blob(apval[0]));
+	stream.avail_in = sqlite3_value_bytes(apval[0]);
+	stream.avail_out = stream.avail_in * 2 + 100;
+	stream.next_out = outbuf = emalloc(stream.avail_out);
+	stream.zalloc = NULL;
+	stream.zfree = NULL;
+	inflateInit(&stream);
+
+	if (inflateInit(&stream) != Z_OK) {
 		free(outbuf);
-	else
-		sqlite3_result_blob(pctx, outbuf, nout2, free);
-	return;
+		return;
+	}
+
+	while ((rc = inflate(&stream, Z_SYNC_FLUSH)) != Z_STREAM_END) {
+		if (rc != Z_OK ||
+		    (stream.avail_out != 0 && stream.avail_in == 0)) {
+			free(outbuf);
+			return;
+		}
+		outbuf = erealloc(outbuf, stream.total_out * 2);
+		stream.next_out = outbuf + stream.total_out;
+		stream.avail_out = stream.total_out;
+	}
+	if (inflateEnd(&stream) != Z_OK) {
+		free(outbuf);
+		return;
+	}
+	outbuf = erealloc(outbuf, stream.total_out);
+	sqlite3_result_blob(pctx, outbuf, stream.total_out, free);
 }
 
 /* init_db --
