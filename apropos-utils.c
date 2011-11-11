@@ -117,8 +117,7 @@ concat(char **dst, const char *src, int srclen)
 	*dst = (char *) erealloc(*dst, total_len);
 		
 	/* Append a space at the end of dst */
-	memcpy(*dst + dst_len, " ", 1);
-	dst_len++;
+	(*dst)[dst_len++] = ' ';
 	
 	/* Now, copy src at the end of dst */	
 	memcpy(*dst + dst_len, src, srclen + 1);
