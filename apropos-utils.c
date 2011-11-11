@@ -333,8 +333,7 @@ init_db(int db_flag)
 static void
 rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
-	inverse_document_frequency *idf = (inverse_document_frequency *)
-										sqlite3_user_data(pctx);
+	inverse_document_frequency *idf = sqlite3_user_data(pctx);
 	double tf = 0.0;
 	unsigned int *matchinfo;
 	int ncol;
