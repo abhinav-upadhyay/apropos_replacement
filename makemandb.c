@@ -286,7 +286,7 @@ main(int argc, char *argv[])
 	const char *sqlstr;
 	char *line = NULL;
 	char *errmsg = NULL;
-	char ch;
+	int ch;
 	struct mparse *mp = NULL;
 	sqlite3 *db;
 	ssize_t len = 0;
