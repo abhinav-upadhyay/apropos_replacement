@@ -313,13 +313,13 @@ main(int argc, char *argv[])
 	}
 
 	memset(&rec, 0, sizeof(rec));
-	
+
 	init_secbuffs(&rec);
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
-	
+
 	if ((db = init_db(MANDB_CREATE)) == NULL)
-		errx(EXIT_FAILURE, "%s", "Could not initialize the database");
-	
+		errx(EXIT_FAILURE, "Could not initialize the database");
+
 	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 
 				&errmsg);
 	if (errmsg != NULL) {

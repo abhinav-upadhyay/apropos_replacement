@@ -293,7 +293,7 @@ init_db(int db_flag)
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register function: compress");
+		errx(EXIT_FAILURE, "Unable to register function: compress");
 	}
 
 	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
@@ -301,12 +301,12 @@ init_db(int db_flag)
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register function: uncompress");
+		errx(EXIT_FAILURE, "Unable to register function: uncompress");
 	}
 	
 	if (create_db_flag) {
 		if (create_db(db) < 0) {
-			warnx("%s", "Could not create database schema");
+			warnx("%s", "Unable to create database schema");
 			sqlite3_close(db);
 			sqlite3_shutdown();
 			return NULL;
@@ -415,7 +415,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Not able to register the ranking function function");
+		errx(EXIT_FAILURE, "Unable to register the ranking function");
 	}
 	
 	/* We want to build a query of the form: "select x,y,z from mandb where
