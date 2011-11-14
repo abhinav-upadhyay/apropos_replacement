@@ -400,12 +400,11 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 int
 run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 {
-
-	char *sqlstr = NULL;
-	char *temp = NULL;
+	const char *default_snippet_args[3];
+	char *section_clause = NULL;
+	char *limit_clause = NULL;
+	char *query;
 	int rc;
-	int i;
-	int flag = 0;
 	inverse_document_frequency idf = {0, 0};
 
 	/* Register the rank function */
@@ -426,55 +425,66 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	 * 2. I am using LIKE operator because '=' or IN operators do not seem to be
 	 * working with the compression option enabled.
 	 */
-	if (snippet_args)
-		easprintf(&sqlstr, "SELECT section, name, name_desc, "
-				"snippet(mandb, \"%s\", \"%s\", \"%s\", -1, 40 ), "
-				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
-				 "FROM mandb WHERE mandb MATCH \'%s\'", snippet_args[0],
-				 snippet_args[1], snippet_args[2], args->search_str);
-	else
-		easprintf(&sqlstr, "SELECT section, name, name_desc, "
-				"snippet(mandb, \"%s\", \"%s\", \"%s\", -1, 40 ), "
-				"rank_func(matchinfo(mandb, \"pclxn\")) AS rank "
-				 "FROM mandb WHERE mandb MATCH \'%s\'", "",
-				 "", "...", args->search_str);
 
 	if (args->sec_nums) {
+		char *temp;
+		int i;
+
 		for (i = 0; i < SECMAX; i++) {
-			if (args->sec_nums[i]) {
-				if (flag == 0) {
-					easprintf(&temp, "AND (section LIKE \'%d\'", i + 1);
-					concat(&sqlstr, temp, -1);
-					free(temp);
-					flag = 1;
-				}
-				else {
-					easprintf(&temp, "OR SECTION LIKE \'%d\'", i + 1);
-					concat(&sqlstr, temp, -1);
-					free(temp);
-				}
+			if (args->sec_nums[i] == 0)
+				continue;
+			easprintf(&temp, " OR section LIKE \'%d\'", i + 1);
+			if (section_clause) {
+				concat(&section_clause, temp, -1);
+				free(temp);
+			} else {
+				section_clause = temp;
 			}
 		}
-		if (flag)
-			concat(&sqlstr, ")", 1);
+		if (section_clause) {
+			/*
+			 * At least one section requested, add glue for query.
+			 */
+			temp = section_clause;
+			/* Skip " OR " before first term. */
+			easprintf(&section_clause, " AND (%s)", temp + 4);
+			free(temp);
+		}
 	}
-	concat(&sqlstr, "ORDER BY rank DESC", -1);
+	if (args->nrec >= 0) {
+		/* Use the provided number of records and offset */
+		easprintf(&limit_clause, " LIMIT %d OFFSET %d",
+		    args->nrec, args->offset);
+	}
 
-	/* If the user specified a value of nrec, then we need to fetch that many 
-	*  number of rows
-	*/
-	easprintf(&temp, "LIMIT %d OFFSET %d", args->nrec, args->offset);
-	concat(&sqlstr, temp, strlen(temp));
-	free(temp);
-	
-	/* Execute the query, and let the callback handle the output */
-	sqlite3_exec(db, sqlstr, args->callback, args->callback_data, args->errmsg);
-	if (*(args->errmsg) != NULL) {
-		free(sqlstr);
+	if (snippet_args == NULL) {
+		default_snippet_args[0] = "";
+		default_snippet_args[1] = "";
+		default_snippet_args[2] = "...";
+		snippet_args = default_snippet_args;
+	}
+	query = sqlite3_mprintf("SELECT section, name, name_desc,"
+	    " snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
+	    " rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
+	    " FROM mandb"
+	    " WHERE mandb MATCH %Q"
+	    "%s"
+	    " ORDER BY rank DESC"
+	    "%s",
+	    snippet_args[0], snippet_args[1], snippet_args[2],
+	    args->search_str, section_clause ? section_clause : "",
+	    limit_clause ? limit_clause : "");
+	free(section_clause);
+	free(limit_clause);
+	if (query == NULL) {
+		*args->errmsg = estrdup("malloc failed");
 		return -1;
 	}
-	free(sqlstr);
-	return 0;
+
+	/* Execute the query, and let the callback handle the output */
+	sqlite3_exec(db, query, args->callback, args->callback_data, args->errmsg);
+	sqlite3_free(query);
+	return *(args->errmsg) == NULL ? 0 : -1;
 }
 
 /*
