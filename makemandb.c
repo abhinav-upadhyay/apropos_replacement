@@ -1511,8 +1511,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	
 	rc = sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
-	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
+	if (rc == SQLITE_CONSTRAINT) {
 		/* The *most* probable reason for reaching here is that we violated the
 		 * UNIQUE contraint on the file column of mandb_meta table. This can
 		 * happen when a file was updated/modified. To fix this we need to do
@@ -1521,26 +1520,54 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		 * 2. Run an UPDATE query to update the row for this file in the
 		 *    mandb_meta table.
 		 */
+		warnx("Trying to update index for %s", rec->file_path);
 		sqlstr = (char *) sqlite3_mprintf("DELETE FROM mandb WHERE rowid = ("
-					"SELECT id FROM mandb_meta WHERE file = %Q)",
-					rec->file_path);
+				"SELECT id FROM mandb_meta WHERE file = %Q)",
+				rec->file_path);
 		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 		free((char *)sqlstr);
 		if (errmsg != NULL) {
 			warnx(errmsg);
 			free(errmsg);
 		}
-		sqlstr = sqlite3_mprintf("UPDATE mandb_meta SET device = %lld, inode = "
-					"%lld, mtime = %lld, id = %lld, md5_hash = %Q WHERE file = "
-					"%Q", rec->device, rec->inode, rec->mtime, mandb_rowid,
-					rec->md5_hash, rec->file_path);
-		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-		free((char *)sqlstr);
-		if (errmsg != NULL) {
-			warnx(errmsg);
-			free(errmsg);
+		sqlstr = "UPDATE mandb_meta SET device = :device, inode = :inode, "
+				"mtime = :mtime, id = :id, md5_hash = :md5 WHERE file = :file";
+		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+		if (rc != SQLITE_OK) {
+			warnx("Failed at %s\n%s", sqlite3_errmsg(db));
+			close_db(db);
+			cleanup(rec);
+			errx(EXIT_FAILURE, "Consider running makemandb with -f option");
 		}
 
+		idx = sqlite3_bind_parameter_index(stmt, ":device");
+		sqlite3_bind_int64(stmt, idx, rec->device);
+		idx = sqlite3_bind_parameter_index(stmt, ":inode");
+		sqlite3_bind_int64(stmt, idx, rec->inode);
+		idx = sqlite3_bind_parameter_index(stmt, ":mtime");
+		sqlite3_bind_int64(stmt, idx, rec->mtime);
+		idx = sqlite3_bind_parameter_index(stmt, ":id");
+		sqlite3_bind_int64(stmt, idx, mandb_rowid);
+		idx = sqlite3_bind_parameter_index(stmt, ":md5");
+		sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
+		idx = sqlite3_bind_parameter_index(stmt, ":file");
+		sqlite3_bind_text(stmt, idx, rec->file_path, -1, NULL);
+		rc = sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+
+		if (rc != SQLITE_DONE) {
+			warnx("Failed at %s\n%s", sqlite3_errmsg(db));
+			close_db(db);
+			cleanup(rec);
+			errx(EXIT_FAILURE, "Consider running makemandb with -f option");
+		}
+	}
+	else if (rc != SQLITE_DONE) {
+		/* Otherwise make this error fatal */
+		warnx("Failed at %s\n%s", rec->file_path,sqlite3_errmsg(db));
+		cleanup(rec);
+		close_db(db);
+		exit(EXIT_FAILURE);
 	}
 
 /*------------------------ Populate the mandb_links table---------------------*/
