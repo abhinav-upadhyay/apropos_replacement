@@ -1445,7 +1445,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	/* Get the row id of the last inserted row */
 	mandb_rowid = sqlite3_last_insert_rowid(db);
 		
-/*------------------------ Populate the mandb_md5 table-----------------------*/
+/*------------------------Populate the mandb_meta table-----------------------*/
 	sqlstr = "INSERT INTO mandb_meta VALUES (:device, :inode, :mtime, :file, "
 				":md5_hash, :id)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -1510,15 +1510,39 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 	
 	rc = sqlite3_step(stmt);
+	sqlite3_finalize(stmt);
 	if (rc != SQLITE_DONE) {
 		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		/* The *most* probable reason for reaching here is that we violated the
+		 * UNIQUE contraint on the file column of mandb_meta table. This can
+		 * happen when a file was updated/modified. To fix this we need to do
+		 * two things:
+		 * 1. Delete the row for the older version of this file from mandb table
+		 * 2. Run an UPDATE query to update the row for this file in the
+		 *    mandb_meta table.
+		 */
+		sqlstr = (char *) sqlite3_mprintf("DELETE FROM mandb WHERE rowid = ("
+					"SELECT id FROM mandb_meta WHERE file = %Q)",
+					rec->file_path);
+		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+		free((char *)sqlstr);
+		if (errmsg != NULL) {
+			warnx(errmsg);
+			free(errmsg);
+		}
+		sqlstr = sqlite3_mprintf("UPDATE mandb_meta SET device = %lld, inode = "
+					"%lld, mtime = %lld, id = %lld, md5_hash = %Q WHERE file = "
+					"%Q", rec->device, rec->inode, rec->mtime, mandb_rowid,
+					rec->md5_hash, rec->file_path);
+		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+		free((char *)sqlstr);
+		if (errmsg != NULL) {
+			warnx(errmsg);
+			free(errmsg);
+		}
+
 	}
 
-	sqlite3_finalize(stmt);
-	
 /*------------------------ Populate the mandb_links table---------------------*/
 	char *str = NULL;
 	if (rec->links && strlen(rec->links) == 0) {
