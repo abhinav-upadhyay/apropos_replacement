@@ -48,7 +48,7 @@
 
 typedef struct orig_callback_data {
 	void *data;
-	int (*callback) (void *, int, char **, char **);
+	int (*callback) (void *, char *, char *, char *, char *, int);
 } orig_callback_data;
 
 typedef struct inverse_document_frequency {
@@ -404,8 +404,13 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	char *section_clause = NULL;
 	char *limit_clause = NULL;
 	char *query;
+	char *section;
+	char *name;
+	char *name_desc;
+	char *snippet;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
+	sqlite3_stmt *stmt;
 
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
@@ -480,9 +485,23 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		*args->errmsg = estrdup("malloc failed");
 		return -1;
 	}
+	rc = sqlite3_prepare_v2(db, query, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_free(query);
+		return -1;
+	}
 
-	/* Execute the query, and let the callback handle the output */
-	sqlite3_exec(db, query, args->callback, args->callback_data, args->errmsg);
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		section = (char *) sqlite3_column_text(stmt, 0);
+		name = (char *) sqlite3_column_text(stmt, 1);
+		name_desc = (char *) sqlite3_column_text(stmt, 2);
+		snippet = (char *) sqlite3_column_text(stmt, 3);
+		(args->callback)(args->callback_data, section, name, name_desc, snippet,
+			strlen(snippet));
+	}
+
+	sqlite3_finalize(stmt);
 	sqlite3_free(query);
 	return *(args->errmsg) == NULL ? 0 : -1;
 }
@@ -493,22 +512,18 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
  *  calls the actual user supplied callback function.
  */
 static int
-callback_html(void *data, int ncol, char **col_values, char **col_names)
+callback_html(void *data, char *section, char *name, char *name_desc,
+	char *snippet, int snippet_length)
 {
-	char *html_col_values[ncol + 1];
-	char *html_col_names[ncol + 1];
 	int i;
 	const char *tab = "&nbsp;&nbsp;&nbsp;&nbsp;";
-	char *section =  col_values[0];
-	char *name = col_values[1];
-	char *name_desc = col_values[2];
-	char *snippet = col_values[3];
 	char *buf = NULL;
 	char *html_output = NULL;
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
-	int (*callback) (void *, int, char **, char **) = orig_data->callback;
+	int (*callback) (void *, char *, char *, char *, char *, int) =
+		orig_data->callback;
 	
-	easprintf(&buf, "<p> <b>%s(%s)</b>%s %s %s <br />\n%s</p>", name, section, tab, tab,
+	/*easprintf(&buf, "<p> <b>%s(%s)</b>%s %s %s <br />\n%s</p>", name, section, tab, tab,
 				name_desc, snippet);
 	html_output = emalloc(strlen(buf) * 4 + 1);
 	strvis(html_output, buf, VIS_CSTYLE);
@@ -522,7 +537,11 @@ callback_html(void *data, int ncol, char **col_values, char **col_names)
 	ncol++;	
 	(*callback)(orig_data->data, ncol, html_col_values, html_col_names);
 	free(buf);
-	free(html_output);
+	free(html_output); */
+
+	/* XXX Write code to quote html fragments in the snippet */
+	(*callback)(orig_data->data, section, name, name_desc, snippet,
+		snippet_length)	;
 	return 0;
 }
 
@@ -587,14 +606,12 @@ pager_highlight(char *str)
  *  suitable to be passed to a pager.
  */
 static int
-callback_pager(void *data, int ncol, char **col_values, char **col_names)
+callback_pager(void *data, char *section, char *name, char *name_desc,
+	char *snippet, int snippet_length)
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
-	char *snippet = pager_highlight(col_values[3]);
-	col_values[3] = snippet;
-	int (*callback) (void *, int, char **, char **) = orig_data->callback;
-	(*callback)(orig_data->data, ncol, col_values, col_names);
-	free(snippet);
+	(orig_data->callback)(orig_data->data, section, name, name_desc, snippet,
+		snippet_length);
 	return 0;
 }
 

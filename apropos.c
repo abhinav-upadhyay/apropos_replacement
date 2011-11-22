@@ -52,7 +52,7 @@ typedef struct callback_data {
 } callback_data;
 
 static void remove_stopwords(char **);
-static int query_callback(void *, int , char **, char **);
+static int query_callback(void *, char * , char *, char *, char *, int);
 __dead static void usage(void);
 
 int
@@ -184,20 +184,12 @@ main(int argc, char *argv[])
  *  output stream.
  */
 static int
-query_callback(void *data, int ncol, char **col_values, char **col_names)
+query_callback(void *data, char *section, char *name, char *name_desc,
+	char *snippet, int snippet_length)
 {
-	char *name = NULL;
-	char *section = NULL;
-	char *snippet = NULL;
-	char *name_desc = NULL;
 	callback_data *cbdata = (callback_data *) data;
 	FILE *out = cbdata->out;
 	cbdata->count++;
-
-	section =  col_values[0];
-	name = col_values[1];
-	name_desc = col_values[2];
-	snippet = col_values[3];
 	fprintf(out, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
 				snippet);
 	return 0;

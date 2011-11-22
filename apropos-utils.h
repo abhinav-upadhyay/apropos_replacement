@@ -72,7 +72,7 @@ typedef struct query_args {
 	int *sec_nums;		// Section in which to do the search
 	int nrec;			// number of records to fetch
 	int offset;		//From which position to start processing the records
-	int (*callback) (void *, int, char **, char **);	// The callback function
+	int (*callback) (void *, char *, char *, char *, char *, int);	// The callback function
 	void *callback_data;	// data to pass to the callback function
 	char **errmsg;		// buffer for storing the error msg
 } query_args;
