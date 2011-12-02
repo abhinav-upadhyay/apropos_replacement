@@ -30,7 +30,7 @@
 .\" OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd August 19, 2011
+.Dd December 02, 2011
 .Dt RUN_QUERY_HTML 3
 .Os
 .Sh NAME
@@ -53,20 +53,15 @@ but with the following three differences.
 .Nm
 takes only two arguments.
 .It
-The result set returned by
-.Nm
-contains one new column, the ordering of the columns in the result set is same
-as in
-.Xr run_query 3 .
-This new column has the name html_result and appears as the last column of
-the result set.
-It combines the complete result in a logical form enclosed between <p> and </p>
-tags.
-.It
 The snippet returned by
 .Nm
 uses <b> and </b> tags to highlight the matching pieces of text so that it
 appears bold in a web browser.
+.It
+.Nm
+will do limited quoting of the inline HTML fragments in the snippet.
+Concretely, it will replace <, >, ", & with &lt; &gt; &quot; and &amp;
+respectively.
 .El
 For more details, refer to the manual page of
 .Xr run_query 3 .
@@ -103,10 +98,11 @@ free(query);
 free(errmsg);
 
 static int
-query_callback(void *data, int ncol, char **col_values, char **col_names)
+query_callback(void *data, const char *section, const char *name,
+	const char *name_desc, const char *snippet, int snippet_length)
 {
-	char *html_result = col_values[ncol - 1];
-	fprintf(stdout, "%s\en", html_result);
+	fprintf(stdout, "%s(%s)\t%s\en%s\en\en", name, section, name_desc,
+		snippet);
 	return 0;
 }
 .Ed
