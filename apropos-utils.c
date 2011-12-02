@@ -48,7 +48,8 @@
 
 typedef struct orig_callback_data {
 	void *data;
-	int (*callback) (void *, char *, char *, char *, char *, int);
+	int (*callback) (void *, const char *, const char *, const char *,
+		const char *, int);
 } orig_callback_data;
 
 typedef struct inverse_document_frequency {
@@ -512,10 +513,10 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
  *  calls the actual user supplied callback function.
  */
 static int
-callback_html(void *data, char *section, char *name, char *name_desc,
-	char *snippet, int snippet_length)
+callback_html(void *data, const char *section, const char *name,
+	const char *name_desc, const char *snippet, int snippet_length)
 {
-	char *temp = snippet;
+	char *temp = (char *) snippet;
 	int i = 0;
 	int sz = 0;
 	int gt_count = 0;
@@ -523,8 +524,8 @@ callback_html(void *data, char *section, char *name, char *name_desc,
 	int quot_count = 0;
 	int amp_count = 0;
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
-	int (*callback) (void *, char *, char *, char *, char *, int) =
-		orig_data->callback;
+	int (*callback) (void *, const char *, const char *, const char *, 
+		const char *, int) = orig_data->callback;
 
 	/* First scan the snippet to find out the number of occurrences of {'>', '<'
 	 * '"', '&'}.
@@ -584,8 +585,8 @@ callback_html(void *data, char *section, char *name, char *name_desc,
 		snippet++;
 	}
 	qsnippet[i] = 0;
-	(*callback)(orig_data->data, section, name, name_desc, qsnippet,
-		qsnippet_length);
+	(*callback)(orig_data->data, section, name, name_desc,
+		(const char *)qsnippet,	qsnippet_length);
 	free(qsnippet);
 	return 0;
 }
@@ -651,8 +652,8 @@ pager_highlight(char *str)
  *  suitable to be passed to a pager.
  */
 static int
-callback_pager(void *data, char *section, char *name, char *name_desc,
-	char *snippet, int snippet_length)
+callback_pager(void *data, const char *section, const char *name, 
+	const char *name_desc, const char *snippet, int snippet_length)
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	(orig_data->callback)(orig_data->data, section, name, name_desc, snippet,
