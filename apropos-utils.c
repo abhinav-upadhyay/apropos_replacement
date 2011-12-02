@@ -515,33 +515,78 @@ static int
 callback_html(void *data, char *section, char *name, char *name_desc,
 	char *snippet, int snippet_length)
 {
-	int i;
-	const char *tab = "&nbsp;&nbsp;&nbsp;&nbsp;";
-	char *buf = NULL;
-	char *html_output = NULL;
+	char *temp = snippet;
+	int i = 0;
+	int sz = 0;
+	int gt_count = 0;
+	int lt_count = 0;
+	int quot_count = 0;
+	int amp_count = 0;
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	int (*callback) (void *, char *, char *, char *, char *, int) =
 		orig_data->callback;
-	
-	/*easprintf(&buf, "<p> <b>%s(%s)</b>%s %s %s <br />\n%s</p>", name, section, tab, tab,
-				name_desc, snippet);
-	html_output = emalloc(strlen(buf) * 4 + 1);
-	strvis(html_output, buf, VIS_CSTYLE);
-	
-	for (i = 0; i < ncol; i++) {
-		html_col_names[i] = col_names[i];
-		html_col_values[i] = col_values[i];
-	}
-	html_col_names[ncol] = (char *) "html_result";
-	html_col_values[ncol] = html_output;
-	ncol++;	
-	(*callback)(orig_data->data, ncol, html_col_values, html_col_names);
-	free(buf);
-	free(html_output); */
 
-	/* XXX Write code to quote html fragments in the snippet */
-	(*callback)(orig_data->data, section, name, name_desc, snippet,
-		snippet_length)	;
+	/* First scan the snippet to find out the number of occurrences of {'>', '<'
+	 * '"', '&'}.
+	 * Then allocate a new buffer with sufficient space to be able to store the
+	 * quoted versions of the special characters {&gt;, &lt;, &quot;, &amp;}.
+	 * Copy over the characters from the original snippet to this buffer while
+	 * replacing the special characters with their quoted versions.
+	 */
+
+	i = 0;
+	while (*temp) {
+		sz = strcspn(temp, "<>\"&");
+		temp += sz + 1;
+		switch (*temp) {
+		case '<':
+			lt_count++;
+			break;
+		case '>':
+			gt_count++;
+			break;
+		case '\"':
+			quot_count++;
+			break;
+		case '&':
+			amp_count++;
+			break;
+		default:
+			break;
+		}
+	}
+	int qsnippet_length = lt_count * 3 + gt_count * 3 + quot_count * 6 +
+							amp_count * 5;
+	char *qsnippet = emalloc(snippet_length + qsnippet_length + 1);
+	
+	while (*snippet) {
+		switch (*snippet) {
+		case '<':
+			memcpy(&qsnippet[i], "&lt;", 4);
+			i += 4;
+			break;
+		case '>':
+			memcpy(&qsnippet[i], "&gt;", 4);
+			i += 4;
+			break;
+		case '\"':
+			memcpy(&qsnippet[i], "&quot;", 6);
+			i += 6;
+			break;
+		case '&':
+			memcpy(&qsnippet[i], "&amp;", 5);
+			i += 5;
+			break;
+		default:
+			qsnippet[i++] = *snippet;
+			break;
+		}
+		snippet++;
+	}
+	qsnippet[i] = 0;
+	(*callback)(orig_data->data, section, name, name_desc, qsnippet,
+		qsnippet_length);
+	free(qsnippet);
 	return 0;
 }
 
