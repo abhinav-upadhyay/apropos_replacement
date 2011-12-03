@@ -41,7 +41,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <util.h>
-#include <vis.h>
 
 #include "apropos-utils.h"
 #include "sqlite3.h"
