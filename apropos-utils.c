@@ -519,10 +519,7 @@ callback_html(void *data, const char *section, const char *name,
 	char *temp = (char *) snippet;
 	int i = 0;
 	int sz = 0;
-	int gt_count = 0;
-	int lt_count = 0;
-	int quot_count = 0;
-	int amp_count = 0;
+	int count = 0;
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	int (*callback) (void *, const char *, const char *, const char *, 
 		const char *, int) = orig_data->callback;
@@ -537,31 +534,31 @@ callback_html(void *data, const char *section, const char *name,
 
 	i = 0;
 	while (*temp) {
-		sz = strcspn(temp, "<>\"&");
+		sz = strcspn(temp, "<>\"&\002\003");
 		temp += sz + 1;
 		switch (*temp) {
 		case '<':
-			lt_count++;
-			break;
 		case '>':
-			gt_count++;
-			break;
 		case '\"':
-			quot_count++;
-			break;
 		case '&':
-			amp_count++;
+			count++;
 			break;
 		default:
 			break;
 		}
 	}
-	int qsnippet_length = lt_count * 3 + gt_count * 3 + quot_count * 6 +
-							amp_count * 5;
-	char *qsnippet = emalloc(snippet_length + qsnippet_length + 1);
-	
+	size_t qsnippet_length = snippet_length + count * 5;
+	char *qsnippet = emalloc(qsnippet_length + 1);
+	sz = 0;
 	while (*snippet) {
-		switch (*snippet) {
+		sz = strcspn(snippet, "<>\"&\002\003");
+		if (sz) {
+			memcpy(&qsnippet[i], snippet, sz);
+			snippet += sz;
+			i += sz;
+		}
+
+		switch (*snippet++) {
 		case '<':
 			memcpy(&qsnippet[i], "&lt;", 4);
 			i += 4;
@@ -575,16 +572,29 @@ callback_html(void *data, const char *section, const char *name,
 			i += 6;
 			break;
 		case '&':
-			memcpy(&qsnippet[i], "&amp;", 5);
-			i += 5;
+			/* Don't perform the quoting if this & is part of an mdoc escape
+			 * sequence, e.g. \&
+			 */
+			if (i && *(snippet - 2) != '\\') {
+				memcpy(&qsnippet[i], "&amp;", 5);
+				i += 5;
+			}
+			else
+				qsnippet[i++] = '&';
+			break;
+		case '\002':
+			memcpy(&qsnippet[i], "<b>", 3);
+			i += 3;
+			break;
+		case '\003':
+			memcpy(&qsnippet[i], "</b>", 4);
+			i += 4;
 			break;
 		default:
-			qsnippet[i++] = *snippet;
 			break;
 		}
-		snippet++;
 	}
-	qsnippet[i] = 0;
+	qsnippet[++i] = 0;
 	(*callback)(orig_data->data, section, name, name_desc,
 		(const char *)qsnippet,	qsnippet_length);
 	free(qsnippet);
@@ -607,7 +617,7 @@ run_query_html(sqlite3 *db, query_args *args)
 	struct orig_callback_data orig_data;
 	orig_data.callback = args->callback;
 	orig_data.data = args->callback_data;
-	const char *snippet_args[] = {"<b>", "</b>", "..."}; 
+	const char *snippet_args[] = {"\002", "\003", "..."};
 	args->callback = &callback_html;
 	args->callback_data = (void *) &orig_data;
 	run_query(db, snippet_args, args);
