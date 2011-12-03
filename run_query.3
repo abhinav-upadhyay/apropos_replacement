@@ -30,7 +30,7 @@
 .\" OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd December 02, 2011
+.Dd December 03, 2011
 .Dt RUN_QUERY 3
 .Os
 .Sh NAME
@@ -121,7 +121,7 @@ n records from the result-set will be omitted and rest m-n (or less) records wil
 be available for processing inside the callback.
 Use a negative value if you don't wish to offset any records.
 .It Li int (*callback) (void *, const char *, const char *, const char *,\
-const char *, int)
+const char *, size_t)
 This is the callback function which will
 be called for each row retrieved from the database.
 The function should return a value of 0 on successful execution.
@@ -151,7 +151,7 @@ then the caller should make sure to free it.
 The interface of the callback function is
 .Ft int
 .Fn (*callback) "void *callback_data" "const char *section" "const char *name"\
-"const char *name_desc" "const char *snippet" "int snippet_length"
+"const char *name_desc" "const char *snippet" "size_t snippet_length"
 .Pp
 Its arguments are:
 .Bl -column -offset indent "Function" "Argument Description"
@@ -163,7 +163,7 @@ page belongs.
 page obtained from it's NAME section.
 .It Li const char *snippet Ta This is a snippet of the matching text from this
 man page.
-.It Li int snippet_length Ta This is the length of the snippet.
+.It Li size_t snippet_length Ta This is the length of the snippet.
 .El
 .Sh RETURN VALUES
 On successful execution the
@@ -200,7 +200,7 @@ free(errmsg);
 
 static int
 query_callback(void *data, const char *section, const char *name,
-	const char *name_desc, const char *snippet, int snippet_length )
+	const char *name_desc, const char *snippet, size_t snippet_length )
 {
 	/* The user supplied data could be obtained as follows */
 	// my_data *buf = (my_data *) data;

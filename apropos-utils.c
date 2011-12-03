@@ -49,7 +49,7 @@
 typedef struct orig_callback_data {
 	void *data;
 	int (*callback) (void *, const char *, const char *, const char *,
-		const char *, int);
+		const char *, size_t);
 } orig_callback_data;
 
 typedef struct inverse_document_frequency {
@@ -514,15 +514,15 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
  */
 static int
 callback_html(void *data, const char *section, const char *name,
-	const char *name_desc, const char *snippet, int snippet_length)
+	const char *name_desc, const char *snippet, size_t snippet_length)
 {
 	char *temp = (char *) snippet;
 	int i = 0;
-	int sz = 0;
+	size_t sz = 0;
 	int count = 0;
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	int (*callback) (void *, const char *, const char *, const char *, 
-		const char *, int) = orig_data->callback;
+		const char *, size_t) = orig_data->callback;
 
 	/* First scan the snippet to find out the number of occurrences of {'>', '<'
 	 * '"', '&'}.
@@ -663,7 +663,7 @@ pager_highlight(char *str)
  */
 static int
 callback_pager(void *data, const char *section, const char *name, 
-	const char *name_desc, const char *snippet, int snippet_length)
+	const char *name_desc, const char *snippet, size_t snippet_length)
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	(orig_data->callback)(orig_data->data, section, name, name_desc, snippet,

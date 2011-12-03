@@ -30,7 +30,7 @@
 .\" OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd August 19, 2011
+.Dd December 03, 2011
 .Dt RUN_QUERY_PAGER 3
 .Os
 .Sh NAME
@@ -47,18 +47,9 @@ The
 .Fn run_query_pager
 is very similar to
 .Xr run_query_html 3
-but with following two differences.
-.Bl -enum -offset indent
-.It
-.Nm
-will return a 5 column result set, much like
-.Xr run_query 3
-.It
-The snippet returned by
-.Nm
-in the callback function is in a format so that the matching text appears
-highlighted when piped to a pager.
-.El
+with the only difference that the snippet returned is formatted in a manner so
+that the matching text in it appears highlighted when viewed using a pager.
+.Pp
 For more details, refer to the manual page of
 .Xr run_query 3 .
 .Sh RETURN VALUES
@@ -96,11 +87,12 @@ free(errmsg);
 pclose(pager);
 
 static int
-query_callback(void *data, int ncol, char **col_values, char **col_names)
+query_callback(void *data, const char *section, const char *name,
+	const char *name_desc, const char *snippet, size_t snippet_length)
 {
 	FILE *out = (FILE *) data;
-	char *html_result = col_values[0];
-	fprintf(out, "%s\en", html_result);
+	fprintf(out, "%s(%s)\t%s\en%s\en\en", name, section, name_desc,
+		snippet);
 	return 0;
 }
 .Ed
