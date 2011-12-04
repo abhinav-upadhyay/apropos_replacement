@@ -531,7 +531,6 @@ callback_html(void *data, const char *section, const char *name,
 	 * replacing the special characters with their quoted versions.
 	 */
 
-	i = 0;
 	while (*temp) {
 		sz = strcspn(temp, "<>\"&\002\003");
 		temp += sz + 1;
@@ -603,12 +602,10 @@ callback_html(void *data, const char *section, const char *name,
 /*
  * run_query_html --
  *  Utility function to output query result in HTML format.
- *  It internally calls do_query only, but it first passes the output to it's 
- *  own custom callback function, which builds a single HTML string representing
- *  one row of output.
+ *  It internally calls run_query only, but it first passes the output to it's 
+ *  own custom callback function, which preprocess the snippet for quoting
+ *  inline HTML fragments.
  *  After that it delegates the call the actual user supplied callback function.
- *  #TODO One limit to this is that, the user supplied data for the callback 
- *  function would be lost.
  */
 int
 run_query_html(sqlite3 *db, query_args *args)
