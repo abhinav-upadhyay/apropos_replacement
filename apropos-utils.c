@@ -691,14 +691,10 @@ callback_pager(void *data, const char *section, const char *name,
 
 /*
  * run_query_pager --
- *  Utility function similar to run_query_html. This function tries to process
- *  the result assuming it will be piped to a pager.
- *  It's basic aim is to pre-process the snippet returned from the result-set
- *  in a form so that the pager may be able to highlight the matching bits of 
- *  the text.
- *  We use a hashtable to store each word of the user query as a key and it's
- *  bold text representation as it's value for faster lookup when building the
- *  snippet in pager_highlight.
+ *  Utility function similar to run_query_html. This function tries to
+ *  pre-process the result assuming it will be piped to a pager.
+ *  For this purpose it first calls it's own callback function callback_pager
+ *  which then delegates the call to the user supplied callback.
  */
 int run_query_pager(sqlite3 *db, query_args *args)
 {
