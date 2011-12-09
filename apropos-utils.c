@@ -621,11 +621,9 @@ run_query_html(sqlite3 *db, query_args *args)
 
 /*
  * callback_pager --
- *  A callback similar to callback_html. Difference being it formats the snippet
- *  so that the pager should be able to dispaly the matching bits of the snippet
- *  in bold and then calls the actual callback function specified by the user.
- *  It passes the snippet to pager_highlight which returns a new string which is
- *  suitable to be passed to a pager.
+ *  A callback similar to callback_html. It overstrikes the matching text in
+ *  the snippet so that it appears emboldened when viewed using a pager like
+ *  more or less.
  */
 static int
 callback_pager(void *data, const char *section, const char *name, 
