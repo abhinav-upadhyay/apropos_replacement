@@ -36,7 +36,6 @@
 #include <ctype.h>
 #include <err.h>
 #include <math.h>
-#include <search.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -621,35 +620,6 @@ run_query_html(sqlite3 *db, query_args *args)
 }
 
 /*
- * pager_highlight --
- *  Builds a string in a form so that a pager like more or less may display it in
- *  bold.
- *  This function is required by run_query_pager, which calls it to replace the
- *  snippet returned from Sqlite.
- *  Caller should free the string returned from this function.
- */
-static char *
-pager_highlight(char *str)
-{
-	char *temp = NULL;
-	char *buf = NULL;
-	ENTRY ent, *result;
-	/* Process the string word by word and if the word is found in the hash 
-	 * table, then replace that word with it's bold text representation obtained
-	 * from the table.
-	 */
-	for (temp = strtok(str, " "); temp; temp = strtok(NULL, " ")) {
-		 ent.key = (char *)temp;
-		 ent.data = NULL;
-		 if ((result = hsearch(ent, FIND)) == NULL)
-		 	concat(&buf, temp, strlen(temp));
-		 else
-		 	concat(&buf, (char *)result->data, -1);
-	}
-	return buf;
-}
-
-/*
  * callback_pager --
  *  A callback similar to callback_html. Difference being it formats the snippet
  *  so that the pager should be able to dispaly the matching bits of the snippet
@@ -662,28 +632,63 @@ callback_pager(void *data, const char *section, const char *name,
 	const char *name_desc, const char *snippet, size_t snippet_length)
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
-	(orig_data->callback)(orig_data->data, section, name, name_desc, snippet,
-		snippet_length);
-	return 0;
-}
+	char *psnippet;
+	char *temp = (char *) snippet;
+	int count = 0;
+	int i = 0;
+	size_t sz = 0;
+	size_t psnippet_length;
 
-/*
- * build_cat_string --
- *  Builds a string which is in a form so that a pager may display it in bold.
- *  Basic aim is: If the input string is "A", then output should be: "A\bA"
- */
-static char *
-build_cat_string(char *str)
-{
-	int i, j;
-	char *catstr = emalloc(3 * strlen(str) + 1);
-	for (i = 0, j = 0; str[i] != '\0'; i++, j+=3) {
-		catstr[j] = str[i];
-		catstr[j + 1] = '\b';
-		catstr[ j + 2] = str[i];
+	/* Count the number of bytes of matching text. For each of these bytes we
+	 * will use 2 extra bytes to overstrike it so that it appears bold when
+	 * viewed using a pager.
+	 */
+	while (*temp) {
+		sz = strcspn(temp, "\002");
+		if (sz) {
+			temp += sz;
+			sz = strcspn(temp, "\003");
+			count += 2 * sz;
+			temp += sz;
+			sz = 0;
+		}
 	}
-	catstr[j] = 0;
-	return catstr;
+
+	psnippet_length = snippet_length + count;
+	psnippet = emalloc(psnippet_length + 1);
+
+	/* Copy the bytes from snippet to psnippet:
+	 * 1. Copy the bytes before \002 as it is.
+	 * 2. The bytes after \002 need to be overstriked till we encounter \003.
+	 * 3. To overstrike a byte 'A' we need to write 'A\bA'
+	 */
+	while (*snippet) {
+		sz = 0;
+		sz = strcspn(snippet, "\002");
+		if (sz) {
+			memcpy(&psnippet[i], snippet, sz);
+			snippet += sz;
+			i += sz;
+
+			/* Don't change this. Advancing the pointer without reading the byte
+			 * is causing strange behavior.
+			 */
+			if (*snippet == '\002')
+				snippet++;
+			while (*snippet && *snippet != '\003') {
+				psnippet[i++] = *snippet;
+				psnippet[i++] = '\b';
+				psnippet[i++] = *snippet++;
+			}
+			snippet++;
+		}
+	}
+
+	psnippet[i] = 0;
+	(orig_data->callback)(orig_data->data, section, name, name_desc, psnippet,
+		psnippet_length);
+	free(psnippet);
+	return 0;
 }
 
 /*
@@ -699,29 +704,13 @@ build_cat_string(char *str)
  */
 int run_query_pager(sqlite3 *db, query_args *args)
 {
-	char *temp = NULL;
 	struct orig_callback_data orig_data;
 	orig_data.callback = args->callback;
 	orig_data.data = args->callback_data;
-	char *query = strdup(args->search_str);
-	/* initialize the hash table for stop words */
-	if (!hcreate(10))
-		return -1;
-	
-	/* store the query words in the hashtable as key and their equivalent
-	 * bold text representation as their values.
-	 */	
-	for (temp = strtok(query, " "); temp; temp = strtok(NULL, " ")) {
-		ENTRY ent;
-		ent.key = strdup(temp);
-		ent.data = (void *) build_cat_string(temp);
-		hsearch(ent, ENTER);
-	}
-	free(query);
+	const char *snippet_args[] = {"\002", "\003", "..."};
 	args->callback = &callback_pager;
 	args->callback_data = (void *) &orig_data;
-	run_query(db, NULL, args);
-	hdestroy();
+	run_query(db, snippet_args, args);
 	return 0;
-
 }
+
