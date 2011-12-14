@@ -80,33 +80,17 @@ main(int argc, char *argv[])
 	 * section number.
 	 */
 	while ((ch = getopt(argc, argv, "123456789p")) != -1) {
-	switch (ch) {
+		switch (ch) {
 		case '1':
-			aflags.sec_nums[0] = 1;
-			break;
 		case '2':
-			aflags.sec_nums[1] = 2;
-			break;
 		case '3':
-			aflags.sec_nums[2] = 3;
-			break;
 		case '4':
-			aflags.sec_nums[3] = 4;
-			break;
 		case '5':
-			aflags.sec_nums[4] = 5;
-			break;
 		case '6':
-			aflags.sec_nums[5] = 6;
-			break;
 		case '7':
-			aflags.sec_nums[6] = 7;
-			break;
 		case '8':
-			aflags.sec_nums[7] = 8;
-			break;
 		case '9':
-			aflags.sec_nums[8] = 9;
+			aflags.sec_nums[atoi(&ch) - 1] = 1;
 			break;
 		case 'p':	//user wants to view more than 10 results and page them
 			aflags.pager = 1;
