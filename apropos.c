@@ -105,7 +105,7 @@ main(int argc, char *argv[])
 	
 	argc -= optind;
 	argv += optind;		
-	query = *argv;
+	query = lower(*argv);
 	if ((db = init_db(MANDB_READONLY)) == NULL)
 		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
 			"first and then try again");
