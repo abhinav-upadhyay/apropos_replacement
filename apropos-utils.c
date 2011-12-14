@@ -533,16 +533,7 @@ callback_html(void *data, const char *section, const char *name,
 	while (*temp) {
 		sz = strcspn(temp, "<>\"&\002\003");
 		temp += sz + 1;
-		switch (*temp) {
-		case '<':
-		case '>':
-		case '\"':
-		case '&':
-			count++;
-			break;
-		default:
-			break;
-		}
+		count++;
 	}
 	size_t qsnippet_length = snippet_length + count * 5;
 	char *qsnippet = emalloc(qsnippet_length + 1);
@@ -642,14 +633,12 @@ callback_pager(void *data, const char *section, const char *name,
 	 * viewed using a pager.
 	 */
 	while (*temp) {
-		sz = strcspn(temp, "\002");
-		if (sz) {
-			temp += sz;
-			sz = strcspn(temp, "\003");
-			count += 2 * sz;
-			temp += sz;
-			sz = 0;
+		sz = strcspn(temp, "\002\003");
+		temp += sz;
+		if (*temp == '\003') {
+			count += 2 * (sz);
 		}
+		temp++;
 	}
 
 	psnippet_length = snippet_length + count;
@@ -680,6 +669,8 @@ callback_pager(void *data, const char *section, const char *name,
 			}
 			snippet++;
 		}
+		else
+			break;
 	}
 
 	psnippet[i] = 0;
