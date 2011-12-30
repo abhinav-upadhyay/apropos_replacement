@@ -207,7 +207,7 @@ remove_stopwords(char **query)
 	 "did", "does", "down", 
 	 "each", "early","either", "end", "enough",  "even", "every", 
 	 "fact", "far", "few", "four", "further", "follow", "from", "full", 
-	 "general", "good", "got", "great", "give", "given", 
+	 "general", "get", "good", "got", "great", "give", "given", 
 	 "have", "has", "had", "here", "how", "having", "high", "him", "his", 
 	 "however", 
 	 "if", "important", "in", "interest", "into", "is", "it", 
