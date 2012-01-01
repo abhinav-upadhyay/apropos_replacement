@@ -785,15 +785,49 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 static void
 pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 {
+	/* A static variable for keeping track of whether a Xr macro was seen
+	 * previously.
+	 */
+	static int xr = 0;
+	char *buf = NULL;
+	char *temp;
+
 	if (n == NULL)
 		return;
-	if (n->type == MDOC_TEXT) 
-		concat(&(rec->name_desc), n->string, strlen(n->string));
+
+	if (n->type == MDOC_TEXT) {
+		if (xr == 1) {
+		/* An Xr macro was seen previously, so we need to parse this and the
+		 * next node especially
+		 */
+			if (n->next) {
+				temp = strdup(n->string);
+				n = n->next;
+				easprintf(&buf, "%s(%s)", temp, n->string);
+				concat(&rec->name_desc, buf, strlen(buf));
+				free(buf);
+				free(temp);
+			}
+			else {
+				concat(&rec->name_desc, n->string, strlen(temp));
+			}
+			xr = 0;
+		}
+		else {
+			concat(&(rec->name_desc), n->string, strlen(n->string));
+		}
+	}
+	else if (mdocs[n->tok] == pmdoc_Xr) {
+		/* Remember that we have encountered an Xr macro */
+		xr = 1;
+	}
 	
-	if (n->child)
+	if (n->child) {
 		pmdoc_Nd(n->child, rec);
-	if(n->next)
+	}
+	if(n->next) {
 		pmdoc_Nd(n->next, rec);
+	}
 }
 
 /*
