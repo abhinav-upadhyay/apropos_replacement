@@ -801,7 +801,7 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 		 * next node especially
 		 */
 			if (n->next) {
-				temp = strdup(n->string);
+				temp = estrdup(n->string);
 				n = n->next;
 				easprintf(&buf, "%s(%s)", temp, n->string);
 				concat(&rec->name_desc, buf, strlen(buf));
