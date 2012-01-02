@@ -796,26 +796,21 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 		return;
 
 	if (n->type == MDOC_TEXT) {
-		if (xr == 1) {
-		/* An Xr macro was seen previously, so we need to parse this and the
-		 * next node especially
-		 */
-			if (n->next) {
-				temp = estrdup(n->string);
-				n = n->next;
-				easprintf(&buf, "%s(%s)", temp, n->string);
-				concat(&rec->name_desc, buf, strlen(buf));
-				free(buf);
-				free(temp);
-			}
-			else {
-				concat(&rec->name_desc, n->string, strlen(temp));
-			}
-			xr = 0;
+		if (xr == 1 && n->next) {
+			/* An Xr macro was seen previously, so we need to parse this and the
+			 * next node especially
+			 */
+			temp = estrdup(n->string);
+			n = n->next;
+			easprintf(&buf, "%s(%s)", temp, n->string);
+			concat(&rec->name_desc, buf, strlen(buf));
+			free(buf);
+			free(temp);
 		}
 		else {
-			concat(&(rec->name_desc), n->string, strlen(n->string));
+			concat(&rec->name_desc, n->string, strlen(n->string));
 		}
+		xr = 0;			
 	}
 	else if (mdocs[n->tok] == pmdoc_Xr) {
 		/* Remember that we have encountered an Xr macro */
