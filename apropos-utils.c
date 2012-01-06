@@ -66,7 +66,9 @@ static const double col_weights[] = {
 	0.01,	//FILES
 	0.001,	//EXIT STATUS
 	2.00,	//DIAGNOSTICS
-	0.05	//ERRORS
+	0.05,	//ERRORS
+	0.00,	//md5_hash
+	1.00	//machine
 };
 
 /*
@@ -144,10 +146,11 @@ create_db(sqlite3 *db)
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 				"name_desc, desc, lib, return_vals, env, files, "
-				"exit_status, diagnostics, errors, compress=zip, "
-				"uncompress=unzip, tokenize=porter); "	//mandb table
-			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, file UNIQUE, "
-				"md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "	//mandb_meta
+				"exit_status, diagnostics, errors, md5_hash, machine, "
+				"tokenize=porter); "	//mandb
+			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, "
+			"file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
+				//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
 				"machine); ";	//mandb_links
 

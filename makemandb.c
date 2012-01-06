@@ -1353,7 +1353,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 /*------------------------ Populate the mandb table---------------------------*/
 	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc, "
 			":lib, :return_vals, :env, :files, :exit_status, "
-			":diagnostics, :errors)";
+			":diagnostics, :errors, :md5_hash, :machine)";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
@@ -1454,6 +1454,24 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 
 	idx = sqlite3_bind_parameter_index(stmt, ":errors");
 	rc = sqlite3_bind_text(stmt, idx, rec->errors.data, -1, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup(rec);
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
+	rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_finalize(stmt);
+		cleanup(rec);
+		return -1;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":machine");
+	rc = sqlite3_bind_text(stmt, idx, rec->machine, -1, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
