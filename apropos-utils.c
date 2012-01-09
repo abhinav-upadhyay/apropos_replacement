@@ -447,7 +447,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		for (i = 0; i < SECMAX; i++) {
 			if (args->sec_nums[i] == 0)
 				continue;
-			easprintf(&temp, " OR section LIKE \'%d\'", i + 1);
+			easprintf(&temp, " OR section = \'%d\'", i + 1);
 			if (section_clause) {
 				concat(&section_clause, temp, -1);
 				free(temp);
