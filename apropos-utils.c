@@ -239,7 +239,7 @@ unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 		return;
 	}
 	outbuf = erealloc(outbuf, stream.total_out);
-	sqlite3_result_blob(pctx, outbuf, stream.total_out, free);
+	sqlite3_result_text(pctx, outbuf, stream.total_out, free);
 }
 
 /* init_db --
