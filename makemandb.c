@@ -735,6 +735,8 @@ get_machine(const struct mdoc *md, mandb_rec *rec)
 	const struct mdoc_meta *md_meta = mdoc_meta(md);
 	if (md_meta->arch)
 		rec->machine = estrdup(md_meta->arch);
+	else
+		easprintf(&rec->machine, "%s", "");
 }
 
 static void
@@ -1625,9 +1627,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 		
 	if (rec->links) {
-		if (rec->machine == NULL)
-			easprintf(&rec->machine, "%s", "");
-		
 		for(link = strtok(rec->links, " "); link; link = strtok(NULL, " ")) {
 			if (link[0] == ',')
 				link++;
