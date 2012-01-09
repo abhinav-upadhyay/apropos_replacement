@@ -31,6 +31,7 @@
  */
 
 #include <sys/stat.h>
+#include <sys/utsname.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -40,7 +41,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <util.h>
-#include <sys/utsname.h>
 
 #include "apropos-utils.h"
 #include "sqlite3.h"
