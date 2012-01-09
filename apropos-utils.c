@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <util.h>
+#include <sys/utsname.h>
 
 #include "apropos-utils.h"
 #include "sqlite3.h"
@@ -410,10 +411,16 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	char *name;
 	char *name_desc;
 	char *snippet;
+	char *machine;
+	struct utsname mname;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
 	sqlite3_stmt *stmt;
 
+	if (uname(&mname) < 0)
+		machine = "";
+	else
+		machine = mname.machine;
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
@@ -474,15 +481,16 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	    " snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
 	    " rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
 	    " FROM mandb"
-	    " WHERE mandb MATCH %Q"
+	    " WHERE mandb MATCH %Q AND machine IN(%Q,%Q) "
 	    "%s"
 	    " ORDER BY rank DESC"
 	    "%s",
-	    snippet_args[0], snippet_args[1], snippet_args[2],
-	    args->search_str, section_clause ? section_clause : "",
+	    snippet_args[0], snippet_args[1], snippet_args[2], args->search_str,
+	    machine, "", section_clause ? section_clause : "",
 	    limit_clause ? limit_clause : "");
 	free(section_clause);
 	free(limit_clause);
+
 	if (query == NULL) {
 		*args->errmsg = estrdup("malloc failed");
 		return -1;
