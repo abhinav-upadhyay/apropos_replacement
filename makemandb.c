@@ -1007,8 +1007,8 @@ pman_node(const struct man_node *n, mandb_rec *rec)
 	case (MAN_ELEM):
 		if (mans[n->tok] == NULL)
 			break;
-
 		(*mans[n->tok])(n, rec);
+		break;
 	default:
 		break;
 	}
