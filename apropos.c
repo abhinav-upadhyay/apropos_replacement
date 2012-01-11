@@ -43,6 +43,7 @@
 
 typedef struct apropos_flags {
 	int sec_nums[SECMAX];
+	int nresults;
 	int pager;
 } apropos_flags;
 
@@ -63,7 +64,6 @@ main(int argc, char *argv[])
 	char ch;
 	char *errmsg = NULL;
 	callback_data cbdata;
-	int nrec = 10;	// The number of records to fetch from db
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
 	cbdata.out = stdout;		// the default stream for the search output
 	cbdata.count = 0;
@@ -79,7 +79,7 @@ main(int argc, char *argv[])
 	 * index element in sec_nums is set to the string representing that 
 	 * section number.
 	 */
-	while ((ch = getopt(argc, argv, "123456789p")) != -1) {
+	while ((ch = getopt(argc, argv, "123456789n:p")) != -1) {
 		switch (ch) {
 		case '1':
 		case '2':
@@ -92,9 +92,12 @@ main(int argc, char *argv[])
 		case '9':
 			aflags.sec_nums[atoi(&ch) - 1] = 1;
 			break;
+		case 'n':
+			aflags.nresults = atoi(optarg);
+			break;
 		case 'p':	//user wants to view more than 10 results and page them
 			aflags.pager = 1;
-			nrec = -1;	// Fetch all records
+			aflags.nresults = -1;	// Fetch all records
 			break;
 		case '?':
 		default:
@@ -104,7 +107,11 @@ main(int argc, char *argv[])
 	}
 	
 	argc -= optind;
-	argv += optind;		
+	argv += optind;
+	
+	if (!argc)
+		usage();
+
 	query = lower(*argv);
 	if ((db = init_db(MANDB_READONLY)) == NULL)
 		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
@@ -134,7 +141,7 @@ main(int argc, char *argv[])
 	query_args args;
 	args.search_str = query;
 	args.sec_nums = aflags.sec_nums;
-	args.nrec = nrec;
+	args.nrec = aflags.nresults ? aflags.nresults : 10;
 	args.offset = 0;
 	args.callback = &query_callback;
 	args.callback_data = &cbdata;
@@ -276,6 +283,8 @@ remove_stopwords(char **query)
 static void
 usage(void)
 {
-	(void)warnx("Usage: %s [-p] [-123456789] query", getprogname());
+	(void)fprintf(stderr,
+		"Usage %s [-n Number of records] [-p] [-123456789] query",
+		getprogname());
 	exit(1);
 }

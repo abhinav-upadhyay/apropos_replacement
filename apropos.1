@@ -39,6 +39,7 @@
 .Sh SYNOPSIS
 .Nm
 .Op Fl 123456789p
+.Op Fl n Ar Number of results
 .Ar query
 .Sh DESCRIPTION
 The
@@ -80,6 +81,10 @@ Search only within section 7 manual pages.
 Search only within section 8 manual pages.
 .It Fl 9
 Search only within section 9 manual pages.
+.It Fl n
+Output only the specified number of search results.
+This option can be used to override the default limit of maximum 10 results per
+query.
 .It Fl p
 This display all matching results (instead of the default of 10)
 and pipe them through a pager (defaulting to
