@@ -354,9 +354,9 @@ main(int argc, char *argv[])
 	}
 		
 	sqlstr = "CREATE TABLE IF NOT EXISTS metadb.file_cache(device, inode, "
-				"mtime, file PRIMARY KEY); "
+			    "mtime, file PRIMARY KEY); "
 			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_file_cache_dev ON "
-				"file_cache (device, inode)";
+			    "file_cache (device, inode)";
 			
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
@@ -438,8 +438,9 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 			if (strncmp(dirp->d_name, ".", 1)) {
 				if ((asprintf(&buf, "%s/%s", file, dirp->d_name) == -1)) {
 					closedir(dp);
-					if (errno == ENOMEM)
-						warn(NULL);
+					if (errno == ENOMEM) {
+						warn("%s", "malloc failed");
+					}
 					continue;
 				}
 				traversedir(buf, db, mp);
@@ -470,7 +471,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	time_t mtime_cache = sb->st_mtime;
 
 	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode, :mtime, "
-				":file)";
+			    ":file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
@@ -656,9 +657,9 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	if (!mflags.f) {
 		printf("Deleting stale index entries\n");	
 		sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
-					"WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
+				    "WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
 				"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
-					" metadb.file_cache); "
+				    " metadb.file_cache); "
 				"DROP TABLE metadb.file_cache";
 			
 		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
@@ -755,11 +756,11 @@ pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
 	case (MDOC_TAIL):
 		/* FALLTHROUGH */
 	case (MDOC_ELEM):
-		if (mdocs[n->tok] == NULL)
+		if (mdocs[n->tok] == NULL) {
 			break;
-
+		}
 		(*mdocs[n->tok])(n, rec);
-		
+		break;
 	default:
 		break;
 	}
@@ -777,8 +778,9 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 {
 	if (n->sec == SEC_NAME) {
 		for (n = n->child; n; n = n->next) {
-			if (n->type == MDOC_TEXT)
+			if (n->type == MDOC_TEXT) {
 				concat(&rec->name, n->string, strlen(n->string));
+			}
 		}
 	}
 }
@@ -854,19 +856,25 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 	 */
 	case MDOC_Xr:
 		n = n->child;
-		while (n->type != MDOC_TEXT && n->next)
+		while (n->type != MDOC_TEXT && n->next) {
 			n = n->next;
+		}
+
 		if (n && n->type == MDOC_TEXT) {
 			len = strlen(n->string);
 			concat(&buf, n->string, len);
-			if (n->next)
+			if (n->next) {
 				n = n->next;
+			}
 		}
-		else
+		else {
 			return;
+		}
 
-		while (n->type != MDOC_TEXT && n->next)
+		while (n->type != MDOC_TEXT && n->next) {
 			n = n->next;
+		}
+
 		if (n && n->type == MDOC_TEXT) {
 			buf = (char *) erealloc(buf, len + 4);
 			buf[len] = '(';
@@ -875,14 +883,16 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 			buf[len + 3] = 0;
 			mdoc_parse_section(n->sec, buf, rec);
 		}
+
 		free(buf);
 		break;
 
 	/* Parse the .Pp macro to add a new line */
 	case MDOC_Pp:
-			if (n->type == MDOC_TEXT)
-				mdoc_parse_section(n->sec, "\n", rec);
-			break;
+		if (n->type == MDOC_TEXT) {
+			mdoc_parse_section(n->sec, "\n", rec);
+		}
+		break;
 	default:
 		break;
 	}
@@ -925,17 +935,20 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 			/* On encountering a .Nm macro, substitute it with it's previously
 			 * cached value of the argument
 			 */
-			if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL)
+			if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL) {
 				mdoc_parse_section(n->sec, rec->name, rec);
+			}
 			/* On encountering other inline macros, call pmdoc_macro_handler */
-			else if (mdocs[n->tok] == pmdoc_Xr)
+			else if (mdocs[n->tok] == pmdoc_Xr) {
 				pmdoc_macro_handler(n, rec, MDOC_Xr);
-			else if (mdocs[n->tok] == pmdoc_Pp)
+			}
+			else if (mdocs[n->tok] == pmdoc_Pp) {
 				pmdoc_macro_handler(n, rec, MDOC_Pp);
+			}
 			/* otherwise call pmdoc_Sh again to handle the nested macros */
-			else
+			else {
 				pmdoc_Sh(n, rec);
-			
+			}
 		}
 	}
 }
@@ -959,38 +972,38 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 		return;
 
 	switch (sec) {
-		case SEC_LIBRARY:
-			append(&rec->lib, string, strlen(string));
-			break;
-		case SEC_RETURN_VALUES:
-			append(&rec->return_vals, string, strlen(string));
-			break;
-		case SEC_ENVIRONMENT:
-			append(&rec->env, string, strlen(string));
-			break;
-		case SEC_FILES:
-			append(&rec->files, string, strlen(string));
-			break;
-		case SEC_EXIT_STATUS:
-			append(&rec->exit_status, string, strlen(string));
-			break;
-		case SEC_DIAGNOSTICS:
-			append(&rec->diagnostics, string, strlen(string));
-			break;
-		case SEC_ERRORS:
-			append(&rec->errors, string, strlen(string));
-			break;
-		case SEC_NAME:
-		case SEC_SYNOPSIS:
-		case SEC_EXAMPLES:
-		case SEC_STANDARDS:
-		case SEC_HISTORY:
-		case SEC_AUTHORS:
-		case SEC_BUGS:
-			break;
-		default:
-			append(&rec->desc, string, strlen(string));
-			break;
+	case SEC_LIBRARY:
+		append(&rec->lib, string, strlen(string));
+		break;
+	case SEC_RETURN_VALUES:
+		append(&rec->return_vals, string, strlen(string));
+		break;
+	case SEC_ENVIRONMENT:
+		append(&rec->env, string, strlen(string));
+		break;
+	case SEC_FILES:
+		append(&rec->files, string, strlen(string));
+		break;
+	case SEC_EXIT_STATUS:
+		append(&rec->exit_status, string, strlen(string));
+		break;
+	case SEC_DIAGNOSTICS:
+		append(&rec->diagnostics, string, strlen(string));
+		break;
+	case SEC_ERRORS:
+		append(&rec->errors, string, strlen(string));
+		break;
+	case SEC_NAME:
+	case SEC_SYNOPSIS:
+	case SEC_EXAMPLES:
+	case SEC_STANDARDS:
+	case SEC_HISTORY:
+	case SEC_AUTHORS:
+	case SEC_BUGS:
+		break;
+	default:
+		append(&rec->desc, string, strlen(string));
+		break;
 	}
 }
 
@@ -1030,11 +1043,13 @@ pman_parse_name(const struct man_node *n, mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
+
 	if (n->type == MAN_TEXT) 
 		concat(&rec->name_desc, n->string, strlen(n->string));
 	
 	if (n->child)
 		pman_parse_name(n->child, rec);
+
 	if(n->next)
 		pman_parse_name(n->next, rec);
 }
@@ -1171,7 +1186,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			}
 		}
 		
-		/* Check the section, and if it is of our concern, extract it's 
+		/* Check the section, and if it is of our concern, extract its 
 		 * content
 		 */
 		 
@@ -1266,39 +1281,39 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 		return;
 
 	switch (sec) {
-		case MANSEC_LIBRARY:
-			pman_parse_node(n, &rec->lib);
-			break;
-		case MANSEC_RETURN_VALUES:
-			pman_parse_node(n, &rec->return_vals);
-			break;
-		case MANSEC_ENVIRONMENT:
-			pman_parse_node(n, &rec->env);
-			break;
-		case MANSEC_FILES:
-			pman_parse_node(n, &rec->files);
-			break;
-		case MANSEC_EXIT_STATUS:
-			pman_parse_node(n, &rec->exit_status);
-			break;
-		case MANSEC_DIAGNOSTICS:
-			pman_parse_node(n, &rec->diagnostics);
-			break;
-		case MANSEC_ERRORS:
-			pman_parse_node(n, &rec->errors);
-			break;
-		case MANSEC_NAME:
-		case MANSEC_SYNOPSIS:
-		case MANSEC_EXAMPLES:
-		case MANSEC_STANDARDS:
-		case MANSEC_HISTORY:
-		case MANSEC_BUGS:
-		case MANSEC_AUTHORS:
-		case MANSEC_COPYRIGHT:
-			break;
-		default:
-			pman_parse_node(n, &rec->desc);
-			break;
+	case MANSEC_LIBRARY:
+		pman_parse_node(n, &rec->lib);
+		break;
+	case MANSEC_RETURN_VALUES:
+		pman_parse_node(n, &rec->return_vals);
+		break;
+	case MANSEC_ENVIRONMENT:
+		pman_parse_node(n, &rec->env);
+		break;
+	case MANSEC_FILES:
+		pman_parse_node(n, &rec->files);
+		break;
+	case MANSEC_EXIT_STATUS:
+		pman_parse_node(n, &rec->exit_status);
+		break;
+	case MANSEC_DIAGNOSTICS:
+		pman_parse_node(n, &rec->diagnostics);
+		break;
+	case MANSEC_ERRORS:
+		pman_parse_node(n, &rec->errors);
+		break;
+	case MANSEC_NAME:
+	case MANSEC_SYNOPSIS:
+	case MANSEC_EXAMPLES:
+	case MANSEC_STANDARDS:
+	case MANSEC_HISTORY:
+	case MANSEC_BUGS:
+	case MANSEC_AUTHORS:
+	case MANSEC_COPYRIGHT:
+		break;
+	default:
+		pman_parse_node(n, &rec->desc);
+		break;
 	}
 
 }
