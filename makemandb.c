@@ -1222,6 +1222,9 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		
 		else if (strcmp((const char *)head->string, "AUTHORS") == 0)
 			man_parse_section(MANSEC_AUTHORS, n, rec);
+			
+		else if (strcmp((const char *)head->string, "COPYRIGHT") == 0)
+			man_parse_section(MANSEC_COPYRIGHT, n, rec);			
 
 		/* Store the rest of the content in desc */
 		else
@@ -1291,6 +1294,7 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 		case MANSEC_HISTORY:
 		case MANSEC_BUGS:
 		case MANSEC_AUTHORS:
+		case MANSEC_COPYRIGHT:
 			break;
 		default:
 			pman_parse_node(n, &rec->desc);
