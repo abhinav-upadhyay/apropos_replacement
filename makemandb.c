@@ -739,7 +739,7 @@ get_machine(const struct mdoc *md, mandb_rec *rec)
 	if (md_meta->arch)
 		rec->machine = estrdup(md_meta->arch);
 	else
-		easprintf(&rec->machine, "%s", "");
+		easprintf(&rec->machine, "");
 }
 
 static void
