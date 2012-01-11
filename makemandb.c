@@ -562,7 +562,8 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			err_count++;
 			continue;
 		}
-		else if (md5_status == 0) {
+
+		if (md5_status == 0) {
 			/* The md5 is already present in the database, so simply update the 
 			 * metadata, ignoring symlinks.
 			 */
@@ -611,9 +612,10 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 					printf("Updated %s\n", file);
 					new_count++;
 				}
-				else
+				else {
 					/* otherwise it was a hardlink; update the counter */
 					link_count++;
+				}
 			}
 			else {
 				warnx("Could not update the meta data for %s", file);
@@ -623,7 +625,8 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			sqlite3_finalize(inner_stmt);
 			continue;
 		}
-		else if (md5_status == 1) {
+
+		if (md5_status == 1) {
 			/* The md5 was not present in the database, which means this is 
 			 * either a new file or an updated file. We should go ahead with 
 			 * parsing.
@@ -635,10 +638,10 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			if (insert_into_db(db, rec) < 0) {
 				warnx("Error in indexing %s", file);
 				err_count++;
-				continue;
 			}
-			else
+			else {
 				new_count++;
+			}
 		}
 	}
 	
