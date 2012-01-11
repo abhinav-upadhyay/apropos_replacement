@@ -427,7 +427,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	}
 	
 	/* If it is a directory, traverse it recursively */
-	else if (S_ISDIR(sb.st_mode)) {
+	if (S_ISDIR(sb.st_mode)) {
 		if ((dp = opendir(file)) == NULL) {
 			warn("opendir error: %s", file);
 			return;
@@ -447,7 +447,6 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 				free(buf);
 			}
 		}
-	
 		closedir(dp);
 	}
 }
