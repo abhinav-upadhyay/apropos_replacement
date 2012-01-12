@@ -99,16 +99,17 @@ concat(char **dst, const char *src, int srclen)
 {
 	int total_len, dst_len;
 	assert(src != NULL);
-	if (srclen == -1)
-		srclen = strlen(src);
 
 	/* if destination buffer dst is NULL, then simply strdup the source buffer */
 	if (*dst == NULL) {
 		*dst = estrdup(src);
 		return;
 	}
-	else	
-		dst_len = strlen(*dst);
+
+	if (srclen == -1)
+		srclen = strlen(src);
+
+	dst_len = strlen(*dst);
 	
 	/* calculate total string length:
 	*  one extra character for the nul byte 
@@ -146,14 +147,14 @@ create_db(sqlite3 *db)
 /*------------------------ Create the tables------------------------------*/
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
-				"name_desc, desc, lib, return_vals, env, files, "
-				"exit_status, diagnostics, errors, md5_hash, machine, "
-				"compress=zip, uncompress=unzip, tokenize=porter); "	//mandb
+			    "name_desc, desc, lib, return_vals, env, files, "
+			    "exit_status, diagnostics, errors, md5_hash, machine, "
+			    "compress=zip, uncompress=unzip, tokenize=porter); "	//mandb
 			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, "
-			"file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
+			    "file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
 				//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-				"machine); ";	//mandb_links
+			    "machine); ";	//mandb_links
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
@@ -291,8 +292,7 @@ init_db(int db_flag)
 	sqlite3_extended_result_codes(db, 1);
 	
 	/* Register the zip and unzip functions for FTS compression */
-	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, 
-                             zip, NULL, NULL);
+	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
@@ -300,20 +300,18 @@ init_db(int db_flag)
 	}
 
 	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
-		                         unzip, NULL, NULL);
+                                 unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_close(db);
 		sqlite3_shutdown();
 		errx(EXIT_FAILURE, "Unable to register function: uncompress");
 	}
 	
-	if (create_db_flag) {
-		if (create_db(db) < 0) {
-			warnx("%s", "Unable to create database schema");
-			sqlite3_close(db);
-			sqlite3_shutdown();
-			return NULL;
-		}
+	if (create_db_flag && create_db(db) < 0) {
+		warnx("%s", "Unable to create database schema");
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return NULL;
 	}
 	return db;
 }
@@ -411,7 +409,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	char *name;
 	char *name_desc;
 	char *snippet;
-	char *machine;
+	const char *machine;
 	struct utsname mname;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
