@@ -495,9 +495,9 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	}
 	rc = sqlite3_prepare_v2(db, query, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
+		warnx("Corrupt database. Please rerun makemandb");
 		sqlite3_free(query);
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
