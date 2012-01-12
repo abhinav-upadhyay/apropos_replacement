@@ -65,10 +65,10 @@ main(int argc, char *argv[])
 	char *errmsg = NULL;
 	callback_data cbdata;
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
-	cbdata.out = stdout;		// the default stream for the search output
+	cbdata.out = stdout;		// the default output stream
 	cbdata.count = 0;
 	apropos_flags aflags;
-	sqlite3 *db;	
+	sqlite3 *db;
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
@@ -155,15 +155,18 @@ main(int argc, char *argv[])
 			errx(EXIT_FAILURE, "%s", errmsg);
 	}
 		
-	if (cbdata.count == 0)
+	if (cbdata.count == 0) {
 		warnx("No relevant results obtained.\n"
-				"Please make sure that you spelled all the terms correctly\n"
-				"Or try using better keywords. For example:\n"
-				"\"removing files\" instead of \"deleting files\"");
+			  "Please make sure that you spelled all the terms correctly\n"
+			  "Or try using better keywords.");
+	}
+
 	free(query);
 	free(errmsg);
-	if (aflags.pager)
+	if (aflags.pager) {
 		pclose(cbdata.out);
+	}
+
 	close_db(db);
 	return 0;
 }
@@ -183,9 +186,10 @@ query_callback(void *data, const char *section, const char *name,
 	FILE *out = cbdata->out;
 	cbdata->count++;
 	fprintf(out, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
-				snippet);
+			snippet);
 	return 0;
 }
+
 /*
  * remove_stopwords--
  *  Scans the query and removes any stop words from it.
