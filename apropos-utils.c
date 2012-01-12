@@ -409,6 +409,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	char *section;
 	char *name;
 	char *name_desc;
+	char *machine;
 	char *snippet;
 	struct utsname mname;
 	int rc;
@@ -474,7 +475,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		default_snippet_args[2] = "...";
 		snippet_args = default_snippet_args;
 	}
-	query = sqlite3_mprintf("SELECT section, name, name_desc,"
+	query = sqlite3_mprintf("SELECT section, name, name_desc, machine,"
 	    " snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
 	    " rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
 	    " FROM mandb"
@@ -510,11 +511,20 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (char *) sqlite3_column_text(stmt, 0);
-		name = (char *) sqlite3_column_text(stmt, 1);
 		name_desc = (char *) sqlite3_column_text(stmt, 2);
-		snippet = (char *) sqlite3_column_text(stmt, 3);
+		machine = (char *) sqlite3_column_text(stmt, 3);
+		snippet = (char *) sqlite3_column_text(stmt, 4);
+		int len = strlen(machine);
+		if (len) {
+			easprintf(&name, "%s/%s", lower(machine),
+				sqlite3_column_text(stmt, 1));
+		} else {
+			name = (char *) sqlite3_column_text(stmt, 1);
+		}
 		(args->callback)(args->callback_data, section, name, name_desc, snippet,
 			strlen(snippet));
+		if (len)
+			free(name);
 	}
 
 	sqlite3_finalize(stmt);
