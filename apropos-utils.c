@@ -575,9 +575,9 @@ callback_html(void *data, const char *section, const char *name,
 			if (i && *(snippet - 2) != '\\') {
 				memcpy(&qsnippet[i], "&amp;", 5);
 				i += 5;
-			}
-			else
+			} else {
 				qsnippet[i++] = '&';
+			}
 			break;
 		case '\002':
 			memcpy(&qsnippet[i], "<b>", 3);
@@ -676,9 +676,9 @@ callback_pager(void *data, const char *section, const char *name,
 				psnippet[i++] = *snippet++;
 			}
 			snippet++;
-		}
-		else
+		} else {
 			break;
+		}
 	}
 
 	psnippet[i] = 0;

@@ -611,16 +611,15 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 				if (update_count != sqlite3_total_changes(db)) {
 					printf("Updated %s\n", file);
 					new_count++;
-				}
-				else {
+				} else {
 					/* otherwise it was a hardlink; update the counter */
 					link_count++;
 				}
-			}
-			else {
+			} else {
 				warnx("Could not update the meta data for %s", file);
 				err_count++;
 			}
+
 			free(buf);
 			sqlite3_finalize(inner_stmt);
 			continue;
@@ -638,8 +637,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			if (insert_into_db(db, rec) < 0) {
 				warnx("Error in indexing %s", file);
 				err_count++;
-			}
-			else {
+			} else {
 				new_count++;
 			}
 		}
@@ -699,8 +697,7 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 	if (mdoc) {
 		rec->page_type = MDOC;
 		pmdoc_node(mdoc_node(mdoc), rec);
-	}
-	else {
+	} else {
 		rec->page_type = MAN;
 		pman_node(man_node(man), rec);
 	}
@@ -718,8 +715,7 @@ get_section(const struct mdoc *md, const struct man *m, mandb_rec *rec)
 	if (md) {
 		const struct mdoc_meta *md_meta = mdoc_meta(md);
 		memcpy(rec->section, md_meta->msec, 1);
-	}
-	else if (m) {
+	} else if (m) {
 		const struct man_meta *m_meta = man_meta(m);
 		memcpy(rec->section, m_meta->msec, 1);
 	}
@@ -775,13 +771,15 @@ pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
 static void
 pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 {
-	if (n->sec == SEC_NAME) {
-		for (n = n->child; n; n = n->next) {
-			if (n->type == MDOC_TEXT) {
-				concat(&rec->name, n->string, strlen(n->string));
-			}
+	if (n->sec != SEC_NAME)
+		return;
+
+	for (n = n->child; n; n = n->next) {
+		if (n->type == MDOC_TEXT) {
+			concat(&rec->name, n->string, strlen(n->string));
 		}
 	}
+
 }
 
 /*
@@ -812,13 +810,11 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 			concat(&rec->name_desc, buf, strlen(buf));
 			free(buf);
 			free(temp);
-		}
-		else {
+		} else {
 			concat(&rec->name_desc, n->string, strlen(n->string));
 		}
 		xr = 0;			
-	}
-	else if (mdocs[n->tok] == pmdoc_Xr) {
+	} else if (mdocs[n->tok] == pmdoc_Xr) {
 		/* Remember that we have encountered an Xr macro */
 		xr = 1;
 	}
@@ -826,6 +822,7 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 	if (n->child) {
 		pmdoc_Nd(n->child, rec);
 	}
+
 	if(n->next) {
 		pmdoc_Nd(n->next, rec);
 	}
@@ -865,8 +862,7 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 			if (n->next) {
 				n = n->next;
 			}
-		}
-		else {
+		} else {
 			return;
 		}
 
@@ -921,7 +917,7 @@ pmdoc_Pp(const struct mdoc_node *n, mandb_rec *rec)
  *  Called when a .Sh macro is encountered and loops through it's body, calling 
  *  mdoc_parse_section to append the data to the section specific buffer. 
  *  Two special macros which may occur inside the body of Sh are .Nm and .Xr and 
- *  the need special handling, thus the separate if branches for them.
+ *  they need special handling, thus the separate if branches for them.
  */
 static void
 pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
@@ -929,26 +925,30 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 	for(n = n->child; n; n = n->next) {
 		if (n->type == MDOC_TEXT) {
 			mdoc_parse_section(n->sec, n->string, rec);
+			continue;
 		}
-		else { 
-			/* On encountering a .Nm macro, substitute it with it's previously
-			 * cached value of the argument
-			 */
-			if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL) {
-				mdoc_parse_section(n->sec, rec->name, rec);
-			}
-			/* On encountering other inline macros, call pmdoc_macro_handler */
-			else if (mdocs[n->tok] == pmdoc_Xr) {
-				pmdoc_macro_handler(n, rec, MDOC_Xr);
-			}
-			else if (mdocs[n->tok] == pmdoc_Pp) {
-				pmdoc_macro_handler(n, rec, MDOC_Pp);
-			}
-			/* otherwise call pmdoc_Sh again to handle the nested macros */
-			else {
-				pmdoc_Sh(n, rec);
-			}
+		
+		/* On encountering a .Nm macro, substitute it with it's previously
+		 * cached value of the argument
+		 */
+		if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL) {
+			mdoc_parse_section(n->sec, rec->name, rec);
+			continue;
 		}
+
+		/* On encountering other inline macros, call pmdoc_macro_handler */
+		if (mdocs[n->tok] == pmdoc_Xr) {
+			pmdoc_macro_handler(n, rec, MDOC_Xr);
+			continue;
+		}
+		
+		if (mdocs[n->tok] == pmdoc_Pp) {
+			pmdoc_macro_handler(n, rec, MDOC_Pp);
+			continue;
+		}
+
+		/* otherwise call pmdoc_Sh again to handle the nested macros */
+		pmdoc_Sh(n, rec);
 	}
 }
 
@@ -1020,9 +1020,8 @@ pman_node(const struct man_node *n, mandb_rec *rec)
 	case (MAN_BLOCK):
 		/* FALLTHROUGH */
 	case (MAN_ELEM):
-		if (mans[n->tok] == NULL)
-			break;
-		(*mans[n->tok])(n, rec);
+		if (mans[n->tok] != NULL)
+			(*mans[n->tok])(n, rec);
 		break;
 	default:
 		break;
@@ -1131,9 +1130,9 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				if (link[strlen(link)] == ',') {
 					link[strlen(link)] = 0;
 					concat(&rec->links, link, strlen(link));
-				}
-				else
+				} else {
 					break;
+				}
 			}
 			free(s);
 
@@ -1631,8 +1630,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 			cleanup(rec);
 			errx(EXIT_FAILURE, "Consider running makemandb with -f option");
 		}
-	}
-	else if (rc != SQLITE_DONE) {
+	} else if (rc != SQLITE_DONE) {
 		/* Otherwise make this error fatal */
 		warnx("Failed at %s\n%s", rec->file_path,sqlite3_errmsg(db));
 		cleanup(rec);
