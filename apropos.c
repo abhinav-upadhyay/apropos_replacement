@@ -124,11 +124,12 @@ main(int argc, char *argv[])
 	/* if any error occured in remove_stopwords, we continue with the initial
 	 *  query input by the user
 	 */
-	if (query == NULL)
-		query = *argv;
-	else if (!strcmp(query, ""))
+	if (query == NULL) {
+		query = lower(*argv);
+	} else if (!strcmp(query, "")) {
 		errx(EXIT_FAILURE, "Try specifying more relevant keywords to get some "
 			"matches");
+	}
 
 	/* If user wants to page the output, then set some settings */
 	if (aflags.pager) {
