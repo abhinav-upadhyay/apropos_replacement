@@ -31,7 +31,6 @@
  */
 
 #include <sys/stat.h>
-#include <sys/utsname.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -411,7 +410,6 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	char *name_desc;
 	char *machine;
 	char *snippet;
-	struct utsname mname;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
 	sqlite3_stmt *stmt;
