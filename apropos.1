@@ -40,6 +40,7 @@
 .Nm
 .Op Fl 123456789p
 .Op Fl n Ar Number of results
+.Op Fl S Ar machine
 .Ar query
 .Sh DESCRIPTION
 The
@@ -86,9 +87,11 @@ Output only the specified number of search results.
 This option can be used to override the default limit of maximum 10 results per
 query.
 .It Fl p
-This display all matching results (instead of the default of 10)
+Display all matching results (instead of the default of 10)
 and pipe them through a pager (defaulting to
 .Xr more 1 ) .
+.It Fl S
+Limit the search to the pages for the specified machine architecture.
 .El
 .Sh FILES
 .Bl -hang -width -compact

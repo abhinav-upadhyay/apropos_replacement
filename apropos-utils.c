@@ -409,16 +409,17 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	char *name;
 	char *name_desc;
 	char *snippet;
-	const char *machine;
+	char *machine_clause;
 	struct utsname mname;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
 	sqlite3_stmt *stmt;
 
-	if (uname(&mname) < 0)
-		machine = "";
-	else
-		machine = mname.machine;
+	if (args->machine)
+		easprintf(&machine_clause, " AND machine = \'%s\' ", args->machine);
+	else if (uname(&mname) == 0)
+		easprintf(&machine_clause, " AND machine IN(\'%s\', \'\') ", mname.machine);
+
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
@@ -479,26 +480,34 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	    " snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
 	    " rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
 	    " FROM mandb"
-	    " WHERE mandb MATCH %Q AND machine IN(%Q,%Q) "
+	    " WHERE mandb MATCH %Q %s "
 	    "%s"
 	    " ORDER BY rank DESC"
 	    "%s",
 	    snippet_args[0], snippet_args[1], snippet_args[2], args->search_str,
-	    machine, "", section_clause ? section_clause : "",
+	    machine_clause, section_clause ? section_clause : "",
 	    limit_clause ? limit_clause : "");
+
+	free(machine_clause);
 	free(section_clause);
 	free(limit_clause);
-
+	fprintf(stderr, "%s\n", query);
 	if (query == NULL) {
 		*args->errmsg = estrdup("malloc failed");
 		return -1;
 	}
 	rc = sqlite3_prepare_v2(db, query, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
+	if (rc == SQLITE_IOERR) {
 		warnx("Corrupt database. Please rerun makemandb");
 		sqlite3_free(query);
 		return -1;
+	} else if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		sqlite3_free(query);
+		return -1;
 	}
+	
+	
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (char *) sqlite3_column_text(stmt, 0);

@@ -120,6 +120,9 @@ For example if the value of nrec is m and value of offset is n, then the first
 n records from the result-set will be omitted and rest m-n (or less) records will
 be available for processing inside the callback.
 Use a negative value if you don't wish to offset any records.
+.It Li const char *machine
+The machine architecture to which the searches should be restricted.
+Specify NULL if the search should not be restricted a particular machine architecture.
 .It Li int (*callback) (void *, const char *, const char *, const char *,\
 const char *, size_t)
 This is the callback function which will
@@ -188,6 +191,7 @@ args.search_str = argv[1];
 args.sec_nums = sec_nums;
 args.nrec = 10;
 args.offset = -1;
+args.machine = NULL;
 args.callback = &query_callback;
 args.callback_data = NULL;
 args.errmsg = &errmsg;

@@ -45,6 +45,7 @@ typedef struct apropos_flags {
 	int sec_nums[SECMAX];
 	int nresults;
 	int pager;
+	const char *machine;
 } apropos_flags;
 
 typedef struct callback_data {
@@ -80,7 +81,7 @@ main(int argc, char *argv[])
 	 * index element in sec_nums is set to the string representing that 
 	 * section number.
 	 */
-	while ((ch = getopt(argc, argv, "123456789n:p")) != -1) {
+	while ((ch = getopt(argc, argv, "123456789n:pS:")) != -1) {
 		switch (ch) {
 		case '1':
 		case '2':
@@ -99,6 +100,9 @@ main(int argc, char *argv[])
 		case 'p':	//user wants to view more than 10 results and page them
 			aflags.pager = 1;
 			aflags.nresults = -1;	// Fetch all records
+			break;
+		case 'S':
+			aflags.machine = optarg;
 			break;
 		case '?':
 		default:
@@ -145,6 +149,7 @@ main(int argc, char *argv[])
 	args.sec_nums = aflags.sec_nums;
 	args.nrec = aflags.nresults ? aflags.nresults : 10;
 	args.offset = 0;
+	args.machine = aflags.machine;
 	args.callback = &query_callback;
 	args.callback_data = &cbdata;
 	args.errmsg = &errmsg;
@@ -294,7 +299,7 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-		"Usage: %s [-n Number of records] [-p] [-123456789] query\n",
+		"Usage: %s [-n Number of records] [-p] [-123456789] [-S machine] query\n",
 		getprogname());
 	exit(1);
 }
