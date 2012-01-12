@@ -152,8 +152,7 @@ main(int argc, char *argv[])
 	if (aflags.pager) {
 		rc = run_query_pager(db, &args);
 		pclose(cbdata.out);
-	}
-	else {
+	} else {
 		rc = run_query(db, snippet_args, &args);
 	}
 
