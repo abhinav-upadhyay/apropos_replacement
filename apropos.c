@@ -283,8 +283,8 @@ remove_stopwords(char **query)
 static void
 usage(void)
 {
-	(void)fprintf(stderr,
-		"Usage %s [-n Number of records] [-p] [-123456789] query",
+	fprintf(stderr,
+		"Usage: %s [-n Number of records] [-p] [-123456789] query\n",
 		getprogname());
 	exit(1);
 }

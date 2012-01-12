@@ -1891,6 +1891,6 @@ append(secbuff *sbuff, const char *src, int srclen)
 static void
 usage(void)
 {
-	(void)warnx("usage: %s [-flo]", getprogname());
+	fprintf(stderr, "Usage: %s [-flo]\n", getprogname());
 	exit(1);
 }
