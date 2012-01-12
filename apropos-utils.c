@@ -404,21 +404,19 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	const char *default_snippet_args[3];
 	char *section_clause = NULL;
 	char *limit_clause = NULL;
+	char *machine_clause = NULL;
 	char *query;
 	char *section;
 	char *name;
 	char *name_desc;
 	char *snippet;
-	char *machine_clause;
 	struct utsname mname;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
 	sqlite3_stmt *stmt;
 
 	if (args->machine)
-		easprintf(&machine_clause, " AND machine = \'%s\' ", args->machine);
-	else if (uname(&mname) == 0)
-		easprintf(&machine_clause, " AND machine IN(\'%s\', \'\') ", mname.machine);
+		easprintf(&machine_clause, "AND machine = \'%s\' ", args->machine);
 
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
@@ -485,13 +483,14 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	    " ORDER BY rank DESC"
 	    "%s",
 	    snippet_args[0], snippet_args[1], snippet_args[2], args->search_str,
-	    machine_clause, section_clause ? section_clause : "",
+	    machine_clause ? machine_clause : "",
+	    section_clause ? section_clause : "",
 	    limit_clause ? limit_clause : "");
 
 	free(machine_clause);
 	free(section_clause);
 	free(limit_clause);
-	fprintf(stderr, "%s\n", query);
+
 	if (query == NULL) {
 		*args->errmsg = estrdup("malloc failed");
 		return -1;
