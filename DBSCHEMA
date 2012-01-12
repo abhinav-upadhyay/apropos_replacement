@@ -18,7 +18,7 @@ There are three tables in the database at present:
   9. exit_status    EXIT STATUS section
   10. diagnostics   DIAGNOSTICS section
   11. errors        ERRORS section
-  12. md5_hash      md5 hash of the man page
+  12. md5_hash      md5 hash of the man page (UNIQUE)
   13. machine       The machine architecture (if any) for which this page is
                     relevant.
 
@@ -35,7 +35,7 @@ There are three tables in the database at present:
   4. file           Absolute path name (UNIQUE constraint)
   5. md5_hash       MD5 Hash of the man page (UNIQUE)
   6. id             A unique integer ID for the page, which
-                    refers to a page in mandb (Implicit foreign 
+                    refers to the docid column in mandb (Implicit foreign 
                     key?) PRIMARY KEY
   {device, inode} form a UNIQUE index
 
