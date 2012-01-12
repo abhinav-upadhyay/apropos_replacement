@@ -29,12 +29,12 @@ There are three tables in the database at present:
     hardlinks.
 
   COLUMN NAME       DESCRIPTION
-  device            (dev_t)Logical device number from stat(2)
-  inode             (ino_t)Inode number from stat(2)
-  mtime             Last modification time from stat(2)
-  file              Absolute path name (UNIQUE constraint)
-  md5_hash          MD5 Hash of the man page (UNIQUE)
-  id                A unique integer ID for the page, which
+  1. device         (dev_t)Logical device number from stat(2)
+  2. inode          (ino_t)Inode number from stat(2)
+  3. mtime          Last modification time from stat(2)
+  4. file           Absolute path name (UNIQUE constraint)
+  5. md5_hash       MD5 Hash of the man page (UNIQUE)
+  6. id             A unique integer ID for the page, which
                     refers to a page in mandb (Implicit foreign 
                     key?) PRIMARY KEY
   {device, inode} form a UNIQUE index
@@ -44,7 +44,7 @@ There are three tables in the database at present:
     pages. The list of the linked pages is usually obtained 
     from the multiple .Nm entries in the page.
 
-  Column Name       Description
+  COLUMN NAME       DESCRIPTION
   1. link           The name of the hard/soft link (index) 
   2. target         Name of the target page to which it points  
   3. section        The section number  
