@@ -63,6 +63,7 @@ main(int argc, char *argv[])
 	char *query = NULL;	// the user query
 	char ch;
 	char *errmsg = NULL;
+	int rc = 0;
 	callback_data cbdata;
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
 	cbdata.out = stdout;		// the default output stream
@@ -146,28 +147,33 @@ main(int argc, char *argv[])
 	args.callback = &query_callback;
 	args.callback_data = &cbdata;
 	args.errmsg = &errmsg;
+
 	if (aflags.pager) {
-		if (run_query_pager(db, &args) < 0)
-			errx(EXIT_FAILURE, "%s", errmsg);
+		rc = run_query_pager(db, &args);
+		pclose(cbdata.out);
 	}
 	else {
-		if (run_query(db, snippet_args, &args) < 0)
-			errx(EXIT_FAILURE, "%s", errmsg);
+		rc = run_query(db, snippet_args, &args);
 	}
-		
+
+	free(query);
+	close_db(db);
+	if (errmsg) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		exit(EXIT_FAILURE);
+	}
+
+	if (rc < 0) {
+		/* Something wrong with the database. Exit */
+		exit(EXIT_FAILURE);
+	}
+	
 	if (cbdata.count == 0) {
 		warnx("No relevant results obtained.\n"
 			  "Please make sure that you spelled all the terms correctly\n"
 			  "Or try using better keywords.");
 	}
-
-	free(query);
-	free(errmsg);
-	if (aflags.pager) {
-		pclose(cbdata.out);
-	}
-
-	close_db(db);
 	return 0;
 }
 

@@ -497,7 +497,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	if (rc != SQLITE_OK) {
 		warnx("Corrupt database. Please rerun makemandb");
 		sqlite3_free(query);
-		exit(EXIT_FAILURE);
+		return -1;
 	}
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -615,8 +615,7 @@ run_query_html(sqlite3 *db, query_args *args)
 	const char *snippet_args[] = {"\002", "\003", "..."};
 	args->callback = &callback_html;
 	args->callback_data = (void *) &orig_data;
-	run_query(db, snippet_args, args);
-	return 0;
+	return run_query(db, snippet_args, args);
 }
 
 /*
@@ -704,7 +703,6 @@ int run_query_pager(sqlite3 *db, query_args *args)
 	const char *snippet_args[] = {"\002", "\003", "..."};
 	args->callback = &callback_pager;
 	args->callback_data = (void *) &orig_data;
-	run_query(db, snippet_args, args);
-	return 0;
+	return run_query(db, snippet_args, args);
 }
 
