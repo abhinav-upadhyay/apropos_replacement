@@ -12,7 +12,7 @@ MAN=	makemandb.1 apropos.1 apropos-utils.3 init_db.3 close_db.3 run_query.3 run_
 CPPFLAGS+=-I${MDIST}
 CPPFLAGS+=-DSQLITE_ENABLE_FTS3
 CPPFLAGS+=-DSQLITE_ENABLE_FTS3_PARENTHESIS
-
+CPPFLAGS+=-g
 MDOCMLOBJDIR!=	cd ${MDOCDIR}/lib/libmandoc && ${PRINTOBJDIR}
 MDOCMLLIB=	${MDOCMLOBJDIR}/libmandoc.a
 

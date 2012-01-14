@@ -149,7 +149,7 @@ create_db(sqlite3 *db)
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 			    "name_desc, desc, lib, return_vals, env, files, "
 			    "exit_status, diagnostics, errors, md5_hash UNIQUE, machine, "
-			    "compress=zip, uncompress=unzip, tokenize=porter); "	//mandb
+			    "tokenize=porter); "	//mandb
 			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, "
 			    "file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
 				//mandb_meta

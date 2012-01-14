@@ -1840,6 +1840,28 @@ free_secbuffs(mandb_rec *rec)
 	free(rec->errors.data);
 }
 
+static char *
+parse_escape(char *str, int len)
+{
+	assert(str);
+	if (len == -1)
+		len = strlen(str);
+	char *result = emalloc(len);
+	size_t sz = 0;
+	int retval;
+	int offset = 0;
+	while (*str) {
+		sz = strcspn(str, "\\");
+		memcpy(result + offset, str, sz);
+		offset += sz;
+		str += sz + 1;
+		retval = mandoc_escape((const char **) &str, NULL, NULL);
+	}
+	result[offset] = 0;
+	return result;
+}
+
+
 /*
  * append--
  *  Concatenates a space and src at the end of sbuff->data (much like concat in 
@@ -1863,6 +1885,10 @@ append(secbuff *sbuff, const char *src, int srclen)
 	if (srclen == -1)
 		srclen = strlen(src);
 
+	char *temp = parse_escape((char *)src, srclen);
+	if (temp == NULL)
+		err(EXIT_FAILURE, "parse_escape failed");
+
 	if (sbuff->data == NULL) {
 		sbuff->data = (char *) emalloc (sbuff->buflen);
 		sbuff->offset = 0;
@@ -1883,6 +1909,7 @@ append(secbuff *sbuff, const char *src, int srclen)
 	/* Now, copy src at the end of the buffer */	
 	memcpy(sbuff->data + sbuff->offset, src, srclen);
 	sbuff->offset += srclen;
+	free(temp);
 	return;
 }
 
