@@ -42,6 +42,7 @@
 #include <util.h>
 
 #include "apropos-utils.h"
+#include "mandoc.h"
 #include "sqlite3.h"
 
 typedef struct orig_callback_data {
@@ -388,6 +389,27 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	return;
 }
 
+static char *
+parse_escape(const char *str, int len)
+{
+	assert(str);
+	if (len == -1)
+		len = strlen(str);
+	char *result = emalloc(len);
+	size_t sz = 0;
+	int retval;
+	int offset = 0;
+	while (*str) {
+		sz = strcspn(str, "\\");
+		memcpy(result + offset, str, sz);
+		offset += sz;
+		str += sz + 1;
+		retval = mandoc_escape((const char **) &str, NULL, NULL);
+	}
+	result[offset] = 0;
+	return result;
+}
+
 /*
  *  run_query --
  *  Performs the searches for the keywords entered by the user.
@@ -512,17 +534,19 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		name_desc = (char *) sqlite3_column_text(stmt, 2);
 		machine = (char *) sqlite3_column_text(stmt, 3);
 		snippet = (char *) sqlite3_column_text(stmt, 4);
-		int len = strlen(machine);
+		int len = machine ? strlen(machine) : 0;
 		if (len) {
 			easprintf(&name, "%s/%s", lower(machine),
 				sqlite3_column_text(stmt, 1));
 		} else {
 			name = (char *) sqlite3_column_text(stmt, 1);
 		}
-		(args->callback)(args->callback_data, section, name, name_desc, snippet,
+		char *temp = parse_escape(snippet, -1);
+		(args->callback)(args->callback_data, section, name, name_desc, temp,
 			strlen(snippet));
 		if (len)
 			free(name);
+		free(temp);
 	}
 
 	sqlite3_finalize(stmt);
