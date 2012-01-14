@@ -543,7 +543,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		}
 		char *temp = parse_escape(snippet, -1);
 		(args->callback)(args->callback_data, section, name, name_desc, temp,
-			strlen(snippet));
+			strlen(temp));
 		if (len)
 			free(name);
 		free(temp);
@@ -715,7 +715,8 @@ callback_pager(void *data, const char *section, const char *name,
 				psnippet[i++] = '\b';
 				psnippet[i++] = *snippet++;
 			}
-			snippet++;
+			if (*snippet)
+				snippet++;
 		} else {
 			break;
 		}
