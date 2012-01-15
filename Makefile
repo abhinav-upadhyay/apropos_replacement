@@ -21,5 +21,5 @@ LDADD.makemandb+= 	-L${MDOCMLOBJDIR} -lmandoc
 LDADD+=	-lm
 LDADD+=	-lz
 LDADD+=	-lutil
-LDADD+= 	-L${MDOCMLOBJDIR} -lmandoc
+
 .include <bsd.prog.mk>
