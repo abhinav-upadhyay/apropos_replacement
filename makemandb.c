@@ -1221,7 +1221,8 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			strcmp((const char *) head->next->string, "STATUS") == 0))
 			man_parse_section(MANSEC_EXIT_STATUS, n, rec);
 		
-		else if (strcmp((const char *) head->string, "EXAMPLES") == 0)
+		else if (strcmp((const char *) head->string, "EXAMPLES") == 0 ||
+			strcmp((const char *) head->string, "EXAMPLE") == 0)
 			man_parse_section(MANSEC_EXAMPLES, n, rec);
 		
 		else if (strcmp((const char *) head->string, "STANDARDS") == 0)
