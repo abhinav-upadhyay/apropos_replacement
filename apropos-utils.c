@@ -677,28 +677,23 @@ callback_pager(void *data, const char *section, const char *name,
 	 * 3. To overstrike a byte 'A' we need to write 'A\bA'
 	 */
 	while (*snippet) {
-		sz = 0;
 		sz = strcspn(snippet, "\002");
-		if (sz) {
-			memcpy(&psnippet[i], snippet, sz);
-			snippet += sz;
-			i += sz;
+		memcpy(&psnippet[i], snippet, sz);
+		snippet += sz;
+		i += sz;
 
-			/* Don't change this. Advancing the pointer without reading the byte
-			 * is causing strange behavior.
-			 */
-			if (*snippet == '\002')
-				snippet++;
-			while (*snippet && *snippet != '\003') {
-				psnippet[i++] = *snippet;
-				psnippet[i++] = '\b';
-				psnippet[i++] = *snippet++;
-			}
-			if (*snippet)
-				snippet++;
-		} else {
-			break;
+		/* Don't change this. Advancing the pointer without reading the byte
+		 * is causing strange behavior.
+		 */
+		if (*snippet == '\002')
+			snippet++;
+		while (*snippet && *snippet != '\003') {
+			psnippet[i++] = *snippet;
+			psnippet[i++] = '\b';
+			psnippet[i++] = *snippet++;
 		}
+		if (*snippet)
+			snippet++;
 	}
 
 	psnippet[i] = 0;
