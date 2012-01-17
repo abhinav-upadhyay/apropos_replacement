@@ -528,7 +528,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	const char *inner_sqlstr;
 	sqlite3_stmt *stmt = NULL;
 	sqlite3_stmt *inner_stmt = NULL;
-	char *file;
+	const char *file;
 	char *errmsg = NULL;
 	char *buf = NULL;
 	int new_count = 0;	/* Counter for counting newly indexed/updated pages */
@@ -554,7 +554,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		rec->device = sqlite3_column_int64(stmt, 0);
 		rec->inode = sqlite3_column_int64(stmt, 1);
 		rec->mtime = sqlite3_column_int64(stmt, 2);
-		file = (char *) sqlite3_column_text(stmt, 3);
+		file = (const char *) sqlite3_column_text(stmt, 3);
 		md5_status = check_md5(file, db, "mandb_meta", &buf);
 		assert(buf != NULL);
 		if (md5_status == -1) {
@@ -735,7 +735,7 @@ get_machine(const struct mdoc *md, mandb_rec *rec)
 	if (md_meta->arch)
 		rec->machine = estrdup(md_meta->arch);
 	else
-		easprintf(&rec->machine, "");
+		rec->machine = estrdup("");
 }
 
 static void
@@ -1080,7 +1080,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 {
 	const struct man_node *head;
 	int sz;
-	char *link;
+	char *ln;
 	char *temp;
 	char *s;
 
@@ -1126,10 +1126,10 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			rec->name[i] = 0;
 			
 			/* Build a space separated list of all the links to this page */
-			for(link = strtok(temp, " "); link; link = strtok(NULL, " ")) {
-				if (link[strlen(link)] == ',') {
-					link[strlen(link)] = 0;
-					concat(&rec->links, link, strlen(link));
+			for(ln = strtok(temp, " "); ln; ln = strtok(NULL, " ")) {
+				if (ln[strlen(ln)] == ',') {
+					ln[strlen(ln)] = 0;
+					concat(&rec->links, ln, strlen(ln));
 				} else {
 					break;
 				}
@@ -1330,7 +1330,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	int idx = -1;
 	const char *sqlstr = NULL;
 	sqlite3_stmt *stmt = NULL;
-	char *link = NULL;
+	char *ln = NULL;
 	char *errmsg = NULL;
 	long int mandb_rowid;
 	
@@ -1591,11 +1591,11 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		 *    mandb_meta table.
 		 */
 		warnx("Trying to update index for %s", rec->file_path);
-		sqlstr = (char *) sqlite3_mprintf("DELETE FROM mandb WHERE rowid = ("
+		char *sql = sqlite3_mprintf("DELETE FROM mandb WHERE rowid = ("
 				"SELECT id FROM mandb_meta WHERE file = %Q)",
 				rec->file_path);
-		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-		free((char *)sqlstr);
+		sqlite3_exec(db, sql, NULL, NULL, &errmsg);
+		sqlite3_free(sql);
 		if (errmsg != NULL) {
 			warnx(errmsg);
 			free(errmsg);
@@ -1604,7 +1604,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 				"mtime = :mtime, id = :id, md5_hash = :md5 WHERE file = :file";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
-			warnx("Failed at %s\n%s", sqlite3_errmsg(db));
+			warnx("Update failed with error: %s", sqlite3_errmsg(db));
 			close_db(db);
 			cleanup(rec);
 			errx(EXIT_FAILURE, "Consider running makemandb with -f option");
@@ -1626,7 +1626,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		sqlite3_finalize(stmt);
 
 		if (rc != SQLITE_DONE) {
-			warnx("Failed at %s\n%s", sqlite3_errmsg(db));
+			warnx("%s", sqlite3_errmsg(db));
 			close_db(db);
 			cleanup(rec);
 			errx(EXIT_FAILURE, "Consider running makemandb with -f option");
@@ -1647,14 +1647,14 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 		
 	if (rec->links) {
-		for(link = strtok(rec->links, " "); link; link = strtok(NULL, " ")) {
-			if (link[0] == ',')
-				link++;
-			if(link[strlen(link) - 1] == ',')
-				link[strlen(link) - 1] = 0;
+		for(ln = strtok(rec->links, " "); ln; ln = strtok(NULL, " ")) {
+			if (ln[0] == ',')
+				ln++;
+			if(ln[strlen(ln) - 1] == ',')
+				ln[strlen(ln) - 1] = 0;
 			
 			easprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', "
-				"\'%s\', \'%s\')", link, rec->name, rec->section, rec->machine);
+				"\'%s\', \'%s\')", ln, rec->name, rec->section, rec->machine);
 			sqlite3_exec(db, str, NULL, NULL, &errmsg);
 			if (errmsg != NULL) {
 				warnx("%s", errmsg);
@@ -1842,7 +1842,7 @@ free_secbuffs(mandb_rec *rec)
 }
 
 static char *
-parse_escape(char *str, int len)
+parse_escape(const char *str, int len)
 {
 	assert(str);
 	if (len == -1)
@@ -1859,7 +1859,7 @@ parse_escape(char *str, int len)
 
 		if (*str == '\\') {
 			str++;
-			mandoc_escape((const char **)&str, NULL, NULL);
+			mandoc_escape(&str, NULL, NULL);
 			continue;
 		}
 
@@ -1892,7 +1892,7 @@ append(secbuff *sbuff, const char *src, int srclen)
 	assert(src != NULL);
 	if (srclen == -1)
 		srclen = strlen(src);
-	char  *temp = parse_escape((char *)src, srclen);
+	char  *temp = parse_escape(src, srclen);
 	srclen = strlen(temp);
 
 	if (sbuff->data == NULL) {

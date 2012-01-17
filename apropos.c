@@ -53,7 +53,7 @@ typedef struct callback_data {
 	FILE *out;
 } callback_data;
 
-static void remove_stopwords(char **);
+static int remove_stopwords(char **);
 static int query_callback(void *, const char * , const char *, const char *,
 	const char *, size_t);
 __dead static void usage(void);
@@ -118,23 +118,29 @@ main(int argc, char *argv[])
 		usage();
 
 	query = lower(*argv);
-	if ((db = init_db(MANDB_READONLY)) == NULL)
-		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
-			"first and then try again");
-
+	
 	/* Eliminate any stopwords from the query */
-	remove_stopwords(&query);
+	int retval = remove_stopwords(&query);
 	
 	/* if any error occured in remove_stopwords, we continue with the initial
 	 *  query input by the user
 	 */
-	if (query == NULL) {
-		query = lower(*argv);
-	} else if (!strcmp(query, "")) {
-		errx(EXIT_FAILURE, "Try specifying more relevant keywords to get some "
-			"matches");
-	}
+	 switch (retval) {
+	 case -1:
+	 	query = lower(*argv);
+	 	break;
+	 case 1:
+	 	errx(EXIT_FAILURE, "Try using more relevant keywords");
+	 	/* Not reached */
+	 case 0:
+	 	break;
+	 }
 
+	if ((db = init_db(MANDB_READONLY)) == NULL)
+		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
+			"first and then try again");
+
+	 	
 	/* If user wants to page the output, then set some settings */
 	if (aflags.pager) {
 		/* Open a pipe to the pager */
@@ -208,16 +214,20 @@ query_callback(void *data, const char *section, const char *name,
  *  to check if it is a stopword or a valid keyword. In the end we only have the
  *  relevant keywords left in the query.
  *  Error Cases: 
- *   1. In case of any error, it will set the query to NULL.	
+ *   1. In case of any error, it will set the query to NULL and return -1.	
  *   2. In case the query is found to be consisting only of stop words, it will
- *      set the query to a blank string ""
+ *      set the query NULL and return 1.
+ *   3. Otherwise it will return 0 and properly remove any stopwords from the
+ *      query.
  */
-static void
+static int
 remove_stopwords(char **query)
 {
 	int i = 0;
 	const char *temp;
+	char *term;
 	char *buf = NULL;
+	char c = 'y';
 	const char *stopwords[] = {"a", "b", "d", "e", "f", "g", "h", "i", "j",
 	 "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", 
 	 "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
@@ -264,31 +274,36 @@ remove_stopwords(char **query)
 	};
 	
 	/* initialize the hash table for stop words */
-	if (!hcreate(sizeof(stopwords) * sizeof(char)))
-		return;
+	if (!hcreate(sizeof(stopwords) * sizeof(char))) {
+		*query = NULL;
+		return -1;
+	}
 	
 	/* store the stopwords in the hashtable */	
-	for (temp = stopwords[i]; temp != NULL; temp = stopwords[i++]) {
+	for (temp = stopwords[i]; temp; temp = stopwords[i++]) {
 		ENTRY ent;
 		ent.key = strdup(temp);
-		ent.data = (void *) "y";
+		ent.data = (char *) &c ;
 		hsearch(ent, ENTER);
 	}
 	
 	/* filter out the stop words from the query */
-	for (temp = strtok(*query, " "); temp; temp = strtok(NULL, " ")) {
+	for (term = strtok(*query, " "); term; term = strtok(NULL, " ")) {
 		 ENTRY ent;
-		 ent.key = (char *)temp;
+		 ent.key = (char *)term;
 		 ent.data = NULL;
 		 if (hsearch(ent, FIND) == NULL)
-		 	concat(&buf, temp, strlen(temp));
+		 	concat(&buf, term, strlen(term));
 	}
 	
 	hdestroy();
-	if (buf != NULL)
+	if (buf != NULL) {
 		*query = buf;
-	else
-		*query = (char *)"";
+		return 0;
+	} else {
+		*query = NULL;
+		return 1;
+	}
 }
 
 /*

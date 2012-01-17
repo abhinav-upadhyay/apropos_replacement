@@ -241,7 +241,7 @@ unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 		return;
 	}
 	outbuf = erealloc(outbuf, stream.total_out);
-	sqlite3_result_text(pctx, outbuf, stream.total_out, free);
+	sqlite3_result_text(pctx, (const char *) outbuf, stream.total_out, free);
 }
 
 /* init_db --
@@ -336,7 +336,7 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
 	inverse_document_frequency *idf = sqlite3_user_data(pctx);
 	double tf = 0.0;
-	unsigned int *matchinfo;
+	const unsigned int *matchinfo;
 	int ncol;
 	int nphrase;
 	int iphrase;
@@ -346,13 +346,13 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	/* Check that the number of arguments passed to this function is correct. */
 	assert(nval == 1);
 
-	matchinfo = (unsigned int *) sqlite3_value_blob(apval[0]);
+	matchinfo = (const unsigned int *) sqlite3_value_blob(apval[0]);
 	nphrase = matchinfo[0];
 	ncol = matchinfo[1];
 	ndoc = matchinfo[2 + 3 * ncol * nphrase + ncol];
 	for (iphrase = 0; iphrase < nphrase; iphrase++) {
 		int icol;
-		unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
+		const unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
 		for(icol = 1; icol < ncol; icol++) {
 			
 			/* nhitcount: number of times the current phrase occurs in the current
@@ -406,11 +406,11 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	char *limit_clause = NULL;
 	char *machine_clause = NULL;
 	char *query;
-	char *section;
+	const char *section;
 	char *name;
-	char *name_desc;
+	const char *name_desc;
 	char *machine;
-	char *snippet;
+	const char *snippet;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
 	sqlite3_stmt *stmt;
@@ -509,23 +509,23 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		section = (char *) sqlite3_column_text(stmt, 0);
-		name_desc = (char *) sqlite3_column_text(stmt, 2);
-		machine = (char *) sqlite3_column_text(stmt, 3);
-		snippet = (char *) sqlite3_column_text(stmt, 4);
+		section = (const char *) sqlite3_column_text(stmt, 0);
+		name_desc = (const char *) sqlite3_column_text(stmt, 2);
+		machine = estrdup((const char *) sqlite3_column_text(stmt, 3));
+		snippet = (const char *) sqlite3_column_text(stmt, 4);
 		int len = machine ? strlen(machine) : 0;
 		if (len) {
 			easprintf(&name, "%s/%s", lower(machine),
 				sqlite3_column_text(stmt, 1));
 		} else {
-			name = (char *) sqlite3_column_text(stmt, 1);
+			name = estrdup((const char *) sqlite3_column_text(stmt, 1));
 		}
 
 		(args->callback)(args->callback_data, section, name, name_desc, snippet,
 			strlen(snippet));
 
-		if (len)
-			free(name);
+		free(machine);
+		free(name);
 	}
 
 	sqlite3_finalize(stmt);
@@ -542,7 +542,7 @@ static int
 callback_html(void *data, const char *section, const char *name,
 	const char *name_desc, const char *snippet, size_t snippet_length)
 {
-	char *temp = (char *) snippet;
+	const char *temp = snippet;
 	int i = 0;
 	size_t sz = 0;
 	int count = 0;
@@ -649,7 +649,7 @@ callback_pager(void *data, const char *section, const char *name,
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	char *psnippet;
-	char *temp = (char *) snippet;
+	const char *temp = snippet;
 	int count = 0;
 	int i = 0;
 	size_t sz = 0;
