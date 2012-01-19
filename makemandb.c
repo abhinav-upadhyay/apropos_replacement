@@ -922,34 +922,32 @@ pmdoc_Pp(const struct mdoc_node *n, mandb_rec *rec)
 static void
 pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 {
-	for(n = n->child; n; n = n->next) {
-		if (n->type == MDOC_TEXT) {
-			mdoc_parse_section(n->sec, n->string, rec);
-			continue;
-		}
-		
-		/* On encountering a .Nm macro, substitute it with it's previously
-		 * cached value of the argument
-		 */
-		if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL) {
-			mdoc_parse_section(n->sec, rec->name, rec);
-			continue;
-		}
+	if (n == NULL)
+		return;
 
-		/* On encountering other inline macros, call pmdoc_macro_handler */
-		if (mdocs[n->tok] == pmdoc_Xr) {
-			pmdoc_macro_handler(n, rec, MDOC_Xr);
-			continue;
-		}
-		
-		if (mdocs[n->tok] == pmdoc_Pp) {
-			pmdoc_macro_handler(n, rec, MDOC_Pp);
-			continue;
-		}
-
-		/* otherwise call pmdoc_Sh again to handle the nested macros */
-		pmdoc_Sh(n, rec);
+	if (n->type == MDOC_TEXT) {
+		mdoc_parse_section(n->sec, n->string, rec);
 	}
+		
+	/* On encountering a .Nm macro, substitute it with it's previously
+	 * cached value of the argument
+	 */
+	else if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL) {
+		mdoc_parse_section(n->sec, rec->name, rec);
+	}
+
+	/* On encountering other inline macros, call pmdoc_macro_handler */
+	else if (mdocs[n->tok] == pmdoc_Xr) {
+		pmdoc_macro_handler(n, rec, MDOC_Xr);
+	}
+	
+	else if (mdocs[n->tok] == pmdoc_Pp) {
+		pmdoc_macro_handler(n, rec, MDOC_Pp);
+	}
+
+	/* otherwise call pmdoc_Sh again to handle the nested macros */
+	pmdoc_Sh(n->child, rec);
+	pmdoc_Sh(n->next, rec);
 }
 
 /*
