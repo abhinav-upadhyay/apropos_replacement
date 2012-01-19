@@ -1379,135 +1379,104 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 			":diagnostics, :errors, :md5_hash, :machine)";
 	
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		cleanup(rec);
-		return -1;
-	}
+	if (rc != SQLITE_OK)
+		goto Out;
 
 	idx = sqlite3_bind_parameter_index(stmt, ":name");
 	rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":section");
 	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
 	rc = sqlite3_bind_text(stmt, idx, rec->name_desc, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":desc");
 	rc = sqlite3_bind_text(stmt, idx, rec->desc.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":lib");
 	rc = sqlite3_bind_text(stmt, idx, rec->lib.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":return_vals");
 	rc = sqlite3_bind_text(stmt, idx, rec->return_vals.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":env");
 	rc = sqlite3_bind_text(stmt, idx, rec->env.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":files");
 	rc = sqlite3_bind_text(stmt, idx, rec->files.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
 	rc = sqlite3_bind_text(stmt, idx, rec->exit_status.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":diagnostics");
 	rc = sqlite3_bind_text(stmt, idx, rec->diagnostics.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":errors");
 	rc = sqlite3_bind_text(stmt, idx, rec->errors.data, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":machine");
 	rc = sqlite3_bind_text(stmt, idx, rec->machine, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	sqlite3_finalize(stmt);
@@ -1519,64 +1488,49 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	sqlstr = "INSERT INTO mandb_meta VALUES (:device, :inode, :mtime, :file, "
 				":md5_hash, :id)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
-		cleanup(rec);
-		return -1;
-	}
+	if (rc != SQLITE_OK)
+		goto Out;
 
 	idx = sqlite3_bind_parameter_index(stmt, ":device");
 	rc = sqlite3_bind_int64(stmt, idx, rec->device);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":inode");
 	rc = sqlite3_bind_int64(stmt, idx, rec->inode);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":mtime");
 	rc = sqlite3_bind_int64(stmt, idx, rec->mtime);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":file");
 	rc = sqlite3_bind_text(stmt, idx, rec->file_path, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":id");
 	rc = sqlite3_bind_int64(stmt, idx, mandb_rowid);
 	if (rc != SQLITE_OK) {
-		warnx("%s", sqlite3_errmsg(db));
 		sqlite3_finalize(stmt);
-		cleanup(rec);
-		return -1;
+		goto Out;
 	}
 	
 	rc = sqlite3_step(stmt);
@@ -1669,6 +1623,11 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	
 	cleanup(rec);
 	return 0;
+	
+	Out:
+		warnx("%s", sqlite3_errmsg(db));
+		cleanup(rec);
+		return -1;
 }
 
 /*
@@ -1699,7 +1658,7 @@ check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
 		return -1;
 	}
 	
-	easprintf(&sqlstr, "SELECT * from %s WHERE md5_hash = :md5_hash", table);
+	easprintf(&sqlstr, "SELECT * FROM %s WHERE md5_hash = :md5_hash", table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		free(sqlstr);
