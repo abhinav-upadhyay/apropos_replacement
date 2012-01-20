@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
@@ -1146,43 +1147,8 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			}
 			
 			
-			/* Now remove the name(s) of the man page(s) so that we are left 
-			 * with the one line description.
-			 * So we know we have passed over the list of names if we:
-			 * 1. encounter a space not preceeded by a comma and not succeeded 
-			 *		by a \\
-			 *    e.g.: foo-bar This is a simple foo-bar utility.
-			 * 2. enconter a '-' which is preceeded by a '\' and succeeded by a 
-			 *		space
-			 *    e.g.: foo-bar \- This is a simple foo-bar utility
-			 *          foo-bar, blah-blah \- foo-bar with blah-blah
-			 *          foo-bar \-\- another foo-bar
-			 * 3. encounter a '-' preceeded by a space and succeeded by a space
-			 *     e.g.: foo-bar - This is a simple foo-bar utility
-			 * (I hope this covers all possible sane combinations)
-			 */
-			char prev = *rec->name_desc++;
-			while (*(rec->name_desc)) {
-				/* case 1 */
-				if (*(rec->name_desc) == ' ' && prev != ',' && 
-					*(rec->name_desc + 1) != '\\') {
-					rec->name_desc++;
-					/* Well, there might be a '-' without a leading '\\', 
-					 * get over it 
-					 */
-					if (*(rec->name_desc) == '-')
-						rec->name_desc += 2;
-					break;
-				}
-				/* case 2 */
-				else if (*(rec->name_desc) == '-' && prev == '\\' 
-					&& *(rec->name_desc + 1) == ' ') {
-					rec->name_desc += 2;
-					break;
-				}
-				prev = *(rec->name_desc);
+			while (isalnum((int) *rec->name_desc) == 0)
 				rec->name_desc++;
-			}
 		}
 		
 		/* Check the section, and if it is of our concern, extract its 
