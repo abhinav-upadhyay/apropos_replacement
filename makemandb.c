@@ -1118,10 +1118,9 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			
 			sz = strcspn(temp, " ,\0");
 			rec->name = malloc(sz+1);
-			int i;
-			for(i=0; i<sz; i++)
-				rec->name[i] = *temp++;
-			rec->name[i] = 0;
+			memcpy(rec->name, temp, sz);
+			rec->name[sz] = 0;
+			temp += sz;
 			
 			/* Build a space separated list of all the links to this page */
 			for(ln = strtok(temp, " "); ln; ln = strtok(NULL, " ")) {
@@ -1137,9 +1136,13 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			/*   The name might be surrounded by escape sequences of the form:
 			 *   \fBname\fR or similar. So remove those as well.
 			 */
-			if (rec->name[0] == '\\' && rec->name[1] != '&') {
-				rec->name += 3;
-				rec->name[strlen(rec->name) -3] = 0;
+			if (rec->name[0] == '\\') {
+				const char *backup = (const char *) rec->name;
+				backup++;
+				int nchars = 0;
+				int retval = mandoc_escape((const char **) &backup, NULL, &nchars);
+				if (retval != ESCAPE_ERROR)
+					rec->name += nchars + 1;
 			}
 			
 			
