@@ -1117,7 +1117,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			 */
 			s = temp;
 			
-			sz = strcspn(temp, " ,\0");
+			sz = strcspn(temp, " ,");
 			rec->name = malloc(sz+1);
 			memcpy(rec->name, temp, sz);
 			rec->name[sz] = 0;
