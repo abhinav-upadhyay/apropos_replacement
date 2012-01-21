@@ -1085,7 +1085,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 
 	if ((head = n->parent->head) != NULL &&	(head = head->child) != NULL &&
 		head->type ==  MAN_TEXT) {
-		if (strncmp(head->string, "NAME", 4) == 0) {
+		if (strcmp(head->string, "NAME") == 0) {
 			/* We are in the NAME section. pman_parse_name will put the complete
 			 * content in name_desc
 			 */			
