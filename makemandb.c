@@ -22,7 +22,6 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <err.h>
-#include <errno.h>
 #include <md5.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -439,9 +438,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 			if (strncmp(dirp->d_name, ".", 1)) {
 				if ((asprintf(&buf, "%s/%s", file, dirp->d_name) == -1)) {
 					closedir(dp);
-					if (errno == ENOMEM) {
-						warn("%s", "malloc failed");
-					}
+					warn("%s", "malloc failed");
 					continue;
 				}
 				traversedir(buf, db, mp);
