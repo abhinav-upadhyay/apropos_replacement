@@ -1088,12 +1088,6 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			 */			
 			pman_parse_name(n, rec);
 
-			/* Take out the name of the man page. name_desc contains complete
-			 * NAME section content, e.g: "gcc \- GNU project C and C++ compiler"
-			 * It might be a comma separated list of multiple names, for now to 
-			 * keep things simple just take the first name out before the comma.
-			 */
-			
 			/* Remove any leading spaces */
 			while (*(rec->name_desc) == ' ') 
 				rec->name_desc++;
@@ -1102,17 +1096,17 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			if (rec->name_desc[0] == '\\' && rec->name_desc[1] == '&')
 				rec->name_desc += 2;
 
-			/* Now name_desc should be left with a comma-space separate list of
+			/* Now name_desc should be left with a comma-space separated
 			 * list of names and the one line description of the page.
 			 * For example "a, b, c \- sample description"
-			 * Take out the first name, before the first comma or space and store
-			 * it in rec->name.
+			 * Take out the first name, before the first comma (or space)
+			 * and store it in rec->name.
 			 * If the page has aliases then they should be in the form of a comma
 			 * separated list. Keep looping while there is a comma in name_desc, 
 			 * extract the alias name and store in rec->links.
 			 * When there are no more commas left, break out.
 			 */
-			int has_link = 0;
+			int has_alias = 0;	//are there any more aliases left in the string
 			while (*rec->name_desc) {
 				/* Remove any leading spaces */
 				if (*rec->name_desc == ' ') {
@@ -1124,7 +1118,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				/* Extract the first term and store it in rec->name */
 				if (rec->name == NULL) {
 					if (rec->name_desc[sz] == ',') {
-						has_link = 1;
+						has_alias = 1;
 					}
 					rec->name_desc[sz] = 0;
 					rec->name = emalloc(sz + 1);
@@ -1136,9 +1130,10 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				/* Once rec->name is set, rest of the names are to be treated
 				 * as links or aliases.
 				 */
-				if (rec->name && has_link) {
+				if (rec->name && has_alias) {
 					if (rec->name_desc[sz] != ',') {
-						has_link = 0;
+						/* No more commas left --> no more aliases to take out*/
+						has_alias = 0;
 					}
 					rec->name_desc[sz] = 0;
 					concat(&rec->links, rec->name_desc, sz);
@@ -1147,18 +1142,14 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				}
 				break;
 			}
-					
+			
+			/* Parse any escape sequences that might be there */		
 			char *temp = parse_escape((const char *)rec->name_desc, -1);
 			free(rec->name_desc);
 			rec->name_desc = temp;
-
-
-			/*   The name might be surrounded by escape sequences of the form:
-			 *   \fBname\fR or similar. So remove those as well.
-			 */
-			 temp = parse_escape((const char *) rec->name, -1);
-			 free(rec->name);
-			 rec->name = temp;
+			temp = parse_escape((const char *) rec->name, -1);
+			free(rec->name);
+			rec->name = temp;
 		}
 		
 		/* Check the section, and if it is of our concern, extract its 
