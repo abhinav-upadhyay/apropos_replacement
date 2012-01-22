@@ -1222,12 +1222,14 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 static void
 pman_parse_node(const struct man_node *n, secbuff *s)
 {
-	for (n = n->child; n; n = n->next) {
-		if (n->type == MAN_TEXT)
-			append(s, n->string, strlen(n->string));
-		else
-			pman_parse_node(n, s);
-	}
+	if (n == NULL)
+		return;
+
+	if (n->type == MAN_TEXT)
+		append(s, n->string, strlen(n->string));
+		
+	pman_parse_node(n->child, s);
+	pman_parse_node(n->next, s);
 }
 
 /*
