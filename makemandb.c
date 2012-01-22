@@ -113,7 +113,7 @@ static void build_file_cache(sqlite3 *, const char *, struct stat *);
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
-
+static char *parse_escape(const char *, int);
 static makemandb_flags mflags;
 
 typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
@@ -1148,21 +1148,17 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				break;
 			}
 					
-			while (isalnum((int) *rec->name_desc) == 0)
-				rec->name_desc++;
+			char *temp = parse_escape((const char *)rec->name_desc, -1);
+			free(rec->name_desc);
+			rec->name_desc = temp;
 
 
 			/*   The name might be surrounded by escape sequences of the form:
 			 *   \fBname\fR or similar. So remove those as well.
 			 */
-			if (rec->name[0] == '\\') {
-				const char *backup = (const char *) rec->name;
-				backup++;
-				int nchars = 0;
-				int retval = mandoc_escape((const char **) &backup, NULL, &nchars);
-				if (retval != ESCAPE_ERROR)
-					rec->name += nchars + 1;
-			}
+			 temp = parse_escape((const char *) rec->name, -1);
+			 free(rec->name);
+			 rec->name = temp;
 		}
 		
 		/* Check the section, and if it is of our concern, extract its 
