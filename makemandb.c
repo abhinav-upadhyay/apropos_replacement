@@ -1079,9 +1079,6 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 {
 	const struct man_node *head;
 	int sz;
-	char *ln;
-	char *temp;
-	char *s;
 
 	if ((head = n->parent->head) != NULL &&	(head = head->child) != NULL &&
 		head->type ==  MAN_TEXT) {
@@ -1104,35 +1101,56 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			/* If the line begins with a "\&", avoid those */
 			if (rec->name_desc[0] == '\\' && rec->name_desc[1] == '&')
 				rec->name_desc += 2;
-			/* Again remove any leading spaces left */
-			while (*(rec->name_desc) == ' ') 
-				rec->name_desc++;
-			
-			/* Assuming the name of a man page is a single word, we can easily
-			 * take out the first word out of the string
+
+			/* Now name_desc should be left with a comma-space separate list of
+			 * list of names and the one line description of the page.
+			 * For example "a, b, c \- sample description"
+			 * Take out the first name, before the first comma or space and store
+			 * it in rec->name.
+			 * If the page has aliases then they should be in the form of a comma
+			 * separated list. Keep looping while there is a comma in name_desc, 
+			 * extract the alias name and store in rec->links.
+			 * When there are no more commas left, break out.
 			 */
-			temp = estrdup(rec->name_desc);
-			/* temp will be modified, use s as a backup for freeing up later
-			 * so that we don't leak memory
-			 */
-			s = temp;
-			
-			sz = strcspn(temp, " ,");
-			rec->name = malloc(sz+1);
-			memcpy(rec->name, temp, sz);
-			rec->name[sz] = 0;
-			temp += sz;
-			
-			/* Build a space separated list of all the links to this page */
-			for(ln = strtok(temp, " "); ln; ln = strtok(NULL, " ")) {
-				if (ln[strlen(ln)] == ',') {
-					ln[strlen(ln)] = 0;
-					concat(&rec->links, ln, strlen(ln));
-				} else {
-					break;
+			int has_link = 0;
+			while (*rec->name_desc) {
+				/* Remove any leading spaces */
+				if (*rec->name_desc == ' ') {
+					rec->name_desc++;
+					continue;
 				}
+				sz = strcspn(rec->name_desc, ", ");
+
+				/* Extract the first term and store it in rec->name */
+				if (rec->name == NULL) {
+					if (rec->name_desc[sz] == ',') {
+						has_link = 1;
+					}
+					rec->name_desc[sz] = 0;
+					rec->name = emalloc(sz + 1);
+					memcpy(rec->name, rec->name_desc, sz + 1);
+					rec->name_desc += sz + 1;
+					continue;
+				}
+
+				/* Once rec->name is set, rest of the names are to be treated
+				 * as links or aliases.
+				 */
+				if (rec->name && has_link) {
+					if (rec->name_desc[sz] != ',') {
+						has_link = 0;
+					}
+					rec->name_desc[sz] = 0;
+					concat(&rec->links, rec->name_desc, sz);
+					rec->name_desc += sz + 1;
+					continue;
+				}
+				break;
 			}
-			free(s);
+					
+			while (isalnum((int) *rec->name_desc) == 0)
+				rec->name_desc++;
+
 
 			/*   The name might be surrounded by escape sequences of the form:
 			 *   \fBname\fR or similar. So remove those as well.
@@ -1145,10 +1163,6 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 				if (retval != ESCAPE_ERROR)
 					rec->name += nchars + 1;
 			}
-			
-			
-			while (isalnum((int) *rec->name_desc) == 0)
-				rec->name_desc++;
 		}
 		
 		/* Check the section, and if it is of our concern, extract its 
