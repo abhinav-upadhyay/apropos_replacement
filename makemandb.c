@@ -1518,7 +1518,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		sqlite3_exec(db, sql, NULL, NULL, &errmsg);
 		sqlite3_free(sql);
 		if (errmsg != NULL) {
-			warnx(errmsg);
+			warnx("%s", errmsg);
 			free(errmsg);
 		}
 		sqlstr = "UPDATE mandb_meta SET device = :device, inode = :inode, "
