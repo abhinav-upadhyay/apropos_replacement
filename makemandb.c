@@ -1562,12 +1562,8 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 
 /*------------------------ Populate the mandb_links table---------------------*/
 	char *str = NULL;
-	if (rec->links && strlen(rec->links) == 0) {
-		free(rec->links);
-		rec->links = NULL;
-	}
 		
-	if (rec->links) {
+	if (rec->links && strlen(rec->links)) {
 		for(ln = strtok(rec->links, " "); ln; ln = strtok(NULL, " ")) {
 			if (ln[0] == ',')
 				ln++;
