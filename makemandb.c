@@ -1792,7 +1792,7 @@ parse_escape(const char *str)
 			++backslash;
 			mandoc_escape(&backslash, NULL, NULL);
 			last_backslash = backslash;
-			backslash = nstrchr(last_backslash, '\\');
+			backslash = strchr(last_backslash, '\\');
 		}
 	} while (backslash != NULL);
 	strcpy(iter, last_backslash);
