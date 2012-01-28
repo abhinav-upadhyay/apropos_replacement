@@ -112,7 +112,7 @@ static void build_file_cache(sqlite3 *, const char *, struct stat *);
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
-static char *parse_escape(const char *, int *);
+static char *parse_escape(const char *, int);
 static makemandb_flags mflags;
 
 typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
@@ -1141,10 +1141,10 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			}
 			
 			/* Parse any escape sequences that might be there */		
-			char *temp = parse_escape((const char *)rec->name_desc, NULL);
+			char *temp = parse_escape((const char *)rec->name_desc, -1);
 			free(rec->name_desc);
 			rec->name_desc = temp;
-			temp = parse_escape((const char *) rec->name, NULL);
+			temp = parse_escape((const char *) rec->name, -1);
 			free(rec->name);
 			rec->name = temp;
 		}
@@ -1764,17 +1764,13 @@ free_secbuffs(mandb_rec *rec)
 }
 
 static char *
-parse_escape(const char *str, int *length)
+parse_escape(const char *str, int len)
 {
 	assert(str);
-	int offset = 0;
-	int len;
-	if (length == NULL)
+	if (len == -1)
 		len = strlen(str);
-	else
-		len = *length;
-
 	char *result = emalloc(len + 1);
+	int offset = 0;
 
 	while (*str) {
 		if (*str == '\\' && *(str + 1) == '-') {
@@ -1793,8 +1789,6 @@ parse_escape(const char *str, int *length)
 	}
 
 	result[offset] = 0;
-	if (length)
-		*length = offset;
 	return result;
 }
 
@@ -1820,15 +1814,16 @@ append(secbuff *sbuff, const char *src, int srclen)
 	assert(src != NULL);
 	if (srclen == -1)
 		srclen = strlen(src);
-	char  *temp = parse_escape(src, &srclen);
+	char  *temp = parse_escape(src, srclen);
+	srclen = strlen(temp);
 
 	if (sbuff->data == NULL) {
 		sbuff->data = (char *) emalloc (sbuff->buflen);
 		sbuff->offset = 0;
 	}
 	
-	if ((srclen) >= (sbuff->buflen - sbuff->offset)) {
-		sbuff->data = (char *) erealloc(sbuff->data, sbuff->buflen * 2);
+	if ((srclen + 2) >= (sbuff->buflen - sbuff->offset)) {
+		sbuff->data = (char *) erealloc(sbuff->data, sbuff->buflen + sbuff->offset);
 		sbuff->buflen += sbuff->buflen;
 		flag++;
 	}
@@ -1840,7 +1835,7 @@ append(secbuff *sbuff, const char *src, int srclen)
 	}
 	
 	/* Now, copy src at the end of the buffer */	
-	memcpy(&sbuff->data[sbuff->offset], temp, srclen);
+	memcpy(sbuff->data + sbuff->offset, temp, srclen);
 	sbuff->offset += srclen;
 	free(temp);
 	return;
