@@ -83,7 +83,7 @@ typedef struct mandb_rec {
 	int page_type; //Indicates the type of page: mdoc or man
 } mandb_rec;
 
-static void append(secbuff *sbuff, const char *src, int srclen);
+static void append(secbuff *sbuff, const char *src);
 static void init_secbuffs(mandb_rec *);
 static void free_secbuffs(mandb_rec *);
 static int check_md5(const char *, sqlite3 *, const char *, char **);
@@ -112,7 +112,7 @@ static void build_file_cache(sqlite3 *, const char *, struct stat *);
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
-static char *parse_escape(const char *, int);
+static char *parse_escape(const char *);
 static makemandb_flags mflags;
 
 typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
@@ -968,25 +968,25 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 
 	switch (sec) {
 	case SEC_LIBRARY:
-		append(&rec->lib, string, strlen(string));
+		append(&rec->lib, string);
 		break;
 	case SEC_RETURN_VALUES:
-		append(&rec->return_vals, string, strlen(string));
+		append(&rec->return_vals, string);
 		break;
 	case SEC_ENVIRONMENT:
-		append(&rec->env, string, strlen(string));
+		append(&rec->env, string);
 		break;
 	case SEC_FILES:
-		append(&rec->files, string, strlen(string));
+		append(&rec->files, string);
 		break;
 	case SEC_EXIT_STATUS:
-		append(&rec->exit_status, string, strlen(string));
+		append(&rec->exit_status, string);
 		break;
 	case SEC_DIAGNOSTICS:
-		append(&rec->diagnostics, string, strlen(string));
+		append(&rec->diagnostics, string);
 		break;
 	case SEC_ERRORS:
-		append(&rec->errors, string, strlen(string));
+		append(&rec->errors, string);
 		break;
 	case SEC_NAME:
 	case SEC_SYNOPSIS:
@@ -997,7 +997,7 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 	case SEC_BUGS:
 		break;
 	default:
-		append(&rec->desc, string, strlen(string));
+		append(&rec->desc, string);
 		break;
 	}
 }
@@ -1141,10 +1141,10 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			}
 			
 			/* Parse any escape sequences that might be there */		
-			char *temp = parse_escape((const char *)rec->name_desc, -1);
+			char *temp = parse_escape((const char *)rec->name_desc);
 			free(rec->name_desc);
 			rec->name_desc = temp;
-			temp = parse_escape((const char *) rec->name, -1);
+			temp = parse_escape((const char *) rec->name);
 			free(rec->name);
 			rec->name = temp;
 		}
@@ -1223,7 +1223,7 @@ pman_parse_node(const struct man_node *n, secbuff *s)
 		return;
 
 	if (n->type == MAN_TEXT)
-		append(s, n->string, strlen(n->string));
+		append(s, n->string);
 		
 	pman_parse_node(n->child, s);
 	pman_parse_node(n->next, s);
@@ -1764,31 +1764,38 @@ free_secbuffs(mandb_rec *rec)
 }
 
 static char *
-parse_escape(const char *str, int len)
+parse_escape(const char *str)
 {
+	const char *backslash, *last_backslash;
+	char *result, *iter;
+	size_t len;
+
 	assert(str);
-	if (len == -1)
-		len = strlen(str);
-	char *result = emalloc(len + 1);
-	int offset = 0;
 
-	while (*str) {
-		if (*str == '\\' && *(str + 1) == '-') {
-			str += 2;
-			result[offset++] = '-';
-			continue;
+	last_backslash = str;
+	backslash = strchr(str, '\\');
+	if (backslash == NULL)
+		return estrdup(str);
+
+	result = emalloc(strlen(str) + 1);
+	iter = result;
+
+	do {
+		len = backslash - last_backslash;
+		memcpy(iter, last_backslash, len);
+		iter += len;
+		if (backslash[1] == '-' || backslash[1] == ' ') {
+			*iter++ = backslash[1];
+			last_backslash = backslash + 2;
+			backslash = strchr(backslash + 2, '\\');
+		} else {
+			++backslash;
+			mandoc_escape(&backslash, NULL, NULL);
+			last_backslash = backslash;
+			backslash = nstrchr(last_backslash, '\\');
 		}
-
-		if (*str == '\\') {
-			str++;
-			mandoc_escape(&str, NULL, NULL);
-			continue;
-		}
-
-		result[offset++] = *str++;
-	}
-
-	result[offset] = 0;
+	} while (backslash != NULL);
+	strcpy(iter, last_backslash);
 	return result;
 }
 
@@ -1808,37 +1815,36 @@ parse_escape(const char *str, int len)
  *  in the db.
  */
 static void
-append(secbuff *sbuff, const char *src, int srclen)
+append(secbuff *sbuff, const char *src)
 {
 	short flag = 0;
+	size_t srclen, newlen;
+	char *temp;
+
 	assert(src != NULL);
-	if (srclen == -1)
-		srclen = strlen(src);
-	char  *temp = parse_escape(src, srclen);
+	temp = parse_escape(src);
 	srclen = strlen(temp);
 
 	if (sbuff->data == NULL) {
 		sbuff->data = (char *) emalloc (sbuff->buflen);
 		sbuff->offset = 0;
 	}
-	
-	if ((srclen + 2) >= (sbuff->buflen - sbuff->offset)) {
-		sbuff->data = (char *) erealloc(sbuff->data, sbuff->buflen + sbuff->offset);
-		sbuff->buflen += sbuff->buflen;
-		flag++;
+
+	newlen = sbuff->offset + srclen + 2;
+	if (newlen >= sbuff->buflen) {
+		while (sbuff->buflen < newlen)
+			sbuff->buflen += sbuff->buflen;
+		sbuff->data = erealloc(sbuff->data, sbuff->buflen);
+		flag = 1;
 	}
-		
+
 	/* Append a space at the end of the buffer */
-	if (sbuff->offset || flag) {
-		memcpy(sbuff->data + sbuff->offset, " ", 1);
-		sbuff->offset++;
-	}
-	
-	/* Now, copy src at the end of the buffer */	
+	if (sbuff->offset || flag)
+		sbuff->data[sbuff->offset++] = ' ';
+	/* Now, copy src at the end of the buffer */
 	memcpy(sbuff->data + sbuff->offset, temp, srclen);
 	sbuff->offset += srclen;
 	free(temp);
-	return;
 }
 
 static void
