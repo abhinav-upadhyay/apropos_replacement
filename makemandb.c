@@ -1704,21 +1704,26 @@ cleanup(mandb_rec *rec)
 	rec->errors.offset = 0;
 	rec->files.offset = 0;
 
-	free(rec->md5_hash);
 	free(rec->machine);
-	free(rec->section);
-	free(rec->links);
-	free(rec->file_path);
-	free(rec->name);
-	free(rec->name_desc);
-
-	rec->name_desc = NULL;
-	rec->name = NULL;
-	rec->md5_hash = NULL;
 	rec->machine = NULL;
+
+	free(rec->section);
 	rec->section = NULL;
+
+	free(rec->links);
 	rec->links = NULL;
+
+	free(rec->file_path);
 	rec->file_path = NULL;
+
+	free(rec->name);
+	rec->name = NULL;
+
+	free(rec->name_desc);
+	rec->name_desc = NULL;
+
+	free(rec->md5_hash);
+	rec->md5_hash = NULL;
 }
 
 /*
