@@ -1339,7 +1339,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	 * treated as links and put in the mandb_links table.
 	 */
 	if (rec->page_type == MDOC) {
-		rec->links = strdup(rec->name);
+		rec->links = estrdup(rec->name);
 		free(rec->name);
 		int sz = strcspn(rec->links, " \0");
 		rec->name = emalloc(sz + 1);
