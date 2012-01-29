@@ -446,11 +446,11 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 }
 
 /* build_file_cache --
- *	This function generates an md5 hash of the file passed as it's 2nd parameter
- *	and stores it in a temporary table file_cache along with the full file path.
- *	This is done to support incremental updation of the database.
- *	The temporary table file_cache is dropped thereafter in the function 
- *	update_db(), once the database has been updated.
+ *   This function generates an md5 hash of the file passed as it's 2nd parameter
+ *   and stores it in a temporary table file_cache along with the full file path.
+ *   This is done to support incremental updation of the database.
+ *   The temporary table file_cache is dropped thereafter in the function
+ *   update_db(), once the database has been updated.
  */
 static void
 build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
@@ -495,7 +495,6 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 		return;
 	}
 
-	
 	idx = sqlite3_bind_parameter_index(stmt, ":file");
 	rc = sqlite3_bind_text(stmt, idx, file, -1, NULL);
 	if (rc != SQLITE_OK) {
