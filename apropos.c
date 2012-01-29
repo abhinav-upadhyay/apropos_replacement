@@ -293,7 +293,7 @@ remove_stopwords(char **query)
 		 ent.key = (char *)term;
 		 ent.data = NULL;
 		 if (hsearch(ent, FIND) == NULL)
-		 	concat(&buf, term, strlen(term));
+		 	concat(&buf, term);
 	}
 	
 	hdestroy();

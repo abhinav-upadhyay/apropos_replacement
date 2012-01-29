@@ -81,7 +81,8 @@ typedef struct query_args {
 } query_args;
 
 char *lower(char *);
-void concat(char **, const char *, int);
+void concat(char **, const char *);
+void concat2(char **, const char *, size_t);
 sqlite3 *init_db(int);
 void close_db(sqlite3 *);
 int run_query(sqlite3 *, const char *[3], query_args *);

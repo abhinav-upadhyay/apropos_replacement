@@ -95,36 +95,36 @@ lower(char *str)
 * dst + " " + src 
 */
 void
-concat(char **dst, const char *src, int srclen)
+concat(char **dst, const char *src)
 {
-	int total_len, dst_len;
+	concat2(dst, src, strlen(src));
+}
+
+void
+concat2(char **dst, const char *src, size_t srclen)
+{
+	size_t total_len, dst_len;
 	assert(src != NULL);
 
-	/* if destination buffer dst is NULL, then simply strdup the source buffer */
+	/* If destination buffer dst is NULL, then simply strdup the source buffer */
 	if (*dst == NULL) {
 		*dst = estrdup(src);
 		return;
 	}
 
-	if (srclen == -1)
-		srclen = strlen(src);
-
 	dst_len = strlen(*dst);
-	
-	/* calculate total string length:
-	*  one extra character for the nul byte 
-	*  and one for the space character 
-	*/	
+	/*
+	 * NUL Byte and separator space
+	 */
 	total_len = dst_len + srclen + 2;
-	
-	*dst = (char *) erealloc(*dst, total_len);
-		
+
+	*dst = erealloc(*dst, total_len);
+
 	/* Append a space at the end of dst */
 	(*dst)[dst_len++] = ' ';
-	
+
 	/* Now, copy src at the end of dst */	
 	memcpy(*dst + dst_len, src, srclen + 1);
-	return;
 }
 
 void
@@ -446,7 +446,7 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 				continue;
 			easprintf(&temp, " OR section = \'%d\'", i + 1);
 			if (section_clause) {
-				concat(&section_clause, temp, -1);
+				concat(&section_clause, temp);
 				free(temp);
 			} else {
 				section_clause = temp;

@@ -785,7 +785,7 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 
 	for (n = n->child; n; n = n->next) {
 		if (n->type == MDOC_TEXT) {
-			concat(&rec->name, n->string, strlen(n->string));
+			concat(&rec->name, n->string);
 		}
 	}
 }
@@ -816,11 +816,11 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 			temp = estrdup(n->string);
 			n = n->next;
 			easprintf(&buf, "%s(%s)", temp, n->string);
-			concat(&rec->name_desc, buf, strlen(buf));
+			concat(&rec->name_desc, buf);
 			free(buf);
 			free(temp);
 		} else {
-			concat(&rec->name_desc, n->string, strlen(n->string));
+			concat(&rec->name_desc, n->string);
 		}
 		rec->xr_found = 0;
 	} else if (mdocs[n->tok] == pmdoc_Xr) {
@@ -867,7 +867,7 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 		if (n && n->type != MDOC_TEXT)
 			return;
 		len = strlen(n->string);
-		concat(&buf, n->string, len);
+		concat2(&buf, n->string, len);
 		if (n->next)
 			n = n->next;
 
@@ -1043,7 +1043,7 @@ pman_parse_name(const struct man_node *n, mandb_rec *rec)
 		return;
 
 	if (n->type == MAN_TEXT) 
-		concat(&rec->name_desc, n->string, strlen(n->string));
+		concat(&rec->name_desc, n->string);
 	
 	if (n->child)
 		pman_parse_name(n->child, rec);
@@ -1179,7 +1179,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 					has_alias = 0;
 				}
 				name_desc[sz] = 0;
-				concat(&rec->links, name_desc, sz);
+				concat2(&rec->links, name_desc, sz);
 				name_desc += sz + 1;
 				continue;
 			}
