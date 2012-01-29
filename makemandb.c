@@ -1586,20 +1586,18 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 			if(ln[strlen(ln) - 1] == ',')
 				ln[strlen(ln) - 1] = 0;
 			
-			easprintf(&str, "INSERT INTO mandb_links"
-					" VALUES (\'%s\', \'%s\',"
-					"   \'%s\', \'%s\')",
-					ln, rec->name, rec->section,
-					rec->machine);
+			str = sqlite3_mprintf("INSERT INTO mandb_links"
+					      " VALUES (%Q, %Q, %Q, %Q)",
+					      ln, rec->name, rec->section,
+					      rec->machine);
 			sqlite3_exec(db, str, NULL, NULL, &errmsg);
+			sqlite3_free(str);
 			if (errmsg != NULL) {
 				warnx("%s", errmsg);
 				cleanup(rec);
-				free(str);
 				free(errmsg);
 				return -1;
 			}
-			free(str);
 		}
 	}
 
