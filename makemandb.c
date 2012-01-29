@@ -1069,154 +1069,155 @@ pman_block(const struct man_node *n, mandb_rec *rec)
  * pman_sh --
  * This function does one of the two things:
  *  1. If the present section is NAME, then it will:
- *    (a) extract the name of the page (in case of multiple comma separated 
- *	      names, it will pick up the first one).
- *	  (b) It will also build a space spearated list of all the sym/hardlinks to
+ *    (a) Extract the name of the page (in case of multiple comma separated
+ *        names, it will pick up the first one).
+ *    (b) Build a space spearated list of all the symlinks/hardlinks to
  *        this page and store in the buffer 'links'. These are extracted from
  *        the comma separated list of names in the NAME section as well.
- *    (c) And then it will move on to the one line description section, which is
- *        after the list of names in the NAME section.
+ *    (c) Move on to the one line description section, which is after the list
+ *        of names in the NAME section.
  *  2. Otherwise, it will check the section name and call the man_parse_section
  *     function, passing the enum corresponding that section.
  */
 static void
 pman_sh(const struct man_node *n, mandb_rec *rec)
 {
+	static const struct {
+		enum man_sec section;
+		const char *header;
+	} mapping[] = {
+	    { MANSEC_DESCRIPTION, "DESCRIPTION" },
+	    { MANSEC_SYNOPSIS, "SYNOPSIS" },
+	    { MANSEC_LIBRARY, "LIBRARY" },
+	    { MANSEC_ERRORS, "ERRORS" },
+	    { MANSEC_FILES, "FILES" },
+	    { MANSEC_RETURN_VALUES, "RETURN VALUE" },
+	    { MANSEC_RETURN_VALUES, "RETURN VALUES" },
+	    { MANSEC_EXIT_STATUS, "EXIT STATUS" },
+	    { MANSEC_EXAMPLES, "EXAMPLES" },
+	    { MANSEC_EXAMPLES, "EXAMPLE" },
+	    { MANSEC_STANDARDS, "STANDARDS" },
+	    { MANSEC_HISTORY, "HISTORY" },
+	    { MANSEC_BUGS, "BUGS" },
+	    { MANSEC_AUTHORS, "AUTHORS" },
+	    { MANSEC_COPYRIGHT, "COPYRIGHT" },
+	};
 	const struct man_node *head;
 	int sz;
+	size_t i;
 
-	if ((head = n->parent->head) != NULL &&	(head = head->child) != NULL &&
-		head->type ==  MAN_TEXT) {
-		if (strcmp(head->string, "NAME") == 0) {
-			/* We are in the NAME section. pman_parse_name will put the complete
-			 * content in name_desc
-			 */			
-			pman_parse_name(n, rec);
+	if ((head = n->parent->head) == NULL || (head = head->child) == NULL ||
+	    head->type != MAN_TEXT)
+		return;
 
-			/* Remove any leading spaces */
-			while (*(rec->name_desc) == ' ') 
-				rec->name_desc++;
-			
-			/* If the line begins with a "\&", avoid those */
-			if (rec->name_desc[0] == '\\' && rec->name_desc[1] == '&')
-				rec->name_desc += 2;
-
-			/* Now name_desc should be left with a comma-space separated
-			 * list of names and the one line description of the page.
-			 * For example "a, b, c \- sample description"
-			 * Take out the first name, before the first comma (or space)
-			 * and store it in rec->name.
-			 * If the page has aliases then they should be in the form of a comma
-			 * separated list. Keep looping while there is a comma in name_desc, 
-			 * extract the alias name and store in rec->links.
-			 * When there are no more commas left, break out.
-			 */
-			int has_alias = 0;	//are there any more aliases left in the string
-			while (*rec->name_desc) {
-				/* Remove any leading spaces */
-				if (*rec->name_desc == ' ') {
-					rec->name_desc++;
-					continue;
-				}
-				sz = strcspn(rec->name_desc, ", ");
-
-				/* Extract the first term and store it in rec->name */
-				if (rec->name == NULL) {
-					if (rec->name_desc[sz] == ',') {
-						has_alias = 1;
-					}
-					rec->name_desc[sz] = 0;
-					rec->name = emalloc(sz + 1);
-					memcpy(rec->name, rec->name_desc, sz + 1);
-					rec->name_desc += sz + 1;
-					continue;
-				}
-
-				/* Once rec->name is set, rest of the names are to be treated
-				 * as links or aliases.
-				 */
-				if (rec->name && has_alias) {
-					if (rec->name_desc[sz] != ',') {
-						/* No more commas left --> no more aliases to take out*/
-						has_alias = 0;
-					}
-					rec->name_desc[sz] = 0;
-					concat(&rec->links, rec->name_desc, sz);
-					rec->name_desc += sz + 1;
-					continue;
-				}
-				break;
-			}
-			
-			/* Parse any escape sequences that might be there */		
-			char *temp = parse_escape((const char *)rec->name_desc);
-			free(rec->name_desc);
-			rec->name_desc = temp;
-			temp = parse_escape((const char *) rec->name);
-			free(rec->name);
-			rec->name = temp;
+	/*
+	 * Check if this section should be extracted and
+	 * where it should be stored. Handled the trival cases first.
+	 */
+	for (i = 0; i < sizeof(mapping) / sizeof(mapping[0]); ++i) {
+		if (strcmp(head->string, mapping[i].header) == 0) {
+			man_parse_section(mapping[i].section, n, rec);
+			return;
 		}
-		
-		/* Check the section, and if it is of our concern, extract its 
-		 * content
-		 */
-		 
-		else if (strcmp((const char *)head->string, "DESCRIPTION") == 0)
-			man_parse_section(MANSEC_DESCRIPTION, n, rec);
-		
-		else if (strcmp((const char *)head->string, "SYNOPSIS") == 0)
-			man_parse_section(MANSEC_SYNOPSIS, n, rec);
-
-		else if (strcmp((const char *)head->string, "LIBRARY") == 0)
-			man_parse_section(MANSEC_LIBRARY, n, rec);
-
-		else if (strcmp((const char *)head->string, "ERRORS") == 0)
-			man_parse_section(MANSEC_ERRORS, n, rec);
-
-		else if (strcmp((const char *)head->string, "FILES") == 0)
-			man_parse_section(MANSEC_FILES, n, rec);
-
-		/* The RETURN VALUE section might be specified in multiple ways */
-		else if (strcmp((const char *) head->string, "RETURN VALUE") == 0
-			|| strcmp((const char *)head->string, "RETURN VALUES") == 0
-			|| (strcmp((const char *)head->string, "RETURN") == 0 && 
-			head->next->type == MAN_TEXT && 
-			(strcmp((const char *)head->next->string, "VALUE") == 0 ||
-			strcmp((const char *)head->next->string, "VALUES") == 0)))
-			man_parse_section(MANSEC_RETURN_VALUES, n, rec);
-
-		/* EXIT STATUS section can also be specified all on one line or on two
-		 * separate lines.
-		 */
-		else if (strcmp((const char *) head->string, "EXIT STATUS") == 0
-			|| (strcmp((const char *) head->string, "EXIT") ==0 &&
-			head->next->type == MAN_TEXT &&
-			strcmp((const char *) head->next->string, "STATUS") == 0))
-			man_parse_section(MANSEC_EXIT_STATUS, n, rec);
-		
-		else if (strcmp((const char *) head->string, "EXAMPLES") == 0 ||
-			strcmp((const char *) head->string, "EXAMPLE") == 0)
-			man_parse_section(MANSEC_EXAMPLES, n, rec);
-		
-		else if (strcmp((const char *) head->string, "STANDARDS") == 0)
-			man_parse_section(MANSEC_STANDARDS, n , rec);
-		
-		else if (strcmp((const char *) head->string, "HISTORY") == 0)
-			man_parse_section(MANSEC_HISTORY, n, rec);
-		
-		else if (strcmp((const char *) head->string, "BUGS") == 0)
-			man_parse_section(MANSEC_BUGS, n, rec);
-		
-		else if (strcmp((const char *)head->string, "AUTHORS") == 0)
-			man_parse_section(MANSEC_AUTHORS, n, rec);
-			
-		else if (strcmp((const char *)head->string, "COPYRIGHT") == 0)
-			man_parse_section(MANSEC_COPYRIGHT, n, rec);			
-
-		/* Store the rest of the content in desc */
-		else
-			man_parse_section(MANSEC_NONE, n, rec);
 	}
+
+	if (strcmp(head->string, "NAME") == 0) {
+		/*
+		 * We are in the NAME section.
+		 * pman_parse_name will put the complete content in name_desc.
+		 */
+		pman_parse_name(n, rec);
+
+		/* Remove any leading spaces. */
+		while (*(rec->name_desc) == ' ')
+			rec->name_desc++;
+			
+		/* If the line begins with a "\&", avoid those */
+		if (rec->name_desc[0] == '\\' && rec->name_desc[1] == '&')
+			rec->name_desc += 2;
+
+		/* Now name_desc should be left with a comma-space
+		 * separated list of names and the one line description
+		 * of the page:
+		 *     "a, b, c \- sample description"
+		 * Take out the first name, before the first comma
+		 * (or space) and store it in rec->name.
+		 * If the page has aliases then they should be
+		 * in the form of a comma separated list.
+		 * Keep looping while there is a comma in name_desc,
+		 * extract the alias name and store in rec->links.
+		 * When there are no more commas left, break out.
+		 */
+		int has_alias = 0;	// Any more aliases left?
+		while (*rec->name_desc) {
+			/* Remove any leading spaces. */
+			if (*rec->name_desc == ' ') {
+				rec->name_desc++;
+				continue;
+			}
+			sz = strcspn(rec->name_desc, ", ");
+
+			/* Extract the first term and store it in rec->name. */
+			if (rec->name == NULL) {
+				if (rec->name_desc[sz] == ',')
+					has_alias = 1;
+				rec->name_desc[sz] = 0;
+				rec->name = emalloc(sz + 1);
+				memcpy(rec->name, rec->name_desc, sz + 1);
+				rec->name_desc += sz + 1;
+				continue;
+			}
+
+			/*
+			 * Once rec->name is set, rest of the names
+			 * are to be treated as links or aliases.
+			 */
+			if (rec->name && has_alias) {
+				if (rec->name_desc[sz] != ',') {
+					/* No more commas left -->
+					 * no more aliases to take out
+					 */
+					has_alias = 0;
+				}
+				rec->name_desc[sz] = 0;
+				concat(&rec->links, rec->name_desc, sz);
+				rec->name_desc += sz + 1;
+				continue;
+			}
+			break;
+		}
+
+		/* Parse any escape sequences that might be there */
+		char *temp = parse_escape(rec->name_desc);
+		free(rec->name_desc);
+		rec->name_desc = temp;
+		temp = parse_escape(rec->name);
+		free(rec->name);
+		rec->name = temp;
+		return;
+	}
+
+	/* The RETURN VALUE section might be specified in multiple ways */
+	if (strcmp(head->string, "RETURN") == 0 &&
+	    head->next->type == MAN_TEXT &&
+	    (strcmp(head->next->string, "VALUE") == 0 ||
+	     strcmp(head->next->string, "VALUES") == 0)) {
+		man_parse_section(MANSEC_RETURN_VALUES, n, rec);
+		return;
+	}
+
+	/*
+	 * EXIT STATUS section can also be specified all on one line or on two
+	 * separate lines.
+	 */
+	if (strcmp(head->string, "EXIT") == 0 && head->next->type == MAN_TEXT &&
+	    strcmp(head->next->string, "STATUS") == 0) {
+		man_parse_section(MANSEC_EXIT_STATUS, n, rec);
+		return;
+	}
+
+	/* Store the rest of the content in desc. */
+	man_parse_section(MANSEC_NONE, n, rec);
 }
 
 /*
