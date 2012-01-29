@@ -1367,7 +1367,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":section");
-	rc = sqlite3_bind_text(stmt, idx, rec->section, 2, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
