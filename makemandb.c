@@ -67,18 +67,18 @@ typedef struct mandb_rec {
 	secbuff diagnostics; // DIAGNOSTICS
 	secbuff errors; // ERRORS
 	char *section;
-	
+
 	/* Fields for mandb_meta table */
 	char *md5_hash;
 	dev_t device;
 	ino_t inode;
 	time_t mtime;
-	
+
 	/* Fields for mandb_links table */
 	char *machine;
 	char *links; //all the links to a page in a space separated form
 	char *file_path;
-	
+
 	/* Non-db fields */
 	int page_type; //Indicates the type of page: mdoc or man
 } mandb_rec;
@@ -98,7 +98,7 @@ static void pmdoc_Sh(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_Xr(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_Pp(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_macro_handler(const struct mdoc_node *, mandb_rec *, 
-								enum mdoct);
+				enum mdoct);
 static void pman_node(const struct man_node *n, mandb_rec *);
 static void pman_parse_node(const struct man_node *, secbuff *);
 static void pman_parse_name(const struct man_node *, mandb_rec *);
@@ -122,32 +122,32 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Dd */
 	NULL, /* Dt */
 	NULL, /* Os */
-	pmdoc_Sh, /* Sh */ 
-	NULL, /* Ss */ 
-	pmdoc_Pp, /* Pp */ 
+	pmdoc_Sh, /* Sh */
+	NULL, /* Ss */
+	pmdoc_Pp, /* Pp */
 	NULL, /* D1 */
 	NULL, /* Dl */
 	NULL, /* Bd */
 	NULL, /* Ed */
-	NULL, /* Bl */ 
+	NULL, /* Bl */
 	NULL, /* El */
 	NULL, /* It */
-	NULL, /* Ad */ 
-	NULL, /* An */ 
+	NULL, /* Ad */
+	NULL, /* An */
 	NULL, /* Ar */
-	NULL, /* Cd */ 
+	NULL, /* Cd */
 	NULL, /* Cm */
-	NULL, /* Dv */ 
-	NULL, /* Er */ 
-	NULL, /* Ev */ 
-	NULL, /* Ex */ 
-	NULL, /* Fa */ 
+	NULL, /* Dv */
+	NULL, /* Er */
+	NULL, /* Ev */
+	NULL, /* Ex */
+	NULL, /* Fa */
 	NULL, /* Fd */
 	NULL, /* Fl */
-	NULL, /* Fn */ 
-	NULL, /* Ft */ 
-	NULL, /* Ic */ 
-	NULL, /* In */ 
+	NULL, /* Fn */
+	NULL, /* Ft */
+	NULL, /* Ic */
+	NULL, /* In */
 	NULL, /* Li */
 	pmdoc_Nd, /* Nd */
 	pmdoc_Nm, /* Nm */
@@ -155,10 +155,10 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Ot */
 	NULL, /* Pa */
 	NULL, /* Rv */
-	NULL, /* St */ 
+	NULL, /* St */
 	NULL, /* Va */
-	NULL, /* Vt */ 
-	pmdoc_Xr, /* Xr */ 
+	NULL, /* Vt */
+	pmdoc_Xr, /* Xr */
 	NULL, /* %A */
 	NULL, /* %B */
 	NULL, /* %D */
@@ -173,7 +173,7 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Ac */
 	NULL, /* Ao */
 	NULL, /* Aq */
-	NULL, /* At */ 
+	NULL, /* At */
 	NULL, /* Bc */
 	NULL, /* Bf */
 	NULL, /* Bo */
@@ -185,11 +185,11 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Do */
 	NULL, /* Dq */
 	NULL, /* Ec */
-	NULL, /* Ef */ 
-	NULL, /* Em */ 
+	NULL, /* Ef */
+	NULL, /* Em */
 	NULL, /* Eo */
 	NULL, /* Fx */
-	NULL, /* Ms */ 
+	NULL, /* Ms */
 	NULL, /* No */
 	NULL, /* Ns */
 	NULL, /* Nx */
@@ -207,15 +207,15 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Sc */
 	NULL, /* So */
 	NULL, /* Sq */
-	NULL, /* Sm */ 
+	NULL, /* Sm */
 	NULL, /* Sx */
 	NULL, /* Sy */
 	NULL, /* Tn */
 	NULL, /* Ux */
 	NULL, /* Xc */
 	NULL, /* Xo */
-	NULL, /* Fo */ 
-	NULL, /* Fc */ 
+	NULL, /* Fo */
+	NULL, /* Fc */
 	NULL, /* Oo */
 	NULL, /* Oc */
 	NULL, /* Bk */
@@ -225,12 +225,12 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Fr */
 	NULL, /* Ud */
 	NULL, /* Lb */
-	NULL, /* Lp */ 
-	NULL, /* Lk */ 
-	NULL, /* Mt */ 
-	NULL, /* Brq */ 
-	NULL, /* Bro */ 
-	NULL, /* Brc */ 
+	NULL, /* Lp */
+	NULL, /* Lk */
+	NULL, /* Mt */
+	NULL, /* Brq */
+	NULL, /* Bro */
+	NULL, /* Brc */
 	NULL, /* %C */
 	NULL, /* Es */
 	NULL, /* En */
@@ -292,7 +292,7 @@ main(int argc, char *argv[])
 	ssize_t len;
 	size_t linesize;
 	struct mandb_rec rec;
-	
+
 	while ((ch = getopt(argc, argv, "flo")) != -1) {
 		switch (ch) {
 		case 'f':
@@ -320,8 +320,7 @@ main(int argc, char *argv[])
 	if ((db = init_db(MANDB_CREATE)) == NULL)
 		errx(EXIT_FAILURE, "Could not initialize the database");
 
-	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 
-				&errmsg);
+	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 	&errmsg);
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
@@ -329,16 +328,16 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL, 
-				&errmsg);
+	sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL,
+	    &errmsg);
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
 		close_db(db);
 		exit(EXIT_FAILURE);
 	}
-		
-		
+
+
 	/* Call man -p to get the list of man page dirs */
 	if ((file = popen("man -p", "r")) == NULL) {
 		close_db(db);
@@ -353,11 +352,10 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 		
-	sqlstr = "CREATE TABLE IF NOT EXISTS metadb.file_cache(device, inode, "
-			    "mtime, file PRIMARY KEY); "
-			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_file_cache_dev ON "
-			    "file_cache (device, inode)";
-			
+	sqlstr = "CREATE TABLE IF NOT EXISTS metadb.file_cache(device, inode,"
+		 " mtime, file PRIMARY KEY);"
+		 "CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_file_cache_dev"
+		 " ON file_cache (device, inode)";
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
@@ -367,7 +365,7 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	printf("Building temporary file cache\n");	
+	printf("Building temporary file cache\n");
 	line = NULL;
 	linesize = 0;
 	while ((len = getline(&line, &linesize, file)) != -1) {
@@ -377,18 +375,18 @@ main(int argc, char *argv[])
 		traversedir(line, db, mp);
 	}
 	free(line);
-	
+
 	if (pclose(file) == -1) {
 		close_db(db);
 		cleanup(&rec);
 		free_secbuffs(&rec);
 		err(EXIT_FAILURE, "pclose error");
 	}
-	
+
 	update_db(db, mp, &rec);
 	mparse_free(mp);
 	free_secbuffs(&rec);
-	
+
 	/* Commit the transaction */
 	sqlite3_exec(db, "COMMIT", NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
@@ -396,17 +394,17 @@ main(int argc, char *argv[])
 		free(errmsg);
 		exit(EXIT_FAILURE);
 	}
-	
+
 	if (mflags.optimize)
 		optimize(db);
-	
+
 	close_db(db);
 	return 0;
 }
 
 /*
  * traversedir --
- *  Traverses the given directory recursively and passes all the man page files 
+ *  Traverses the given directory recursively and passes all the man page files
  *  in the way to build_file_cache()
  */
 static void
@@ -416,7 +414,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 	struct dirent *dirp;
 	DIR *dp;
 	char *buf;
-		
+
 	if (stat(file, &sb) < 0) {
 		warn("stat failed: %s", file);
 		return;
@@ -465,8 +463,8 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	ino_t inode_cache = sb->st_ino;
 	time_t mtime_cache = sb->st_mtime;
 
-	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode, :mtime, "
-			    ":file)";
+	sqlstr = "INSERT INTO metadb.file_cache VALUES (:device, :inode,"
+		 " :mtime, :file)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
@@ -505,7 +503,7 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 		sqlite3_finalize(stmt);
 		return;
 	}
-	
+
 	sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
 }
@@ -652,24 +650,27 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	sqlite3_finalize(stmt);
 	
 	printf("Total Number of new or updated pages enountered = %d\n"
-		"Total number of pages that were successfully indexed/updated = %d\n"
+		"Total number of pages that were successfully"
+		" indexed/updated = %d\n"
 		"Total number of (hard or symbolic) links found = %d\n"
-		"Total number of pages that could not be indexed due to errors = %d\n",
+		"Total number of pages that could not be indexed"
+		" due to errors = %d\n",
 		total_count, new_count, link_count, err_count);
 
 	if (!mflags.f) {
-		printf("Deleting stale index entries\n");	
-		sqlstr = "DELETE FROM mandb WHERE rowid IN (SELECT id FROM mandb_meta "
-				    "WHERE file NOT IN (SELECT file FROM metadb.file_cache)); "
-				"DELETE FROM mandb_meta WHERE file NOT IN (SELECT file FROM"
-				    " metadb.file_cache); "
-				"DROP TABLE metadb.file_cache";
-			
+		printf("Deleting stale index entries\n");
+		sqlstr = "DELETE FROM mandb WHERE rowid IN"
+			 " (SELECT id FROM mandb_meta "
+			 "  WHERE file NOT IN"
+			 "   (SELECT file FROM metadb.file_cache));"
+			 "DELETE FROM mandb_meta WHERE file NOT IN"
+			 " (SELECT file FROM metadb.file_cache);"
+			 "DROP TABLE metadb.file_cache";
+
 		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 		if (errmsg != NULL) {
-			warnx("Attempt to remove old entries failed. You may want to run: "
-				"makemandb -f to prune and rebuild the database from scratch");
-			warnx("%s", errmsg);
+			warnx("Removing old entries failed: %s", errmsg);
+			warnx("Please rebuild database from scratch with -f.");
 			free(errmsg);
 			return;
 		}
@@ -747,7 +748,7 @@ get_machine(const struct mdoc *md, mandb_rec *rec)
 static void
 pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
 {
-	
+
 	if (n == NULL)
 		return;
 
@@ -757,9 +758,8 @@ pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
 	case (MDOC_TAIL):
 		/* FALLTHROUGH */
 	case (MDOC_ELEM):
-		if (mdocs[n->tok] == NULL) {
+		if (mdocs[n->tok] == NULL)
 			break;
-		}
 		(*mdocs[n->tok])(n, rec);
 		break;
 	default:
@@ -785,7 +785,6 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 			concat(&rec->name, n->string, strlen(n->string));
 		}
 	}
-
 }
 
 /*
@@ -795,7 +794,8 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 static void
 pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 {
-	/* A static variable for keeping track of whether a Xr macro was seen
+	/*
+	 * A static variable for keeping track of whether a Xr macro was seen
 	 * previously.
 	 */
 	static int xr = 0;
@@ -807,8 +807,9 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 
 	if (n->type == MDOC_TEXT) {
 		if (xr == 1 && n->next) {
-			/* An Xr macro was seen previously, so we need to parse this and the
-			 * next node especially
+			/*
+			 * An Xr macro was seen previously, so parse this
+			 * and the next node.
 			 */
 			temp = estrdup(n->string);
 			n = n->next;
@@ -819,65 +820,60 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 		} else {
 			concat(&rec->name_desc, n->string, strlen(n->string));
 		}
-		xr = 0;			
+		xr = 0;
 	} else if (mdocs[n->tok] == pmdoc_Xr) {
 		/* Remember that we have encountered an Xr macro */
 		xr = 1;
 	}
-	
-	if (n->child) {
-		pmdoc_Nd(n->child, rec);
-	}
 
-	if(n->next) {
+	if (n->child)
+		pmdoc_Nd(n->child, rec);
+
+	if(n->next)
 		pmdoc_Nd(n->next, rec);
-	}
 }
 
 /*
  * pmdoc_macro_handler--
- *  This function is a single point of handling all the special macros that we 
- *  want to handle especially. For example the .Xr macro for properly parsing 
- *  the referenced page name along with the section number, or the .Pp macro 
+ *  This function is a single point of handling all the special macros that we
+ *  want to handle especially. For example the .Xr macro for properly parsing
+ *  the referenced page name along with the section number, or the .Pp macro
  *  for adding a new line whenever we encounter it.
  */
 static void
 pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 {
-	assert(n);
 	char *buf = NULL;
 	size_t len;
 
+	assert(n);
+
 	switch (doct) {
-	/*  Parse the man page references. Basically the .Xr macros are used like:
+	/*  Parse the man page references.
+	 * Basically the .Xr macros are used like:
 	 *  .Xr ls 1
- 	 *  and parsed like this:
+ 	 *  and formatted like this:
 	 *  ls(1)
-	 *  Prepare a buffer to format the data like the above example and call 
+	 *  Prepare a buffer to format the data like the above example and call
 	 *  pmdoc_parse_section to append it.
 	 */
 	case MDOC_Xr:
 		n = n->child;
-		while (n->type != MDOC_TEXT && n->next) {
+		while (n->type != MDOC_TEXT && n->next)
 			n = n->next;
-		}
 
-		if (n && n->type == MDOC_TEXT) {
-			len = strlen(n->string);
-			concat(&buf, n->string, len);
-			if (n->next) {
-				n = n->next;
-			}
-		} else {
+		if (n && n->type != MDOC_TEXT)
 			return;
-		}
-
-		while (n->type != MDOC_TEXT && n->next) {
+		len = strlen(n->string);
+		concat(&buf, n->string, len);
+		if (n->next)
 			n = n->next;
-		}
+
+		while (n->type != MDOC_TEXT && n->next)
+			n = n->next;
 
 		if (n && n->type == MDOC_TEXT) {
-			buf = (char *) erealloc(buf, len + 4);
+			buf = erealloc(buf, len + 4);
 			buf[len] = '(';
 			buf[len + 1] = n->string[0];
 			buf[len + 2] = ')';
@@ -890,9 +886,8 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 
 	/* Parse the .Pp macro to add a new line */
 	case MDOC_Pp:
-		if (n->type == MDOC_TEXT) {
+		if (n->type == MDOC_TEXT)
 			mdoc_parse_section(n->sec, "\n", rec);
-		}
 		break;
 	default:
 		break;
@@ -902,27 +897,27 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 
 /*
  * pmdoc_Xr, pmdoc_Pp--
- *  Empty stubs. The parser calls these functions each time it encounters an .Xr 
- *  or .Pp macro. We are parsing all the data from the pmdoc_Sh function so dont
- *  do anything here. (See if else blocks in pmdoc_Sh)
+ *  Empty stubs.
+ *  The parser calls these functions each time it encounters
+ *  a .Xr or .Pp macro. We are parsing all the data from
+ *  the pmdoc_Sh function, so don't do anything here.
+ *  (See if else blocks in pmdoc_Sh.)
  */
 static void
 pmdoc_Xr(const struct mdoc_node *n, mandb_rec *rec)
 {
-	;
 }
 
 static void
 pmdoc_Pp(const struct mdoc_node *n, mandb_rec *rec)
 {
-	;
 }
 
 /*
  * pmdoc_Sh --
- *  Called when a .Sh macro is encountered and loops through it's body, calling 
- *  mdoc_parse_section to append the data to the section specific buffer. 
- *  Two special macros which may occur inside the body of Sh are .Nm and .Xr and 
+ *  Called when a .Sh macro is encountered and loops through its body, calling
+ *  mdoc_parse_section to append the data to the section specific buffer.
+ *  Two special macros which may occur inside the body of Sh are .Nm and .Xr and
  *  they need special handling, thus the separate if branches for them.
  */
 static void
@@ -933,25 +928,23 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 
 	if (n->type == MDOC_TEXT) {
 		mdoc_parse_section(n->sec, n->string, rec);
-	}
-		
-	/* On encountering a .Nm macro, substitute it with it's previously
-	 * cached value of the argument
-	 */
-	else if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL) {
+	} else if (mdocs[n->tok] == pmdoc_Nm && rec->name != NULL) {
+		/*
+		 * When encountering a .Nm macro, substitute it
+		 * with its previously cached value of the argument.
+		 */
 		mdoc_parse_section(n->sec, rec->name, rec);
-	}
-
-	/* On encountering other inline macros, call pmdoc_macro_handler */
-	else if (mdocs[n->tok] == pmdoc_Xr) {
+	} else if (mdocs[n->tok] == pmdoc_Xr) {
+		/*
+		 * When encountering other inline macros,
+		 * call pmdoc_macro_handler.
+		 */
 		pmdoc_macro_handler(n, rec, MDOC_Xr);
-	}
-	
-	else if (mdocs[n->tok] == pmdoc_Pp) {
+	} else if (mdocs[n->tok] == pmdoc_Pp) {
 		pmdoc_macro_handler(n, rec, MDOC_Pp);
 	}
 
-	/* otherwise call pmdoc_Sh again to handle the nested macros */
+	/* Call pmdoc_Sh again to handle nested macros. */
 	pmdoc_Sh(n->child, rec);
 	pmdoc_Sh(n->next, rec);
 }
@@ -961,14 +954,15 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
  *  Utility function for parsing sections of the mdoc type pages.
  *  Takes two params:
  *   1. sec is an enum which indicates the section in which we are present
- *   2. string is the string which we need to append to the buffer for this 
- *	    particular section.
+ *   2. string is the string which we need to append to the buffer for this
+ *      particular section.
  *  The function appends string to the global section buffer and returns.
  */
 static void
 mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 {
-	/* If the user specified the 'l' flag, then parse and store only the
+	/*
+	 * If the user specified the 'l' flag, then parse and store only the
 	 * NAME section. Ignore the rest.
 	 */
 	if (mflags.limit)
@@ -1015,7 +1009,7 @@ pman_node(const struct man_node *n, mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
-	
+
 	switch (n->type) {
 	case (MAN_BODY):
 		/* FALLTHROUGH */
@@ -1037,7 +1031,7 @@ pman_node(const struct man_node *n, mandb_rec *rec)
 
 /* 
  * pman_parse_name --
- *  Parses the NAME section and puts the complete content in the name_desc 
+ *  Parses the NAME section and puts the complete content in the name_desc
  *  variable.
  */
 static void
@@ -1056,13 +1050,13 @@ pman_parse_name(const struct man_node *n, mandb_rec *rec)
 		pman_parse_name(n->next, rec);
 }
 
-/* A stub function to be able to parse the macros like .B embedded inside a
- *  section
+/*
+ * A stub function to be able to parse the macros like .B embedded inside
+ * a section.
  */
 static void
 pman_block(const struct man_node *n, mandb_rec *rec)
 {
-// empty stub
 }
 
 /* 
@@ -1249,8 +1243,9 @@ pman_parse_node(const struct man_node *n, secbuff *s)
 static void
 man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 {
-	/* If the user sepecified the 'l' flag then just parse the NAME
-	 *  section, ignore the rest.
+	/*
+	 * If the user sepecified the 'l' flag then just parse
+	 * the NAME section, ignore the rest.
 	 */
 	if (mflags.limit)
 		return;
@@ -1296,8 +1291,9 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 /*
  * insert_into_db --
  *  Inserts the parsed data of the man page in the Sqlite databse.
- *  If any of the values is NULL, then we cleanup and return -1 indicating an 
- *  error. Otherwise, store the data in the database and return 0
+ *  If any of the values is NULL, then we cleanup and return -1 indicating
+ *  an error.
+ *  Otherwise, store the data in the database and return 0.
  */
 static int
 insert_into_db(sqlite3 *db, mandb_rec *rec)
@@ -1310,16 +1306,18 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	char *errmsg = NULL;
 	long int mandb_rowid;
 	
-	/* At the very minimum we want to make sure that we store the following data:
-	 *  Name, One line description, the section number, and the md5 hash
+	/*
+	 * At the very minimum we want to make sure that we store
+	 * the following data:
+	 *   Name, one line description, the section number, and the MD5 hash
 	 */		
-	if (rec->name == NULL || rec->name_desc == NULL || rec->md5_hash == NULL 
-		|| rec->section == NULL) {
+	if (rec->name == NULL || rec->name_desc == NULL ||
+	    rec->md5_hash == NULL || rec->section == NULL) {
 		cleanup(rec);
 		return -1;
 	}
 
-	/* Write null byte at the end of all the sec_buffs */	
+	/* Write null byte at the end of all the sec_buffs */
 	rec->desc.data[rec->desc.offset] = 0;
 	rec->lib.data[rec->lib.offset] = 0;
 	rec->env.data[rec->env.offset] = 0;
@@ -1328,12 +1326,13 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	rec->files.data[rec->files.offset] = 0;
 	rec->diagnostics.data[rec->diagnostics.offset] = 0;
 	rec->errors.data[rec->errors.offset] = 0;
-	
-	/* In case of a mdoc page: (sorry, no better place to put this code)
-	 *  parse the comma separated list of names of man pages, the first name 
-	 *  will be stored in the mandb table, rest will be treated as links and put
-	 *  in the mandb_links table
-	 */	
+
+	/*
+	 * In case of a mdoc page: (sorry, no better place to put this code)
+	 * parse the comma separated list of names of man pages,
+	 * the first name will be stored in the mandb table, rest will be
+	 * treated as links and put in the mandb_links table.
+	 */
 	if (rec->page_type == MDOC) {
 		rec->links = strdup(rec->name);
 		free(rec->name);
@@ -1348,12 +1347,12 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		if (*(rec->links) == ' ')
 			rec->links++;
 	}
-	
+
 /*------------------------ Populate the mandb table---------------------------*/
-	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc, "
-			":lib, :return_vals, :env, :files, :exit_status, "
-			":diagnostics, :errors, :md5_hash, :machine)";
-	
+	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc,"
+		 " :lib, :return_vals, :env, :files, :exit_status,"
+		 " :diagnostics, :errors, :md5_hash, :machine)";
+
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		goto Out;
@@ -1461,8 +1460,8 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	mandb_rowid = sqlite3_last_insert_rowid(db);
 		
 /*------------------------Populate the mandb_meta table-----------------------*/
-	sqlstr = "INSERT INTO mandb_meta VALUES (:device, :inode, :mtime, :file, "
-				":md5_hash, :id)";
+	sqlstr = "INSERT INTO mandb_meta VALUES (:device, :inode, :mtime,"
+		 " :file, :md5_hash, :id)";
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		goto Out;
@@ -1480,7 +1479,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
-	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":mtime");
 	rc = sqlite3_bind_int64(stmt, idx, rec->mtime);
 	if (rc != SQLITE_OK) {
@@ -1494,50 +1493,57 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
-	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
-	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":id");
 	rc = sqlite3_bind_int64(stmt, idx, mandb_rowid);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
-	
+
 	rc = sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
 	if (rc == SQLITE_CONSTRAINT) {
-		/* The *most* probable reason for reaching here is that we violated the
-		 * UNIQUE contraint on the file column of mandb_meta table. This can
-		 * happen when a file was updated/modified. To fix this we need to do
-		 * two things:
-		 * 1. Delete the row for the older version of this file from mandb table
-		 * 2. Run an UPDATE query to update the row for this file in the
-		 *    mandb_meta table.
+		/* The *most* probable reason for reaching here is that
+		 * the UNIQUE contraint on the file column of the mandb_meta
+		 * table was violated.
+		 * This can happen when a file was updated/modified.
+		 * To fix this we need to do two things:
+		 * 1. Delete the row for the older version of this file
+		 *    from mandb table.
+		 * 2. Run an UPDATE query to update the row for this file
+		 *    in the mandb_meta table.
 		 */
 		warnx("Trying to update index for %s", rec->file_path);
-		char *sql = sqlite3_mprintf("DELETE FROM mandb WHERE rowid = ("
-				"SELECT id FROM mandb_meta WHERE file = %Q)",
-				rec->file_path);
+		char *sql = sqlite3_mprintf("DELETE FROM mandb "
+					    "WHERE rowid = (SELECT id"
+					    "  FROM mandb_meta"
+					    "  WHERE file = %Q)",
+					    rec->file_path);
 		sqlite3_exec(db, sql, NULL, NULL, &errmsg);
 		sqlite3_free(sql);
 		if (errmsg != NULL) {
 			warnx("%s", errmsg);
 			free(errmsg);
 		}
-		sqlstr = "UPDATE mandb_meta SET device = :device, inode = :inode, "
-				"mtime = :mtime, id = :id, md5_hash = :md5 WHERE file = :file";
+		sqlstr = "UPDATE mandb_meta SET device = :device,"
+			 " inode = :inode, mtime = :mtime, id = :id,"
+			 " md5_hash = :md5 WHERE file = :file";
 		rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 		if (rc != SQLITE_OK) {
-			warnx("Update failed with error: %s", sqlite3_errmsg(db));
+			warnx("Update failed with error: %s",
+			    sqlite3_errmsg(db));
 			close_db(db);
 			cleanup(rec);
-			errx(EXIT_FAILURE, "Consider running makemandb with -f option");
+			errx(EXIT_FAILURE,
+			    "Consider running makemandb with -f option");
 		}
 
 		idx = sqlite3_bind_parameter_index(stmt, ":device");
@@ -1559,7 +1565,8 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 			warnx("%s", sqlite3_errmsg(db));
 			close_db(db);
 			cleanup(rec);
-			errx(EXIT_FAILURE, "Consider running makemandb with -f option");
+			errx(EXIT_FAILURE,
+			    "Consider running makemandb with -f option");
 		}
 	} else if (rc != SQLITE_DONE) {
 		/* Otherwise make this error fatal */
@@ -1579,8 +1586,11 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 			if(ln[strlen(ln) - 1] == ',')
 				ln[strlen(ln) - 1] = 0;
 			
-			easprintf(&str, "INSERT INTO mandb_links VALUES (\'%s\', \'%s\', "
-				"\'%s\', \'%s\')", ln, rec->name, rec->section, rec->machine);
+			easprintf(&str, "INSERT INTO mandb_links"
+					" VALUES (\'%s\', \'%s\',"
+					"   \'%s\', \'%s\')",
+					ln, rec->name, rec->section,
+					rec->machine);
 			sqlite3_exec(db, str, NULL, NULL, &errmsg);
 			if (errmsg != NULL) {
 				warnx("%s", errmsg);
@@ -1592,28 +1602,28 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 			free(str);
 		}
 	}
-	
+
 	cleanup(rec);
 	return 0;
-	
-	Out:
-		warnx("%s", sqlite3_errmsg(db));
-		cleanup(rec);
-		return -1;
+
+  Out:
+	warnx("%s", sqlite3_errmsg(db));
+	cleanup(rec);
+	return -1;
 }
 
 /*
  * check_md5--
- *  Generates the md5 hash of the file and checks if it already doesn't exist in 
- *  the table (passed as the 3rd parameter). This function is being used to avoid 
- *  hardlinks.
- *  On successful completion it will also set the value of the fourth parameter 
- *  to the md5 hash of the file (computed previously). It is the duty of
- *  the caller to free this buffer.
+ *  Generates the md5 hash of the file and checks if it already doesn't exist
+ *  in the table (passed as the 3rd parameter).
+ *  This function is being used to avoid hardlinks.
+ *  On successful completion it will also set the value of the fourth parameter
+ *  to the md5 hash of the file (computed previously). It is the responsibility
+ *  of the caller to free this buffer.
  *  Return values:
- *		-1: If an error occurs somewhere and sets the md5 return buffer to NULL.
- *		0: If the md5 hash does not exist in the table.
- *		1: If the hash exists in the database.
+ *  -1: If an error occurs somewhere and sets the md5 return buffer to NULL.
+ *  0: If the md5 hash does not exist in the table.
+ *  1: If the hash exists in the database.
  */
 static int
 check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
@@ -1629,8 +1639,9 @@ check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
 		warn("md5 failed: %s", file);
 		return -1;
 	}
-	
-	easprintf(&sqlstr, "SELECT * FROM %s WHERE md5_hash = :md5_hash", table);
+
+	easprintf(&sqlstr, "SELECT * FROM %s WHERE md5_hash = :md5_hash",
+	    table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		free(sqlstr);
@@ -1638,7 +1649,7 @@ check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
 		*buf = NULL;
 		return -1;
 	}
-	
+
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, *buf, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1649,13 +1660,13 @@ check_md5(const char *file, sqlite3 *db, const char *table, char **buf)
 		*buf = NULL;
 		return -1;
 	}
-	
+
 	if (sqlite3_step(stmt) == SQLITE_ROW) {
 		sqlite3_finalize(stmt);	
 		free(sqlstr);
 		return 0;
 	}
-	
+
 	sqlite3_finalize(stmt);
 	free(sqlstr);
 	return 1;
@@ -1669,14 +1680,14 @@ optimize(sqlite3 *db)
 	char *errmsg = NULL;
 
 	printf("Optimizing the database index\n");
-	sqlstr = "INSERT INTO mandb(mandb) VALUES (\'optimize\'); "
-			"VACUUM";
+	sqlstr = "INSERT INTO mandb(mandb) VALUES (\'optimize\');"
+		 "VACUUM";
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
 		warnx("%s", errmsg);
 		free(errmsg);
 		return;
-	}	
+	}
 }
 
 /* 
@@ -1694,7 +1705,7 @@ cleanup(mandb_rec *rec)
 	rec->diagnostics.offset = 0;
 	rec->errors.offset = 0;
 	rec->files.offset = 0;
-	
+
 	free(rec->md5_hash);
 	free(rec->machine);
 	free(rec->section);
@@ -1702,7 +1713,7 @@ cleanup(mandb_rec *rec)
 	free(rec->file_path);
 	free(rec->name);
 	free(rec->name_desc);
-	
+
 	rec->name_desc = NULL;
 	rec->name = NULL;
 	rec->md5_hash = NULL;
@@ -1714,48 +1725,55 @@ cleanup(mandb_rec *rec)
 
 /*
  * init_secbuffs--
- *  Sets the value of buflen for all the sec_buff field of rec. And then 
+ *  Sets the value of buflen for all the sec_buff field of rec. And then
  *  allocate memory to each sec_buff member of rec.
  */
 static void
 init_secbuffs(mandb_rec *rec)
 {
-    /* Some sec_buff might need more memory, for example desc which stores the 
-     * data of the DESCRIPTION section, while some might need very small amount 
-     * of memory. Therefore explicitly setting the value of buflen field for 
-     * each sec_buff
-     */
+	/*
+	 * Some sec_buff might need more memory, for example desc,
+	 * which stores the data of the DESCRIPTION section,
+	 * while some might need very small amount of memory.
+	 * Therefore explicitly setting the value of buflen field for
+	 * each sec_buff.
+	 */
 	rec->desc.buflen = 10 * BUFLEN;
-	rec->lib.buflen = BUFLEN / 2;
-	rec->return_vals.buflen = BUFLEN;
-	rec->exit_status.buflen = BUFLEN;
-	rec->env.buflen = BUFLEN;
-	rec->files.buflen = BUFLEN;
-	rec->diagnostics.buflen = BUFLEN;
-	rec->errors.buflen = BUFLEN;
-
-	rec->desc.data = (char *) emalloc(rec->desc.buflen);
-	rec->lib.data = (char *) emalloc(rec->lib.buflen);
-	rec->env.data = (char *) emalloc(rec->env.buflen);
-	rec->return_vals.data = (char *) emalloc(rec->return_vals.buflen);
-	rec->exit_status.data = (char *) emalloc(rec->exit_status.buflen);
-	rec->files.data = (char *) emalloc(rec->files.buflen);
-	rec->errors.data = (char *) emalloc(rec->errors.buflen);
-	rec->diagnostics.data = (char *) emalloc(rec->diagnostics.buflen);
-
+	rec->desc.data = emalloc(rec->desc.buflen);
 	rec->desc.offset = 0;
+
+	rec->lib.buflen = BUFLEN / 2;
+	rec->lib.data = emalloc(rec->lib.buflen);
 	rec->lib.offset = 0;
-	rec->env.offset = 0;
+
+	rec->return_vals.buflen = BUFLEN;
+	rec->return_vals.data = emalloc(rec->return_vals.buflen);
 	rec->return_vals.offset = 0;
+
+	rec->exit_status.buflen = BUFLEN;
+	rec->exit_status.data = emalloc(rec->exit_status.buflen);
 	rec->exit_status.offset = 0;
+
+	rec->env.buflen = BUFLEN;
+	rec->env.data = emalloc(rec->env.buflen);
+	rec->env.offset = 0;
+
+	rec->files.buflen = BUFLEN;
+	rec->files.data = emalloc(rec->files.buflen);
 	rec->files.offset = 0;
-	rec->errors.offset = 0;
+
+	rec->diagnostics.buflen = BUFLEN;
+	rec->diagnostics.data = emalloc(rec->diagnostics.buflen);
 	rec->diagnostics.offset = 0;
+
+	rec->errors.buflen = BUFLEN;
+	rec->errors.data = emalloc(rec->errors.buflen);
+	rec->errors.offset = 0;
 }
 
 /*
  * free_secbuffs--
- *  This function should be called at the end, when all the pages have been 
+ *  This function should be called at the end, when all the pages have been
  *  parsed.
  *  It frees the memory allocated to sec_buffs by init_secbuffs in the starting.
  */
@@ -1810,17 +1828,17 @@ parse_escape(const char *str)
 
 /*
  * append--
- *  Concatenates a space and src at the end of sbuff->data (much like concat in 
+ *  Concatenates a space and src at the end of sbuff->data (much like concat in
  *  apropos-utils.c).
- *  Rather than reallocating space for writing data, it uses the value of the 
- *  offset field of sec_buff to write new data at the free space left in the 
+ *  Rather than reallocating space for writing data, it uses the value of the
+ *  offset field of sec_buff to write new data at the free space left in the
  *  buffer.
- *  In case the size of the data to be appended exceeds the number of bytes left 
+ *  In case the size of the data to be appended exceeds the number of bytes left
  *  in the buffer, it reallocates buflen number of bytes and then continues.
  *  Value of offset field should be adjusted as new data is written.
  *
- *  NOTE: This function does not write the null byte at the end of the buffers, 
- *  write a null byte at the position pointed to by offset before inserting data 
+ *  NOTE: This function does not write the null byte at the end of the buffers,
+ *  write a null byte at the position pointed to by offset before inserting data
  *  in the db.
  */
 static void
@@ -1835,7 +1853,7 @@ append(secbuff *sbuff, const char *src)
 	srclen = strlen(temp);
 
 	if (sbuff->data == NULL) {
-		sbuff->data = (char *) emalloc (sbuff->buflen);
+		sbuff->data = emalloc(sbuff->buflen);
 		sbuff->offset = 0;
 	}
 
@@ -1847,10 +1865,10 @@ append(secbuff *sbuff, const char *src)
 		flag = 1;
 	}
 
-	/* Append a space at the end of the buffer */
+	/* Append a space at the end of the buffer. */
 	if (sbuff->offset || flag)
 		sbuff->data[sbuff->offset++] = ' ';
-	/* Now, copy src at the end of the buffer */
+	/* Now, copy src at the end of the buffer. */
 	memcpy(sbuff->data + sbuff->offset, temp, srclen);
 	sbuff->offset += srclen;
 	free(temp);
