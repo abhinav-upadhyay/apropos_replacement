@@ -1099,6 +1099,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 	    { MANSEC_COPYRIGHT, "COPYRIGHT" },
 	};
 	const struct man_node *head;
+	char *name_desc;
 	int sz;
 	size_t i;
 
@@ -1124,13 +1125,15 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		 */
 		pman_parse_name(n, rec);
 
+		name_desc = rec->name_desc;
+
 		/* Remove any leading spaces. */
-		while (*(rec->name_desc) == ' ')
-			rec->name_desc++;
+		while (name_desc[0] == ' ')
+			name_desc++;
 			
 		/* If the line begins with a "\&", avoid those */
-		if (rec->name_desc[0] == '\\' && rec->name_desc[1] == '&')
-			rec->name_desc += 2;
+		if (name_desc[0] == '\\' && name_desc[1] == '&')
+			name_desc += 2;
 
 		/* Now name_desc should be left with a comma-space
 		 * separated list of names and the one line description
@@ -1145,22 +1148,22 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		 * When there are no more commas left, break out.
 		 */
 		int has_alias = 0;	// Any more aliases left?
-		while (*rec->name_desc) {
+		while (name_desc) {
 			/* Remove any leading spaces. */
-			if (*rec->name_desc == ' ') {
-				rec->name_desc++;
+			if (name_desc[0] == ' ') {
+				name_desc++;
 				continue;
 			}
-			sz = strcspn(rec->name_desc, ", ");
+			sz = strcspn(name_desc, ", ");
 
 			/* Extract the first term and store it in rec->name. */
 			if (rec->name == NULL) {
-				if (rec->name_desc[sz] == ',')
+				if (name_desc[sz] == ',')
 					has_alias = 1;
-				rec->name_desc[sz] = 0;
+				name_desc[sz] = 0;
 				rec->name = emalloc(sz + 1);
-				memcpy(rec->name, rec->name_desc, sz + 1);
-				rec->name_desc += sz + 1;
+				memcpy(rec->name, name_desc, sz + 1);
+				name_desc += sz + 1;
 				continue;
 			}
 
@@ -1169,22 +1172,22 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 			 * are to be treated as links or aliases.
 			 */
 			if (rec->name && has_alias) {
-				if (rec->name_desc[sz] != ',') {
+				if (name_desc[sz] != ',') {
 					/* No more commas left -->
 					 * no more aliases to take out
 					 */
 					has_alias = 0;
 				}
-				rec->name_desc[sz] = 0;
-				concat(&rec->links, rec->name_desc, sz);
-				rec->name_desc += sz + 1;
+				name_desc[sz] = 0;
+				concat(&rec->links, name_desc, sz);
+				name_desc += sz + 1;
 				continue;
 			}
 			break;
 		}
 
 		/* Parse any escape sequences that might be there */
-		char *temp = parse_escape(rec->name_desc);
+		char *temp = parse_escape(name_desc);
 		free(rec->name_desc);
 		rec->name_desc = temp;
 		temp = parse_escape(rec->name);
