@@ -44,8 +44,8 @@
  */
 typedef struct secbuff {
 	char *data;
-	int buflen;	//Total length of buffer allocated initially
-	int offset;		// Remaining bytes left in the buffer
+	size_t buflen;	//Total length of buffer allocated initially
+	size_t offset;		// Remaining bytes left in the buffer
 } secbuff;
 
 typedef struct makemandb_flags {
@@ -282,15 +282,15 @@ static	const pman_nf mans[MAN_MAX] = {
 int
 main(int argc, char *argv[])
 {
-	FILE *file = NULL;
+	FILE *file;
 	const char *sqlstr;
-	char *line = NULL;
-	char *errmsg = NULL;
+	char *line;
+	char *errmsg;
 	int ch;
-	struct mparse *mp = NULL;
+	struct mparse *mp;
 	sqlite3 *db;
-	ssize_t len = 0;
-	size_t linesize = 0;
+	ssize_t len;
+	size_t linesize;
 	struct mandb_rec rec;
 	
 	while ((ch = getopt(argc, argv, "flo")) != -1) {
@@ -368,6 +368,8 @@ main(int argc, char *argv[])
 	}
 
 	printf("Building temporary file cache\n");	
+	line = NULL;
+	linesize = 0;
 	while ((len = getline(&line, &linesize, file)) != -1) {
 		/* Replace the new line character at the end of string with '\0' */
 		line[len - 1] = '\0';
