@@ -924,6 +924,7 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 {
 	if (n == NULL)
 		return;
+	int xr_found = 0;
 
 	if (n->type == MDOC_TEXT) {
 		mdoc_parse_section(n->sec, n->string, rec);
@@ -939,12 +940,17 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 		 * call pmdoc_macro_handler.
 		 */
 		pmdoc_macro_handler(n, rec, MDOC_Xr);
+		xr_found = 1;
 	} else if (mdocs[n->tok] == pmdoc_Pp) {
 		pmdoc_macro_handler(n, rec, MDOC_Pp);
 	}
 
-	/* Call pmdoc_Sh again to handle nested macros. */
-	pmdoc_Sh(n->child, rec);
+	/*
+	 * If an Xr macro was encountered then the child node has
+	 * already been explored by pmdoc_macro_handler.
+	 */
+	if (xr_found == 0)
+		pmdoc_Sh(n->child, rec);
 	pmdoc_Sh(n->next, rec);
 }
 
