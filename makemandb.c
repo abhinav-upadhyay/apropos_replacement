@@ -582,8 +582,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	int err_count = 0;	/* Counter for number of failed pages */
 	int link_count = 0;	/* Counter for number of hard/sym links */
 	int md5_status;
-	int rc, idx;
-	int update_count;	/* Total number of updates since open */
+	int rc;
 
 	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache"
 		 " EXCEPT SELECT device, inode, mtime, file from mandb_meta";
