@@ -438,11 +438,7 @@ traversedir(const char *file, sqlite3 *db, struct mparse *mp)
 		while ((dirp = readdir(dp)) != NULL) {
 			/* Avoid . and .. entries in a directory */
 			if (strncmp(dirp->d_name, ".", 1)) {
-				if ((asprintf(&buf, "%s/%s", file, dirp->d_name) == -1)) {
-					closedir(dp);
-					warn("%s", "malloc failed");
-					continue;
-				}
+				easprintf(&buf, "%s/%s", file, dirp->d_name);
 				traversedir(buf, db, mp);
 				free(buf);
 			}
