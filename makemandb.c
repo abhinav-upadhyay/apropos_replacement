@@ -510,41 +510,92 @@ build_file_cache(sqlite3 *db, const char *file, struct stat *sb)
 	sqlite3_finalize(stmt);
 }
 
+static void
+update_existing_entry(sqlite3 *db, const char *file, const char *hash,
+    mandb_rec *rec, int *new_count, int *link_count, int *err_count)
+{
+	int update_count, rc, idx;
+	const char *inner_sqlstr;
+	sqlite3_stmt *inner_stmt;
+
+	update_count = sqlite3_total_changes(db);
+	inner_sqlstr = "UPDATE mandb_meta SET device = :device,"
+		       " inode = :inode, mtime = :mtime WHERE"
+		       " md5_hash = :md5 AND file = :file AND"
+		       " (device <> :device2 OR inode <> "
+		       "  :inode2 OR mtime <> :mtime2)";
+	rc = sqlite3_prepare_v2(db, inner_sqlstr, -1, &inner_stmt, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		return;
+	}
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":device");
+	sqlite3_bind_int64(inner_stmt, idx, rec->device);
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":inode");
+	sqlite3_bind_int64(inner_stmt, idx, rec->inode);
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime");
+	sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":md5");
+	sqlite3_bind_text(inner_stmt, idx, hash, -1, NULL);
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":file");
+	sqlite3_bind_text(inner_stmt, idx, file, -1, NULL);
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":device2");
+	sqlite3_bind_int64(inner_stmt, idx, rec->device);
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":inode2");
+	sqlite3_bind_int64(inner_stmt, idx, rec->inode);
+	idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime2");
+	sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
+
+	rc = sqlite3_step(inner_stmt);
+	if (rc == SQLITE_DONE) {
+		/* Check if an update has been performed. */
+		if (update_count != sqlite3_total_changes(db)) {
+			printf("Updated %s\n", file);
+			(*new_count)++;
+		} else {
+			/* Otherwise it was a hardlink. */
+			(*link_count)++;
+		}
+	} else {
+		warnx("Could not update the meta data for %s", file);
+		(*err_count)++;
+	}
+	sqlite3_finalize(inner_stmt);
+}
+
 /* update_db --
  *	Does an incremental updation of the database by checking the file_cache.
- *	It parses and adds the pages which are present in file_cache but not in the
- *	database.
- *	It also removes the pages which are present in the databse but not in the 
- *	file_cache.
+ *	It parses and adds the pages which are present in file_cache,
+ *	but not in the database.
+ *	It also removes the pages which are present in the databse,
+ *	but not in the file_cache.
  */
 static void
 update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 {
 	const char *sqlstr;
-	const char *inner_sqlstr;
 	sqlite3_stmt *stmt = NULL;
-	sqlite3_stmt *inner_stmt = NULL;
 	const char *file;
 	char *errmsg = NULL;
 	char *buf = NULL;
-	int new_count = 0;	/* Counter for counting newly indexed/updated pages */
-	int total_count = 0;	/* Counter for counting total number of pages */
-	int err_count = 0;	/* Counter for counting number of failed pages */
-	int link_count = 0;	/* Counter for counting number of hard/sym links */
+	int new_count = 0;	/* Counter for newly indexed/updated pages */
+	int total_count = 0;	/* Counter for total number of pages */
+	int err_count = 0;	/* Counter for number of failed pages */
+	int link_count = 0;	/* Counter for number of hard/sym links */
 	int md5_status;
 	int rc, idx;
-	int update_count;  /*Total number of updates since opening the connection */
+	int update_count;	/* Total number of updates since open */
 
-	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache EXCEPT "
-			" SELECT device, inode, mtime, file from mandb_meta";
-	
+	sqlstr = "SELECT device, inode, mtime, file FROM metadb.file_cache"
+		 " EXCEPT SELECT device, inode, mtime, file from mandb_meta";
+
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		close_db(db);
 		errx(EXIT_FAILURE, "Could not query file cache");
 	}
-	
+
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		total_count++;
 		rec->device = sqlite3_column_int64(stmt, 0);
@@ -554,14 +605,16 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		md5_status = check_md5(file, db, "mandb_meta", &buf);
 		assert(buf != NULL);
 		if (md5_status == -1) {
-			warnx("An error occurred in checking md5 value for file %s", file);
+			warnx("An error occurred in checking md5 value"
+			      " for file %s", file);
 			err_count++;
 			continue;
 		}
 
 		if (md5_status == 0) {
-			/* The md5 is already present in the database, so simply update the 
-			 * metadata, ignoring symlinks.
+			/*
+			 * The MD5 hash is already present in the database,
+			 * so simply update the metadata, ignoring symlinks.
 			 */
 			struct stat sb;
 			stat(file, &sb);
@@ -570,65 +623,22 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 				link_count++;
 				continue;
 			}
-
-			update_count = sqlite3_total_changes(db);
-
-			inner_sqlstr = "UPDATE mandb_meta SET device = :device, "
-							"inode = :inode, mtime = :mtime WHERE "
-							"md5_hash = :md5 AND file = :file AND "
-							"(device <> :device2 OR "
-							"inode <> :inode2 OR mtime <> :mtime2)";
-			rc = sqlite3_prepare_v2(db, inner_sqlstr, -1, &inner_stmt, NULL);
-			if (rc != SQLITE_OK) {
-				warnx("%s", sqlite3_errmsg(db));
-				free(buf);
-				continue;
-			}
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":device");
-			sqlite3_bind_int64(inner_stmt, idx, rec->device);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":inode");
-			sqlite3_bind_int64(inner_stmt, idx, rec->inode);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime");
-			sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":md5");
-			sqlite3_bind_text(inner_stmt, idx, buf, -1, NULL);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":file");
-			sqlite3_bind_text(inner_stmt, idx, file, -1, NULL);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":device2");
-			sqlite3_bind_int64(inner_stmt, idx, rec->device);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":inode2");
-			sqlite3_bind_int64(inner_stmt, idx, rec->inode);
-			idx = sqlite3_bind_parameter_index(inner_stmt, ":mtime2");
-			sqlite3_bind_int64(inner_stmt, idx, rec->mtime);
-
-			rc = sqlite3_step(inner_stmt);
-			if (rc == SQLITE_DONE) {
-				/* check if an update has been performed in the db or not */
-				if (update_count != sqlite3_total_changes(db)) {
-					printf("Updated %s\n", file);
-					new_count++;
-				} else {
-					/* otherwise it was a hardlink; update the counter */
-					link_count++;
-				}
-			} else {
-				warnx("Could not update the meta data for %s", file);
-				err_count++;
-			}
-
+			update_existing_entry(db, file, buf, rec,
+			    &new_count, &link_count, &err_count);
 			free(buf);
-			sqlite3_finalize(inner_stmt);
 			continue;
 		}
 
 		if (md5_status == 1) {
-			/* The md5 was not present in the database, which means this is 
-			 * either a new file or an updated file. We should go ahead with 
-			 * parsing.
+			/*
+			 * The MD5 hash was not present in the database.
+			 * This means is either a new file or an updated file.
+			 * We should go ahead with parsing.
 			 */
 			printf("Parsing: %s\n", file);
 			rec->md5_hash = buf;
-			rec->file_path = estrdup(file);	//freed by insert_into_db itself.
+			rec->file_path = estrdup(file);
+			// file_path is freed by insert_into_db itself.
 			begin_parse(file, mp, rec);
 			if (insert_into_db(db, rec) < 0) {
 				warnx("Error in indexing %s", file);
