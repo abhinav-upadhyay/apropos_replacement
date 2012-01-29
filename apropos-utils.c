@@ -505,16 +505,13 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		sqlite3_free(query);
 		return -1;
 	}
-	
-	
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (const char *) sqlite3_column_text(stmt, 0);
 		name_desc = (const char *) sqlite3_column_text(stmt, 2);
 		machine = estrdup((const char *) sqlite3_column_text(stmt, 3));
 		snippet = (const char *) sqlite3_column_text(stmt, 4);
-		int len = machine ? strlen(machine) : 0;
-		if (len) {
+		if (machine && machine[0]) {
 			easprintf(&name, "%s/%s", lower(machine),
 				sqlite3_column_text(stmt, 1));
 		} else {
