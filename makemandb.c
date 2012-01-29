@@ -842,9 +842,7 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 static void
 pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 {
-	char *buf = NULL;
-	size_t len;
-
+	const struct mdoc_node *sn;;
 	assert(n);
 
 	switch (doct) {
@@ -863,8 +861,7 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 
 		if (n && n->type != MDOC_TEXT)
 			return;
-		len = strlen(n->string);
-		concat2(&buf, n->string, len);
+		sn = n;
 		if (n->next)
 			n = n->next;
 
@@ -872,15 +869,17 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 			n = n->next;
 
 		if (n && n->type == MDOC_TEXT) {
-			buf = erealloc(buf, len + 4);
+			size_t len = strlen(sn->string);
+			char *buf = emalloc(len + 4);
+			memcpy(buf, n->string, len);
 			buf[len] = '(';
 			buf[len + 1] = n->string[0];
 			buf[len + 2] = ')';
 			buf[len + 3] = 0;
 			mdoc_parse_section(n->sec, buf, rec);
+			free(buf);
 		}
 
-		free(buf);
 		break;
 
 	/* Parse the .Pp macro to add a new line */
