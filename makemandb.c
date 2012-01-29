@@ -68,6 +68,8 @@ typedef struct mandb_rec {
 	secbuff errors; // ERRORS
 	char *section;
 
+	int xr_found;
+
 	/* Fields for mandb_meta table */
 	char *md5_hash;
 	dev_t device;
@@ -675,7 +677,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		}
 	}
 }
-	
+
 /*
  * begin_parse --
  *  parses the man page using libmandoc
@@ -686,6 +688,8 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 	struct mdoc *mdoc;
 	struct man *man;
 	mparse_reset(mp);
+
+	rec->xr_found = 0;
 
 	if (mparse_readfd(mp, -1, file) >= MANDOCLEVEL_FATAL) {
 		warnx("%s: Parse failure", file);
@@ -797,7 +801,6 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 	 * A static variable for keeping track of whether a Xr macro was seen
 	 * previously.
 	 */
-	static int xr = 0;
 	char *buf = NULL;
 	char *temp;
 
@@ -805,7 +808,7 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 		return;
 
 	if (n->type == MDOC_TEXT) {
-		if (xr == 1 && n->next) {
+		if (rec->xr_found && n->next) {
 			/*
 			 * An Xr macro was seen previously, so parse this
 			 * and the next node.
@@ -819,10 +822,10 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 		} else {
 			concat(&rec->name_desc, n->string, strlen(n->string));
 		}
-		xr = 0;
+		rec->xr_found = 0;
 	} else if (mdocs[n->tok] == pmdoc_Xr) {
 		/* Remember that we have encountered an Xr macro */
-		xr = 1;
+		rec->xr_found = 1;
 	}
 
 	if (n->child)
