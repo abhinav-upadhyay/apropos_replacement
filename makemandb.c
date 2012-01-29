@@ -743,8 +743,6 @@ get_machine(const struct mdoc *md, mandb_rec *rec)
 	const struct mdoc_meta *md_meta = mdoc_meta(md);
 	if (md_meta->arch)
 		rec->machine = estrdup(md_meta->arch);
-	else
-		rec->machine = estrdup("");
 }
 
 static void
@@ -1369,7 +1367,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":section");
-	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->section, 2, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
@@ -1383,56 +1381,62 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":desc");
-	rc = sqlite3_bind_text(stmt, idx, rec->desc.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->desc.data,
+	                       rec->desc.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":lib");
-	rc = sqlite3_bind_text(stmt, idx, rec->lib.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->lib.data, rec->lib.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":return_vals");
-	rc = sqlite3_bind_text(stmt, idx, rec->return_vals.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->return_vals.data,
+	                      rec->return_vals.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":env");
-	rc = sqlite3_bind_text(stmt, idx, rec->env.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->env.data, rec->env.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":files");
-	rc = sqlite3_bind_text(stmt, idx, rec->files.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->files.data,
+	                       rec->files.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
-	rc = sqlite3_bind_text(stmt, idx, rec->exit_status.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->exit_status.data,
+	                       rec->exit_status.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":diagnostics");
-	rc = sqlite3_bind_text(stmt, idx, rec->diagnostics.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->diagnostics.data,
+	                       rec->diagnostics.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":errors");
-	rc = sqlite3_bind_text(stmt, idx, rec->errors.data, -1, NULL);
+	rc = sqlite3_bind_text(stmt, idx, rec->errors.data,
+	                       rec->errors.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
@@ -1446,7 +1450,10 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":machine");
-	rc = sqlite3_bind_text(stmt, idx, rec->machine, -1, NULL);
+	if (rec->machine)
+		rc = sqlite3_bind_text(stmt, idx, rec->machine, -1, NULL);
+	else
+		rc = sqlite3_bind_null(stmt, idx);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
@@ -1574,7 +1581,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		}
 	} else if (rc != SQLITE_DONE) {
 		/* Otherwise make this error fatal */
-		warnx("Failed at %s\n%s", rec->file_path,sqlite3_errmsg(db));
+		warnx("Failed at %s\n%s", rec->file_path, sqlite3_errmsg(db));
 		cleanup(rec);
 		close_db(db);
 		exit(EXIT_FAILURE);

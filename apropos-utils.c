@@ -409,8 +409,9 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	const char *section;
 	char *name;
 	const char *name_desc;
-	char *machine;
+	const char *machine;
 	const char *snippet;
+	char *m = NULL;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
 	sqlite3_stmt *stmt;
@@ -509,11 +510,13 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (const char *) sqlite3_column_text(stmt, 0);
 		name_desc = (const char *) sqlite3_column_text(stmt, 2);
-		machine = estrdup((const char *) sqlite3_column_text(stmt, 3));
+		machine = (const char *) sqlite3_column_text(stmt, 3);
 		snippet = (const char *) sqlite3_column_text(stmt, 4);
 		if (machine && machine[0]) {
-			easprintf(&name, "%s/%s", lower(machine),
+			m = estrdup(machine);
+			easprintf(&name, "%s/%s", lower(m),
 				sqlite3_column_text(stmt, 1));
+			free(m);
 		} else {
 			name = estrdup((const char *) sqlite3_column_text(stmt, 1));
 		}
@@ -521,7 +524,6 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		(args->callback)(args->callback_data, section, name, name_desc, snippet,
 			strlen(snippet));
 
-		free(machine);
 		free(name);
 	}
 
