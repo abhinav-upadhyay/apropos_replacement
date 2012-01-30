@@ -45,12 +45,12 @@
 typedef struct secbuff {
 	char *data;
 	size_t buflen;	//Total length of buffer allocated initially
-	size_t offset;		// Remaining bytes left in the buffer
+	size_t offset;	// Current offset in the buffer.
 } secbuff;
 
 typedef struct makemandb_flags {
 	int optimize;
-	int limit;	// limit the indexing to only DESCRIPTION section
+	int limit;	// limit the indexing to only NAME section
 	int f;		// force removal of old database
 } makemandb_flags;
 
@@ -842,7 +842,7 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 static void
 pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 {
-	const struct mdoc_node *sn;;
+	const struct mdoc_node *sn;
 	assert(n);
 
 	switch (doct) {
@@ -958,7 +958,7 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
  *  Utility function for parsing sections of the mdoc type pages.
  *  Takes two params:
  *   1. sec is an enum which indicates the section in which we are present
- *   2. string is the string which we need to append to the buffer for this
+ *   2. string is the string which we need to append to the secbuff for this
  *      particular section.
  *  The function appends string to the global section buffer and returns.
  */
