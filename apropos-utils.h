@@ -44,6 +44,8 @@
 #define MANDB_WRITE SQLITE_OPEN_READWRITE
 #define MANDB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
 
+#define APROPOS_SCHEMA_VERSION 20120130
+
 /*
  * Used to identify the section of a man(7) page.
  * This is similar to the enum mdoc_sec defined in mdoc.h from mdocml project.
