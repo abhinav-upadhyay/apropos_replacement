@@ -51,7 +51,7 @@ typedef struct secbuff {
 typedef struct makemandb_flags {
 	int optimize;
 	int limit;	// limit the indexing to only NAME section
-	int f;		// force removal of old database
+	int recreate;	// Database was created from scratch
 } makemandb_flags;
 
 typedef struct mandb_rec {
@@ -299,7 +299,7 @@ main(int argc, char *argv[])
 		switch (ch) {
 		case 'f':
 			remove(DBPATH);
-			mflags.f = 1;
+			mflags.recreate = 1;
 			break;
 		case 'l':
 			mflags.limit = 1;
@@ -320,7 +320,7 @@ main(int argc, char *argv[])
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 
 	if ((db = init_db(MANDB_CREATE)) == NULL)
-		errx(EXIT_FAILURE, "Could not initialize the database");
+		exit(EXIT_FAILURE);
 
 	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 	&errmsg);
 	if (errmsg != NULL) {
@@ -657,7 +657,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		" due to errors = %d\n",
 		total_count, new_count, link_count, err_count);
 
-	if (!mflags.f) {
+	if (!mflags.recreate) {
 		printf("Deleting stale index entries\n");
 		sqlstr = "DELETE FROM mandb WHERE rowid IN"
 			 " (SELECT id FROM mandb_meta "

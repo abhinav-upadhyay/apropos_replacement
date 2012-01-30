@@ -137,10 +137,8 @@ main(int argc, char *argv[])
 	 }
 
 	if ((db = init_db(MANDB_READONLY)) == NULL)
-		errx(EXIT_FAILURE, "The database does not exist. Please run makemandb "
-			"first and then try again");
+		exit(EXIT_FAILURE);
 
-	 	
 	/* If user wants to page the output, then set some settings */
 	if (aflags.pager) {
 		/* Open a pipe to the pager */

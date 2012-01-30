@@ -142,9 +142,22 @@ static int
 create_db(sqlite3 *db)
 {
 	const char *sqlstr = NULL;
+	char *schemasql;
 	char *errmsg = NULL;
 	
 /*------------------------ Create the tables------------------------------*/
+
+	schemasql = sqlite3_mprintf("PRAGMA user_version = %d",
+	    APROPOS_SCHEMA_VERSION);
+	sqlite3_exec(db, schemasql, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		sqlite3_close(db);
+		sqlite3_shutdown();
+		return -1;
+	}
+	sqlite3_free(schemasql);
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 			    "name_desc, desc, lib, return_vals, env, files, "
@@ -263,20 +276,22 @@ sqlite3 *
 init_db(int db_flag)
 {
 	sqlite3 *db = NULL;
+	sqlite3_stmt *stmt;
 	struct stat sb;
 	int rc;
 	int create_db_flag = 0;
 
-	/* Check if the databse exists or not */
+	/* Check if the database exists or not */
 	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode))) {
 		/* Database does not exist, check if DB_CREATE was specified, and set
 		 * flag to create the database schema
 		 */
-		if (db_flag == (MANDB_CREATE))
-			create_db_flag = 1;
-		else
-		/* db does not exist and DB_CREATE was also not specified, return NULL */
+		if (db_flag != (MANDB_CREATE)) {
+			warnx("Missing apropos database. "
+			      "Please run makemandb to create it.");
 			return NULL;
+		}
+		create_db_flag = 1;
 	}
 
 	/* Now initialize the database connection */
@@ -288,32 +303,50 @@ init_db(int db_flag)
 		sqlite3_shutdown();
 		return NULL;
 	}
-	
+
+	if (create_db_flag && create_db(db) < 0) {
+		warnx("%s", "Unable to create database schema");
+		goto error;
+	}
+
+	rc = sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("Unable to query schema version");
+		goto error;
+	}
+	if (sqlite3_step(stmt) != SQLITE_ROW) {
+		sqlite3_finalize(stmt);
+		warnx("Unable to query schema version");
+		goto error;
+	}
+	if (sqlite3_column_int(stmt, 0) != APROPOS_SCHEMA_VERSION) {
+		sqlite3_finalize(stmt);
+		warnx("Incorrect schema version found. "
+		      "Please run makemandb -f.");
+		goto error;
+	}
+	sqlite3_finalize(stmt);
+
 	sqlite3_extended_result_codes(db, 1);
 	
 	/* Register the zip and unzip functions for FTS compression */
 	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Unable to register function: compress");
+		warnx("Unable to register function: compress");
+		goto error;
 	}
 
 	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
                                  unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Unable to register function: uncompress");
-	}
-	
-	if (create_db_flag && create_db(db) < 0) {
-		warnx("%s", "Unable to create database schema");
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return NULL;
+		warnx("Unable to register function: uncompress");
+		goto error;
 	}
 	return db;
+error:
+	sqlite3_close(db);
+	sqlite3_shutdown();
+	return NULL;
 }
 
 /*
@@ -719,4 +752,3 @@ int run_query_pager(sqlite3 *db, query_args *args)
 	args->callback_data = (void *) &orig_data;
 	return run_query(db, snippet_args, args);
 }
-
