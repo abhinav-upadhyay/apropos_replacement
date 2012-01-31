@@ -1353,6 +1353,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	 * treated as links and put in the mandb_links table.
 	 */
 	if (rec->page_type == MDOC) {
+		char *tmp;
 		rec->links = estrdup(rec->name);
 		free(rec->name);
 		int sz = strcspn(rec->links, " \0");
@@ -1362,9 +1363,11 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 			rec->name[sz - 1] = 0;
 		else
 			rec->name[sz] = 0;
-		rec->links += sz;
-		if (*(rec->links) == ' ')
-			rec->links++;
+		while (rec->links[sz] == ' ')
+			++sz;
+		tmp = estrdup(rec->links + sz);
+		free(rec->links);
+		rec->links = tmp;
 	}
 
 /*------------------------ Populate the mandb table---------------------------*/
