@@ -3,7 +3,6 @@
  * All rights reserved.
  *
  * This code was developed as part of Google's Summer of Code 2011 program.
- * Thanks to Google for sponsoring.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
