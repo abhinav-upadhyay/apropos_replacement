@@ -285,8 +285,8 @@ int
 main(int argc, char *argv[])
 {
 	FILE *file;
-	const char *sqlstr;
-	char *line;
+	const char *sqlstr, *manconf = NULL;
+	char *line, *command;
 	char *errmsg;
 	int ch;
 	struct mparse *mp;
@@ -295,8 +295,11 @@ main(int argc, char *argv[])
 	size_t linesize;
 	struct mandb_rec rec;
 
-	while ((ch = getopt(argc, argv, "flo")) != -1) {
+	while ((ch = getopt(argc, argv, "C:flo")) != -1) {
 		switch (ch) {
+		case 'C':
+			manconf = optarg;
+			break;
 		case 'f':
 			remove(DBPATH);
 			mflags.recreate = 1;
@@ -339,13 +342,24 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
+	if (manconf) {
+		char *arg;
+		size_t command_len = shquote(manconf, NULL, 0) + 1;
+		arg = malloc(command_len );
+		shquote(manconf, arg, command_len);
+		easprintf(&command, "man -p -C %s", arg);
+		free(arg);
+	} else {
+		command = estrdup("man -p");
+	}
 
 	/* Call man -p to get the list of man page dirs */
-	if ((file = popen("man -p", "r")) == NULL) {
+	if ((file = popen(command, "r")) == NULL) {
 		close_db(db);
 		err(EXIT_FAILURE, "fopen failed");
 	}
-	
+	free(command);
+
 	/* Begin the transaction for indexing the pages	*/
 	sqlite3_exec(db, "BEGIN", NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
