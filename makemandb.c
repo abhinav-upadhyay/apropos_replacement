@@ -675,7 +675,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 		printf("Deleting stale index entries\n");
 		sqlstr = "DELETE FROM mandb_meta WHERE file NOT IN"
 			 " (SELECT file FROM metadb.file_cache);"
-			 "DROP TABLE metadb.file_cache"
+			 "DROP TABLE metadb.file_cache;"
 			 "DELETE FROM mandb WHERE rowid NOT IN"
 			 " (SELECT id FROM mandb_meta);";
 
