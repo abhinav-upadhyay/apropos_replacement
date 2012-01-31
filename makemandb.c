@@ -883,7 +883,7 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 		if (n && n->type == MDOC_TEXT) {
 			size_t len = strlen(sn->string);
 			char *buf = emalloc(len + 4);
-			memcpy(buf, n->string, len);
+			memcpy(buf, sn->string, len);
 			buf[len] = '(';
 			buf[len + 1] = n->string[0];
 			buf[len + 2] = ')';
