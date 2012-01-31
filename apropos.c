@@ -63,6 +63,7 @@ main(int argc, char *argv[])
 	char *query = NULL;	// the user query
 	char ch;
 	char *errmsg = NULL;
+	char *str;
 	int rc = 0;
 	callback_data cbdata;
 	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
@@ -116,12 +117,14 @@ main(int argc, char *argv[])
 	if (!argc)
 		usage();
 
+	str = NULL
+	while (argc--)
+		concat(&str, *argv++);
 	/* Eliminate any stopwords from the query */
-	query = remove_stopwords(lower(*argv));
+	query = remove_stopwords(lower(str));
+	free(str);
 
-	/* if any error occured in remove_stopwords, we continue with the initial
-	 *  query input by the user
-	 */
+	/* if any error occured in remove_stopwords, exit */
 	if (query == NULL)
 		errx(EXIT_FAILURE, "Try using more relevant keywords");
 
