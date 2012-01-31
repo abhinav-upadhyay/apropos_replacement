@@ -52,7 +52,7 @@ typedef struct callback_data {
 	FILE *out;
 } callback_data;
 
-static int remove_stopwords(char **);
+static char *remove_stopwords(const char *);
 static int query_callback(void *, const char * , const char *, const char *,
 	const char *, size_t);
 __dead static void usage(void);
@@ -116,24 +116,14 @@ main(int argc, char *argv[])
 	if (!argc)
 		usage();
 
-	query = lower(*argv);
-	
 	/* Eliminate any stopwords from the query */
-	int retval = remove_stopwords(&query);
-	
+	query = remove_stopwords(lower(*argv));
+
 	/* if any error occured in remove_stopwords, we continue with the initial
 	 *  query input by the user
 	 */
-	 switch (retval) {
-	 case -1:
-	 	query = lower(*argv);
-	 	break;
-	 case 1:
-	 	errx(EXIT_FAILURE, "Try using more relevant keywords");
-	 	/* Not reached */
-	 case 0:
-	 	break;
-	 }
+	if (query == NULL)
+		errx(EXIT_FAILURE, "Try using more relevant keywords");
 
 	if ((db = init_db(MANDB_READONLY)) == NULL)
 		exit(EXIT_FAILURE);
@@ -204,103 +194,49 @@ query_callback(void *data, const char *section, const char *name,
 	return 0;
 }
 
+#include "stopwords.c"
+
 /*
  * remove_stopwords--
  *  Scans the query and removes any stop words from it.
- *  It scans the query word by word, and looks up a hash table of stop words
- *  to check if it is a stopword or a valid keyword. In the end we only have the
- *  relevant keywords left in the query.
- *  Error Cases: 
- *   1. In case of any error, it will set the query to NULL and return -1.	
- *   2. In case the query is found to be consisting only of stop words, it will
- *      set the query NULL and return 1.
- *   3. Otherwise it will return 0 and properly remove any stopwords from the
- *      query.
+ *  Returns the modified query or NULL, if it contained only stop words.
  */
-static int
-remove_stopwords(char **query)
+
+static char *
+remove_stopwords(const char *query)
 {
-	int i = 0;
-	const char *temp;
-	char *term;
-	char *buf = NULL;
-	char c = 'y';
-	const char *stopwords[] = {"a", "b", "d", "e", "f", "g", "h", "i", "j",
-	 "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", 
-	 "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", 
-	 "about", "also", "all", "an", "another", "and", "are", "as", "ask", "at",
-	 "again", "always", "any", "around", 
-	 "back", "be", "been", "before", "between", "below", "by", "bye", "but", 
-	  "because", 
-	 "case", "can", "consist", "could",
-	 "did", "does", "down", 
-	 "each", "early","either", "end", "enough",  "even", "every", 
-	 "fact", "far", "few", "four", "further", "follow", "from", "full", 
-	 "general", "get", "good", "got", "great", "give", "given", 
-	 "have", "has", "had", "here", "how", "having", "high", "him", "his", 
-	 "however", 
-	 "if", "important", "in", "interest", "into", "is", "it", 
-	 "just", 
-	 "keep", "keeps", "kind", "knew", "know", 
-	 "large", "larger", "last", "later", "latter", "latest", "least", "let", 
-	 "like", "likely", "long", "longer", 
-	 "made", "many", "may", "me", "might", "most", "mostly", "much", "must", 
-	 "my", 
-	 "necessary", "need", "never", "needs", "next", "no", "non", "noone", "not",
-	  "nothing",  "names", "new", 
-	 "often", "old", "older", "once", "only", "order", "our", "out", "over", 
-	 "of", "off", "on", "or",
-	 "part", "per", "perhaps", "possible", "present", "problem", 
-	 "quite", 
-	 "rather", "really", "right", "room", 
-	 "said", "same", "saw", "say", "says", "second", "see", "seem", "seemed", 
-	 "seems", "sees", "several", "shall", "should", "side", "sides", "small", 
-	 "smaller", "so", "some", "something", "state",	"states", "still", "such", 
-	 "sure", 
-	 "take", "taken", "then", "them", "their", "there", "therefore", "thing", 
-	 "think", "thinks", "though", "three", "thus", "together", "too", "took", 
-	 "toward", "turn", "two", "the", "this", "up", "that", "to", "these", 
-	 "those", 
-	 "until", "upon", "us", "use", "used", "uses", 
-	 "very", 
-	 "want", "wanted", "wants", "was", "way", "ways", "we", "well", "went", 
-	 "were", "whether", "with", "within", "without", "work", "would", "what", 
-	 "when", "why", "will", "willing", 
-	 "year", "yet", "you",  
-	 NULL
-	};
-	
-	/* initialize the hash table for stop words */
-	if (!hcreate(sizeof(stopwords) * sizeof(char))) {
-		*query = NULL;
-		return -1;
+	size_t len, idx;
+	char *output, *buf;
+	const char *sep, *next;
+
+	output = buf = emalloc(strlen(query) + 1);
+
+	for (; query[0] != '\0'; query = next) {
+		sep = strchr(query, ' ');
+		if (sep == NULL) {
+			len = strlen(query);
+			next = query + len;
+		} else {
+			len = sep - query;
+			next = sep + 1;
+		}
+		if (len == 0)
+			continue;
+		idx = stopwords_hash(query, len);
+		if (memcmp(stopwords[idx], query, len) == 0 &&
+		    stopwords[idx][len] == '\0')
+			continue;
+		memcpy(buf, query, len);
+		buf += len;
+		*buf++ = ' ';
 	}
-	
-	/* store the stopwords in the hashtable */	
-	for (temp = stopwords[i]; temp; temp = stopwords[i++]) {
-		ENTRY ent;
-		ent.key = strdup(temp);
-		ent.data = (char *) &c ;
-		hsearch(ent, ENTER);
+
+	if (output == buf) {
+		free(output);
+		return NULL;
 	}
-	
-	/* filter out the stop words from the query */
-	for (term = strtok(*query, " "); term; term = strtok(NULL, " ")) {
-		 ENTRY ent;
-		 ent.key = (char *)term;
-		 ent.data = NULL;
-		 if (hsearch(ent, FIND) == NULL)
-		 	concat(&buf, term);
-	}
-	
-	hdestroy();
-	if (buf != NULL) {
-		*query = buf;
-		return 0;
-	} else {
-		*query = NULL;
-		return 1;
-	}
+	buf[-1] = '\0';
+	return output;
 }
 
 /*

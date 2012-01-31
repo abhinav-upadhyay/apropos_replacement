@@ -22,4 +22,14 @@ LDADD+=	-lm
 LDADD+=	-lz
 LDADD+=	-lutil
 
+stopwords.c: stopwords.txt
+	( set -x; ${TOOL_NBPERF} -n stopwords_hash -s -p ${.ALLSRC};	\
+	echo 'static const char *stopwords[] = {';			\
+	${TOOL_SED} -e 's|^\(.*\)$$|	"\1",|' ${.ALLSRC};		\
+	echo '};'							\
+	) > ${.TARGET}
+
+DPSRCS+=	stopwords.c
+CLEANFILES+=	stopwords.c
+
 .include <bsd.prog.mk>
