@@ -1162,7 +1162,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		 * When there are no more commas left, break out.
 		 */
 		int has_alias = 0;	// Any more aliases left?
-		while (name_desc) {
+		while (*name_desc) {
 			/* Remove any leading spaces. */
 			if (name_desc[0] == ' ') {
 				name_desc++;
