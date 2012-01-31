@@ -232,7 +232,6 @@ unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	stream.next_out = outbuf = emalloc(stream.avail_out);
 	stream.zalloc = NULL;
 	stream.zfree = NULL;
-	inflateInit(&stream);
 
 	if (inflateInit(&stream) != Z_OK) {
 		free(outbuf);
