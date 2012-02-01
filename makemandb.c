@@ -1327,7 +1327,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	/*
 	 * At the very minimum we want to make sure that we store
 	 * the following data:
-	 *   Name, one line description, the section number, and the MD5 hash
+	 *   Name, one line description, and the MD5 hash
 	 */		
 	if (rec->name == NULL || rec->name_desc == NULL ||
 	    rec->md5_hash == NULL) {
