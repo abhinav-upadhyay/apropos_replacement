@@ -1330,7 +1330,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	 *   Name, one line description, the section number, and the MD5 hash
 	 */		
 	if (rec->name == NULL || rec->name_desc == NULL ||
-	    rec->md5_hash == NULL || rec->section == NULL) {
+	    rec->md5_hash == NULL) {
 		cleanup(rec);
 		return -1;
 	}
