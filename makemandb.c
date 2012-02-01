@@ -739,7 +739,6 @@ set_section(const struct mdoc *md, const struct man *m, mandb_rec *rec)
 		const struct man_meta *m_meta = man_meta(m);
 		rec->section[0] = m_meta->msec[0];
 	}
-	rec->section[1] = '\0';
 }
 
 /*
