@@ -117,7 +117,7 @@ main(int argc, char *argv[])
 	if (!argc)
 		usage();
 
-	str = NULL
+	str = NULL;
 	while (argc--)
 		concat(&str, *argv++);
 	/* Eliminate any stopwords from the query */
