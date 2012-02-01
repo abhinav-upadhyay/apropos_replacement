@@ -66,7 +66,7 @@ typedef struct mandb_rec {
 	secbuff exit_status; // EXIT STATUS
 	secbuff diagnostics; // DIAGNOSTICS
 	secbuff errors; // ERRORS
-	char *section;
+	char section[2];
 
 	int xr_found;
 
@@ -90,7 +90,8 @@ static void init_secbuffs(mandb_rec *);
 static void free_secbuffs(mandb_rec *);
 static int check_md5(const char *, sqlite3 *, const char *, char **);
 static void cleanup(mandb_rec *);
-static void get_section(const struct mdoc *, const struct man *, mandb_rec *);
+static void set_section(const struct mdoc *, const struct man *, mandb_rec *);
+static void set_machine(const struct mdoc *, mandb_rec *);
 static int insert_into_db(sqlite3 *, mandb_rec *);
 static	void begin_parse(const char *, struct mparse *, mandb_rec *);
 static void pmdoc_node(const struct mdoc_node *, mandb_rec *);
@@ -109,7 +110,6 @@ static void pman_block(const struct man_node *, mandb_rec *);
 static void traversedir(const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *, mandb_rec *);
 static void man_parse_section(enum man_sec, const struct man_node *, mandb_rec *);
-static void get_machine(const struct mdoc *, mandb_rec *);
 static void build_file_cache(sqlite3 *, const char *, struct stat *);
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
@@ -713,8 +713,8 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 		return;
 	}
 
-	get_machine(mdoc, rec);
-	get_section(mdoc, man, rec);
+	set_machine(mdoc, rec);
+	set_section(mdoc, man, rec);
 	if (mdoc) {
 		rec->page_type = MDOC;
 		pmdoc_node(mdoc_node(mdoc), rec);
@@ -725,20 +725,19 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 }
 
 /*
- * get_section --
+ * set_section --
  *  Extracts the section naumber and normalizes it to only the numeric part
  *  (Which should be the first character of the string).
  */
 static void
-get_section(const struct mdoc *md, const struct man *m, mandb_rec *rec)
+set_section(const struct mdoc *md, const struct man *m, mandb_rec *rec)
 {
-	rec->section = emalloc(2);
 	if (md) {
 		const struct mdoc_meta *md_meta = mdoc_meta(md);
-		memcpy(rec->section, md_meta->msec, 1);
+		rec->section[0] = md_meta->msec[0];
 	} else if (m) {
 		const struct man_meta *m_meta = man_meta(m);
-		memcpy(rec->section, m_meta->msec, 1);
+		rec->section[0] = m_meta->msec[0];
 	}
 	rec->section[1] = '\0';
 }
@@ -748,7 +747,7 @@ get_section(const struct mdoc *md, const struct man *m, mandb_rec *rec)
  *  Extracts the machine architecture information if available.
  */
 static void
-get_machine(const struct mdoc *md, mandb_rec *rec)
+set_machine(const struct mdoc *md, mandb_rec *rec)
 {
 	if (md == NULL)
 		return;
@@ -1738,9 +1737,6 @@ cleanup(mandb_rec *rec)
 
 	free(rec->machine);
 	rec->machine = NULL;
-
-	free(rec->section);
-	rec->section = NULL;
 
 	free(rec->links);
 	rec->links = NULL;
