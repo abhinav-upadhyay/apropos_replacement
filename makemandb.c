@@ -726,7 +726,7 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec)
 
 /*
  * set_section --
- *  Extracts the section naumber and normalizes it to only the numeric part
+ *  Extracts the section number and normalizes it to only the numeric part
  *  (Which should be the first character of the string).
  */
 static void
