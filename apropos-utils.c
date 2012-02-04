@@ -1,3 +1,4 @@
+/*	$NetBSD	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -29,6 +30,9 @@
  * SUCH DAMAGE.
  */
 
+#include <sys/cdefs.h>
+__RCSID("$NetBSD$");
+
 #include <sys/stat.h>
 
 #include <assert.h>
@@ -39,6 +43,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <util.h>
+#include <zlib.h>
 
 #include "apropos-utils.h"
 #include "mandoc.h"
@@ -146,16 +151,17 @@ create_db(sqlite3 *db)
 	
 /*------------------------ Create the tables------------------------------*/
 
+#if NOTYET
+	sqlite3_exec(db, "PRAGMA journal_mode = WAL", NULL, NULL, NULL);
+#else
+	sqlite3_exec(db, "PRAGMA journal_mode = DELETE", NULL, NULL, NULL);
+#endif
+
 	schemasql = sqlite3_mprintf("PRAGMA user_version = %d",
 	    APROPOS_SCHEMA_VERSION);
 	sqlite3_exec(db, schemasql, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
+	if (errmsg != NULL)
+		goto out;
 	sqlite3_free(schemasql);
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
@@ -169,27 +175,24 @@ create_db(sqlite3 *db)
 			    "machine); ";	//mandb_links
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
+	if (errmsg != NULL)
+		goto out;
 
 	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
 			"(link); "
 			"CREATE INDEX IF NOT EXISTS index_mandb_meta_dev ON mandb_meta "
 			"(device, inode)";
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		sqlite3_close(db);
-		sqlite3_shutdown();
-		return -1;
-	}
+	if (errmsg != NULL)
+		goto out;
 	return 0;
+
+out:
+	warnx("%s", errmsg);
+	free(errmsg);
+	sqlite3_close(db);
+	sqlite3_shutdown();
+	return -1;
 }
 
 /*

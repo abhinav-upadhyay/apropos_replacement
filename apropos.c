@@ -1,3 +1,4 @@
+/*	$NetBSD	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -28,6 +29,9 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+
+#include <sys/cdefs.h>
+__RCSID("$NetBSD$");
 
 #include <err.h>
 #include <search.h>
@@ -107,8 +111,7 @@ main(int argc, char *argv[])
 		case '?':
 		default:
 			usage();
-			break;
-		}		
+		}
 	}
 	
 	argc -= optind;

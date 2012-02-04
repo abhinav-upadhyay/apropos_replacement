@@ -1,3 +1,4 @@
+/*	$NetBSD	*/
 /*
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * Copyright (c) 2011 Kristaps Dzonsons <kristaps@bsd.lv>
@@ -14,6 +15,9 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
+#include <sys/cdefs.h>
+__RCSID("$NetBSD$");
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -52,6 +56,7 @@ typedef struct makemandb_flags {
 	int optimize;
 	int limit;	// limit the indexing to only NAME section
 	int recreate;	// Database was created from scratch
+	int verbosity;	// 0: quiet, 1: default, 2: verbose
 } makemandb_flags;
 
 typedef struct mandb_rec {
@@ -115,7 +120,7 @@ static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
 static char *parse_escape(const char *);
-static makemandb_flags mflags;
+static makemandb_flags mflags = { .verbosity = 1 };
 
 typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
 typedef	void (*pmdoc_nf)(const struct mdoc_node *n, mandb_rec *);
@@ -295,7 +300,7 @@ main(int argc, char *argv[])
 	size_t linesize;
 	struct mandb_rec rec;
 
-	while ((ch = getopt(argc, argv, "C:flo")) != -1) {
+	while ((ch = getopt(argc, argv, "C:floqv")) != -1) {
 		switch (ch) {
 		case 'C':
 			manconf = optarg;
@@ -310,10 +315,14 @@ main(int argc, char *argv[])
 		case 'o':
 			mflags.optimize = 1;
 			break;
-		case '?':
+		case 'q':
+			mflags.verbosity = 0;
+			break;
+		case 'v':
+			mflags.verbosity = 2;
+			break;
 		default:
 			usage();
-			break;
 		}
 	}
 
@@ -381,7 +390,8 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	printf("Building temporary file cache\n");
+	if (mflags.verbosity)
+		printf("Building temporary file cache\n");
 	line = NULL;
 	linesize = 0;
 	while ((len = getline(&line, &linesize, file)) != -1) {
@@ -563,7 +573,8 @@ update_existing_entry(sqlite3 *db, const char *file, const char *hash,
 	if (rc == SQLITE_DONE) {
 		/* Check if an update has been performed. */
 		if (update_count != sqlite3_total_changes(db)) {
-			printf("Updated %s\n", file);
+			if (mflags.verbosity)
+				printf("Updated %s\n", file);
 			(*new_count)++;
 		} else {
 			/* Otherwise it was a hardlink. */
@@ -647,7 +658,8 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			 * This means is either a new file or an updated file.
 			 * We should go ahead with parsing.
 			 */
-			printf("Parsing: %s\n", file);
+			if (mflags.verbosity > 1)
+				printf("Parsing: %s\n", file);
 			rec->md5_hash = buf;
 			rec->file_path = estrdup(file);
 			// file_path is freed by insert_into_db itself.
@@ -663,29 +675,34 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	
 	sqlite3_finalize(stmt);
 	
-	printf("Total Number of new or updated pages enountered = %d\n"
-		"Total number of pages that were successfully"
-		" indexed/updated = %d\n"
-		"Total number of (hard or symbolic) links found = %d\n"
-		"Total number of pages that could not be indexed"
-		" due to errors = %d\n",
-		total_count, new_count, link_count, err_count);
+	if (mflags.verbosity) {
+		printf("Total Number of new or updated pages enountered = %d\n"
+			"Total number of pages that were successfully"
+			" indexed/updated = %d\n"
+			"Total number of (hard or symbolic) links found = %d\n"
+			"Total number of pages that could not be indexed"
+			" due to errors = %d\n",
+			total_count, new_count, link_count, err_count);
+	}
 
-	if (!mflags.recreate) {
+	if (mflags.recreate == 0)
+		return;
+
+	if (mflags.verbosity)
 		printf("Deleting stale index entries\n");
-		sqlstr = "DELETE FROM mandb_meta WHERE file NOT IN"
-			 " (SELECT file FROM metadb.file_cache);"
-			 "DROP TABLE metadb.file_cache;"
-			 "DELETE FROM mandb WHERE rowid NOT IN"
-			 " (SELECT id FROM mandb_meta);";
 
-		sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-		if (errmsg != NULL) {
-			warnx("Removing old entries failed: %s", errmsg);
-			warnx("Please rebuild database from scratch with -f.");
-			free(errmsg);
-			return;
-		}
+	sqlstr = "DELETE FROM mandb_meta WHERE file NOT IN"
+		 " (SELECT file FROM metadb.file_cache);"
+		 "DROP TABLE metadb.file_cache;"
+		 "DELETE FROM mandb WHERE rowid NOT IN"
+		 " (SELECT id FROM mandb_meta);";
+
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("Removing old entries failed: %s", errmsg);
+		warnx("Please rebuild database from scratch with -f.");
+		free(errmsg);
+		return;
 	}
 }
 
@@ -1210,9 +1227,9 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 
 	/* The RETURN VALUE section might be specified in multiple ways */
 	if (strcmp(head->string, "RETURN") == 0 &&
-	    head->next->type == MAN_TEXT &&
+	    head->next != NULL && head->next->type == MAN_TEXT &&
 	    (strcmp(head->next->string, "VALUE") == 0 ||
-	     strcmp(head->next->string, "VALUES") == 0)) {
+	    strcmp(head->next->string, "VALUES") == 0)) {
 		man_parse_section(MANSEC_RETURN_VALUES, n, rec);
 		return;
 	}
@@ -1221,7 +1238,8 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 	 * EXIT STATUS section can also be specified all on one line or on two
 	 * separate lines.
 	 */
-	if (strcmp(head->string, "EXIT") == 0 && head->next->type == MAN_TEXT &&
+	if (strcmp(head->string, "EXIT") == 0 &&
+	    head->next != NULL && head->next->type == MAN_TEXT &&
 	    strcmp(head->next->string, "STATUS") == 0) {
 		man_parse_section(MANSEC_EXIT_STATUS, n, rec);
 		return;
@@ -1707,7 +1725,8 @@ optimize(sqlite3 *db)
 	const char *sqlstr;
 	char *errmsg = NULL;
 
-	printf("Optimizing the database index\n");
+	if (mflags.verbosity)
+		printf("Optimizing the database index\n");
 	sqlstr = "INSERT INTO mandb(mandb) VALUES (\'optimize\');"
 		 "VACUUM";
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
@@ -1849,10 +1868,13 @@ parse_escape(const char *str)
 			++backslash;
 			mandoc_escape(&backslash, NULL, NULL);
 			last_backslash = backslash;
+			if (backslash == NULL)
+				break;
 			backslash = strchr(last_backslash, '\\');
 		}
 	} while (backslash != NULL);
-	strcpy(iter, last_backslash);
+	if (last_backslash != NULL)
+		strcpy(iter, last_backslash);
 	return result;
 }
 

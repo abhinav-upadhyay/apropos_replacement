@@ -1,3 +1,4 @@
+/*	$NetBSD	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -32,7 +33,6 @@
 #ifndef APROPOS_UTILS_H
 #define APROPOS_UTILS_H
 
-#include <zlib.h> 
 #include "sqlite3.h"
 
 #define DBPATH "/var/db/man.db"
