@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD$");
+__RCSID("$NetBSD: apropos.c,v 1.1 2012/02/07 19:13:32 joerg Exp $");
 
 #include <err.h>
 #include <search.h>
@@ -48,12 +48,14 @@ typedef struct apropos_flags {
 	int sec_nums[SECMAX];
 	int nresults;
 	int pager;
+	int no_context;
 	const char *machine;
 } apropos_flags;
 
 typedef struct callback_data {
 	int count;
 	FILE *out;
+	apropos_flags *aflags;
 } callback_data;
 
 static char *remove_stopwords(const char *);
@@ -61,19 +63,25 @@ static int query_callback(void *, const char * , const char *, const char *,
 	const char *, size_t);
 __dead static void usage(void);
 
+#define _PATH_PAGER	"/usr/bin/more -s"
+
 int
 main(int argc, char *argv[])
 {
+#ifdef NOTYET
+	static const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
+#endif
+	query_args args;
 	char *query = NULL;	// the user query
 	char ch;
 	char *errmsg = NULL;
 	char *str;
 	int rc = 0;
 	callback_data cbdata;
-	const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
 	cbdata.out = stdout;		// the default output stream
 	cbdata.count = 0;
 	apropos_flags aflags;
+	cbdata.aflags = &aflags;
 	sqlite3 *db;
 	setprogname(argv[0]);
 	if (argc < 2)
@@ -85,7 +93,7 @@ main(int argc, char *argv[])
 	 * index element in sec_nums is set to the string representing that 
 	 * section number.
 	 */
-	while ((ch = getopt(argc, argv, "123456789n:pS:")) != -1) {
+	while ((ch = getopt(argc, argv, "123456789Ccn:pS:")) != -1) {
 		switch (ch) {
 		case '1':
 		case '2':
@@ -97,6 +105,12 @@ main(int argc, char *argv[])
 		case '8':
 		case '9':
 			aflags.sec_nums[atoi(&ch) - 1] = 1;
+			break;
+		case 'C':
+			aflags.no_context = 1;
+			break;
+		case 'c':
+			aflags.no_context = 0;
 			break;
 		case 'n':
 			aflags.nresults = atoi(optarg);
@@ -136,14 +150,16 @@ main(int argc, char *argv[])
 
 	/* If user wants to page the output, then set some settings */
 	if (aflags.pager) {
+		const char *pager = getenv("PAGER");
+		if (pager == NULL)
+			pager = _PATH_PAGER;
 		/* Open a pipe to the pager */
-		if ((cbdata.out = popen("more", "w")) == NULL) {
+		if ((cbdata.out = popen(pager, "w")) == NULL) {
 			close_db(db);
 			err(EXIT_FAILURE, "pipe failed");
 		}
 	}
 
-	query_args args;
 	args.search_str = query;
 	args.sec_nums = aflags.sec_nums;
 	args.nrec = aflags.nresults ? aflags.nresults : 10;
@@ -153,12 +169,11 @@ main(int argc, char *argv[])
 	args.callback_data = &cbdata;
 	args.errmsg = &errmsg;
 
-	if (aflags.pager) {
-		rc = run_query_pager(db, &args);
-		pclose(cbdata.out);
-	} else {
-		rc = run_query(db, snippet_args, &args);
-	}
+#ifdef NOTYET
+	rc = run_query(db, snippet_args, &args);
+#else
+	rc = run_query_pager(db, &args);
+#endif
 
 	free(query);
 	close_db(db);
@@ -195,8 +210,11 @@ query_callback(void *data, const char *section, const char *name,
 	callback_data *cbdata = (callback_data *) data;
 	FILE *out = cbdata->out;
 	cbdata->count++;
-	fprintf(out, "%s(%s)\t%s\n%s\n\n", name, section, name_desc, 
-			snippet);
+	fprintf(out, "%s(%s)\t%s\n", name, section, name_desc);
+
+	if (cbdata->aflags->no_context == 0)
+		fprintf(out, "%s\n\n", snippet);
+
 	return 0;
 }
 

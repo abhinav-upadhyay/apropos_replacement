@@ -17,7 +17,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD$");
+__RCSID("$NetBSD: makemandb.c,v 1.1 2012/02/07 19:13:32 joerg Exp $");
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -1071,9 +1071,12 @@ pman_parse_name(const struct man_node *n, mandb_rec *rec)
 	if (n == NULL)
 		return;
 
-	if (n->type == MAN_TEXT) 
-		concat(&rec->name_desc, n->string);
-	
+	if (n->type == MAN_TEXT) {
+		char *tmp = parse_escape(n->string);
+		concat(&rec->name_desc, tmp);
+		free(tmp);
+	}
+
 	if (n->child)
 		pman_parse_name(n->child, rec);
 
@@ -1875,6 +1878,9 @@ parse_escape(const char *str)
 	} while (backslash != NULL);
 	if (last_backslash != NULL)
 		strcpy(iter, last_backslash);
+	iter = result;
+	while ((iter = strchr(iter, ASCII_HYPH)) != NULL)
+		*iter = '-';
 	return result;
 }
 

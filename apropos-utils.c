@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD$");
+__RCSID("$NetBSD: apropos-utils.c,v 1.1 2012/02/07 19:13:32 joerg Exp $");
 
 #include <sys/stat.h>
 
