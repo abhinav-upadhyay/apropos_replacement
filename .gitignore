@@ -8,3 +8,6 @@
 makemandb
 apropos
 stopwords.c
+whatis
+*.swp
+*.diff
