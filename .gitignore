@@ -11,3 +11,4 @@ stopwords.c
 whatis
 *.swp
 *.diff
+apropos.cgi
