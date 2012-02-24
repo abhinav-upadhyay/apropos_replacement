@@ -172,7 +172,9 @@ create_db(sqlite3 *db)
 			    "file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
 				//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-			    "machine); ";	//mandb_links
+			    "machine); "	//mandb_links
+			"CREATE TABLE mandb_dict(word UNIQUE, frequency);";	//mandb_dict;
+
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL)
