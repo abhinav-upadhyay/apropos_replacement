@@ -564,26 +564,6 @@ spell(sqlite3 *db, char *word)
 	const char *sqlstr;
 	int n;
 	int count;
-	/*sqlite3_exec(db, "ATTACH DATABASE \':memory:\' AS metadb", NULL, NULL, 
-				&errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		close_db(db);
-		exit(EXIT_FAILURE);
-	}
-	
-	sqlstr = "CREATE TABLE metadb.dict AS SELECT term, occurrences FROM "
-			"mandb_aux WHERE col=\'*\' ;"
-			"CREATE UNIQUE INDEX IF NOT EXISTS metadb.index_term ON "
-				"dict (term)";
-
-	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		return NULL;
-	}*/
 	
 	lower(word);
 	correct = known_word(db, &word, 1);
@@ -616,12 +596,6 @@ spell(sqlite3 *db, char *word)
 		free_list(cand2, count2);
 	}
 
-	/*sqlite3_exec(db, "DETACH DATABASE metadb", NULL, NULL, 
-				&errmsg);
-	if (errmsg != NULL) {
-		warnx("%s", errmsg);
-		free(errmsg);
-	}*/
 	return correct;
 }
 
