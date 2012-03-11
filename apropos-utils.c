@@ -83,6 +83,50 @@ static const double col_weights[] = {
 	1.00	//machine
 };
 
+#include "stopwords.c"
+/*
+ * remove_stopwords--
+ *  Scans the query and removes any stop words from it.
+ *  Returns the modified query or NULL, if it contained only stop words.
+ */
+
+char *
+remove_stopwords(const char *query)
+{
+	size_t len, idx;
+	char *output, *buf;
+	const char *sep, *next;
+
+	output = buf = emalloc(strlen(query) + 1);
+
+	for (; query[0] != '\0'; query = next) {
+		sep = strchr(query, ' ');
+		if (sep == NULL) {
+			len = strlen(query);
+			next = query + len;
+		} else {
+			len = sep - query;
+			next = sep + 1;
+		}
+		if (len == 0)
+			continue;
+		idx = stopwords_hash(query, len);
+		if (memcmp(stopwords[idx], query, len) == 0 &&
+		    stopwords[idx][len] == '\0')
+			continue;
+		memcpy(buf, query, len);
+		buf += len;
+		*buf++ = ' ';
+	}
+
+	if (output == buf) {
+		free(output);
+		return NULL;
+	}
+	buf[-1] = '\0';
+	return output;
+}
+
 /*
  * lower --
  *  Converts the string str to lower case
