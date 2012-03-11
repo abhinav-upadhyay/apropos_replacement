@@ -154,7 +154,8 @@ main(int argc, char *argv[])
 		printf("Could not open database connection\n");
 		exit(EXIT_FAILURE);
 	}
-	char *query = get_param(qstr, "q");
+	char *query = lower(get_param(qstr, "q"));
+	build_boolean_query(query);
 	
 	char *p = get_param(qstr, "p");
 	if (p == NULL)
