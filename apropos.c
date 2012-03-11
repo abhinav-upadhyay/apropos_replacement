@@ -76,6 +76,8 @@ main(int argc, char *argv[])
 	char *errmsg = NULL;
 	char *str;
 	int ch, rc = 0;
+	char *correct_query;
+	char *correct;
 	int s;
 	callback_data cbdata;
 	cbdata.out = stdout;		// the default output stream
@@ -151,7 +153,7 @@ main(int argc, char *argv[])
 	if (query == NULL)
 		errx(EXIT_FAILURE, "Try using more relevant keywords");
 
-	if ((db = init_db(MANDB_READONLY)) == NULL)
+	if ((db = init_db(MANDB_WRITE)) == NULL)
 		exit(EXIT_FAILURE);
 
 	/* If user wants to page the output, then set some settings */
@@ -181,24 +183,33 @@ main(int argc, char *argv[])
 	rc = run_query_pager(db, &args);
 #endif
 
-	free(query);
-	close_db(db);
-	if (errmsg) {
+	if (errmsg || rc < 0) {
 		warnx("%s", errmsg);
 		free(errmsg);
+		free(query);
+		close_db(db);
 		exit(EXIT_FAILURE);
 	}
 
-	if (rc < 0) {
-		/* Something wrong with the database. Exit */
-		exit(EXIT_FAILURE);
-	}
-	
+	char *orig_query =  query;
+	char *term;
 	if (cbdata.count == 0) {
-		warnx("No relevant results obtained.\n"
+		correct_query = NULL;
+		for (term = strtok(query, " "); term; term = strtok(NULL, " ")) {
+			if ((correct = spell(db, term)))
+				concat(&correct_query, correct);
+			else
+				concat(&correct_query, term);
+		}
+
+		printf("Did you mean %s ?\n", correct_query);
+/*		warnx("No relevant results obtained.\n"
 			  "Please make sure that you spelled all the terms correctly "
-			  "or try using better keywords.");
+			  "or try using better keywords.");*/
+		free(correct_query);
 	}
+	free(orig_query);
+	close_db(db);
 	return 0;
 }
 

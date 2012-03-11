@@ -89,4 +89,5 @@ void close_db(sqlite3 *);
 int run_query(sqlite3 *, const char *[3], query_args *);
 int run_query_html(sqlite3 *, query_args *);
 int run_query_pager(sqlite3 *, query_args *);
+char *spell(sqlite3*, char *);
 #endif 
