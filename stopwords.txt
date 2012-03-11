@@ -14,7 +14,6 @@ all
 also
 always
 an
-and
 another
 any
 are
@@ -128,7 +127,6 @@ next
 no
 non
 noone
-not
 nothing
 o
 of
@@ -139,7 +137,6 @@ older
 on
 once
 only
-or
 order
 our
 out

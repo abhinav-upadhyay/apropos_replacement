@@ -149,6 +149,30 @@ main(int argc, char *argv[])
 	query = remove_stopwords(lower(str));
 	free(str);
 
+	char *temp;
+	str = query;
+	while ((temp = strstr(str, "and")) || (temp = strstr(str, "not"))
+			|| (temp = strstr(str, "or"))) {
+		switch (temp[0]) {
+			case 'a':
+				temp[0] = 'A';
+				temp[1] = 'N';
+				temp[2] = 'D';
+				break;
+
+			case 'n':
+				temp[0] = 'N';
+				temp[1] = 'O';
+				temp[2] = 'T';
+				break;
+			case 'o':
+				temp[0] = 'O';
+				temp[1] = 'R';
+				break;
+		}
+		str = temp + 1;
+	}
+	fprintf(stderr, "%s\n", query);
 	/* if any error occured in remove_stopwords, exit */
 	if (query == NULL)
 		errx(EXIT_FAILURE, "Try using more relevant keywords");
