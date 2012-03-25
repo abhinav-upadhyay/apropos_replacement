@@ -144,6 +144,7 @@ int
 main(int argc, char *argv[])
 {
 	int page;
+	int spell_correct = 0;
 	struct callback_data cbdata;
 	printf("Content-type:text/html;\n\n");
 	char *qstr = getenv("QUERY_STRING");
@@ -154,9 +155,34 @@ main(int argc, char *argv[])
 		printf("Could not open database connection\n");
 		exit(EXIT_FAILURE);
 	}
-	char *query = lower(get_param(qstr, "q"));
-	build_boolean_query(query);
+	char *query = get_param(qstr, "q");
+	query = remove_stopwords(lower(query));
 	
+	char *temp;
+	char *str = query;
+	while ((temp = strstr(str, "and")) || (temp = strstr(str, "not"))
+			|| (temp = strstr(str, "or"))) {
+		if (*(temp -1) == ' ') {
+			switch (temp[0]) {
+			case 'a':
+				temp[0] = 'A';
+				temp[1] = 'N';
+				temp[2] = 'D';
+				break;
+
+			case 'n':
+				temp[0] = 'N';
+				temp[1] = 'O';
+				temp[2] = 'T';
+				break;
+			case 'o':
+				temp[0] = 'O';
+				temp[1] = 'R';
+				break;
+			}
+		}
+		str = temp + 1;
+	}
 	char *p = get_param(qstr, "p");
 	if (p == NULL)
 		page = 1;
@@ -178,6 +204,25 @@ main(int argc, char *argv[])
 	run_query_html(db, &args);
 	printf("</table>");
 	printf("<div><h3>\n");
+	char *correct_query;	
+	char *term;
+	char *correct;
+	if (spell_correct == 0 && cbdata.count == 0) {
+		correct_query = NULL;
+		spell_correct = 1;
+		for (term = strtok(query, " "); term; term = strtok(NULL, " ")) {
+			if ((correct = spell(db, term)))
+				concat(&correct_query, correct);
+			else
+				concat(&correct_query, term);
+		}
+
+		printf("<h4>Did you mean %s ?</h2>\n", correct_query);
+/*		warnx("No relevant results obtained.\n"
+			  "Please make sure that you spelled all the terms correctly "
+			  "or try using better keywords.");*/
+		free(correct_query);
+	}
 	/* If 10 results were displayed then there might be more results,
 	 * so display a link for Next page. 
 	 */
