@@ -139,6 +139,26 @@ query_callback(void *data, const char *section, const char *name,
 	return 0;
 }
 
+static void
+search(sqlite3 *db, char *query, struct callback_data *cbdata, int page)
+{
+	char *errmsg;
+	query_args args;
+	args.search_str = query;
+	args.sec_nums = NULL;
+	args.nrec = 10;
+	args.offset = (page - 1) * 10;
+	args.machine = NULL;
+	args.callback = &query_callback;
+	args.callback_data = cbdata;
+	args.errmsg = &errmsg;
+	printf("<table cellspacing=\"5px\" cellpadding=\"2px\" style=\"%s\">",
+			"align:left; margin:15px; width:65%; padding:10px;");
+	cbdata->count = 0;
+	run_query_html(db, &args);
+	printf("</table>");
+	printf("<div><h3>\n");
+}
 
 int
 main(int argc, char *argv[])
@@ -188,36 +208,29 @@ main(int argc, char *argv[])
 		page = 1;
 	else
 		page = atoi(p);
-	print_form(query);
-	query_args args;
-	args.search_str = query;
-	args.sec_nums = NULL;
-	args.nrec = 10;
-	args.offset = (page - 1) * 10;
-	args.machine = NULL;
-	args.callback = &query_callback;
-	args.callback_data = &cbdata;
-	args.errmsg = &errmsg;
-	printf("<table cellspacing=\"5px\" cellpadding=\"2px\" style=\"%s\">",
-			"align:left; margin:15px; width:65%; padding:10px;");
-	cbdata.count = 0;
-	run_query_html(db, &args);
-	printf("</table>");
-	printf("<div><h3>\n");
-	char *correct_query;	
+	print_form(query);	
+	search(db, query, &cbdata, page);
+
+	char *correct_query;
 	char *term;
 	char *correct;
+	int spell_flag = 0;
 	if (spell_correct == 0 && cbdata.count == 0) {
 		correct_query = NULL;
 		spell_correct = 1;
 		for (term = strtok(query, " "); term; term = strtok(NULL, " ")) {
-			if ((correct = spell(db, term)))
+			if ((correct = spell(db, term))) {
+				spell_flag = 1;
 				concat(&correct_query, correct);
+			}
 			else
 				concat(&correct_query, term);
 		}
-
-		printf("<h4>Did you mean %s ?</h2>\n", correct_query);
+		if (spell_flag) {
+			printf("<h4>Did you mean %s ?</h2>\n", correct_query);
+			search(db, correct_query, &cbdata, page);
+		}
+		
 /*		warnx("No relevant results obtained.\n"
 			  "Please make sure that you spelled all the terms correctly "
 			  "or try using better keywords.");*/
