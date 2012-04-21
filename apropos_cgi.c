@@ -29,6 +29,7 @@
 
 
 #include <err.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,6 +82,68 @@ parse_space(char *str)
 	return str;
 }
 
+static char *
+parse_hex(char *str)
+{
+	char *percent_ptr;
+	char hexcode[2];
+	char *retval;
+	retval = malloc(strlen(str) + 1);
+	int i = 2;
+	int decval = 0;
+	size_t offset = 0;
+	size_t sz;
+	while ((percent_ptr = strchr(str, '%')) != NULL) {
+		i = 2;
+		sz = 0;
+		sz = percent_ptr - str;
+		decval = 0;
+		memcpy(retval + offset, str, sz);
+		percent_ptr++;
+		offset += sz;
+		while (i > 0) {
+			switch (*percent_ptr) {
+			case '0':
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7':
+			case '8':
+			case '9':
+				decval += (*percent_ptr - 48) * pow(16, --i);
+				break;
+			case 'A':
+				decval += 10 * pow(16, --i);
+				break;
+			case 'B':
+				decval += 11 * pow(16, --i);
+				break;
+			case 'C':
+				decval += 12 * pow(16, --i);
+				break;
+			case 'D':
+				decval += 13 * pow(16, --i);
+				break;
+			case 'E':
+				decval += 14 * pow(16, --i);
+				break;
+			case 'F':
+				decval += 15 * pow(16, --i);
+				break;
+			}
+			percent_ptr++;
+		}
+		str = percent_ptr;
+		retval[offset++] = decval;
+	}
+	sz =  strlen(str);
+	memcpy(retval + offset, str, sz + 1);
+	return retval;
+}
+
 /*
  * Parse the given query string to extract the parameter pname
  * and return to the caller. (Not the best way to do it but
@@ -122,7 +185,10 @@ get_param(char *qstr, char *pname)
 		memcpy(value, qstr, sz);
 		value[sz] = 0;
 	}
-	return parse_space(value);
+	value = parse_space(value);
+	char *retval = parse_hex(value);
+	free(value);
+	return retval;
 }
 
 
