@@ -507,28 +507,17 @@ edits1 (char *word)
 	return candidates;
 }
 
-/*
- * known_word--
- *  Pass an array of strings to this function and it will return the word with 
- *  maximum frequency in the dictionary. If no word in the array list is found 
- *  in the dictionary, it returns NULL
- *  #TODO rename this function
+/* Build termlist: a comma separated list of all the words in the list for 
+ * use in the SQL query later.
  */
 static char *
-known_word(sqlite3 *db, char **list, int n)
+build_termlist(char **list, int n)
 {
-	int i, rc;
-	char *sqlstr;
 	char *termlist = NULL;
-	char *correct = NULL;
-	sqlite3_stmt *stmt;
-
-	/* Build termlist: a comma separated list of all the words in the list for 
-	 * use in the SQL query later.
-	 */
 	int total_len = BUFLEN * 20;	/* total bytes allocated to termlist */
 	termlist = emalloc(total_len);
 	int offset = 0;	/* Next byte to write at in termlist */
+	int i;
 	termlist[0] = '(';
 	offset++;
 
@@ -538,12 +527,11 @@ known_word(sqlite3 *db, char **list, int n)
 			termlist = erealloc(termlist, offset + total_len);
 			total_len *= 2;
 		}
-		memcpy(termlist + offset, "\'", 1);
-		offset++;
+		memcpy(termlist + offset++, "\'", 1);
 		memcpy(termlist + offset, list[i], d);
 		offset += d;
 
-		if (i == n -1) {
+		if (i == n - 1) {
 			memcpy(termlist + offset, "\'", 1);
 			offset++;
 		}
@@ -557,6 +545,25 @@ known_word(sqlite3 *db, char **list, int n)
 		memcpy(termlist + offset, ")", 2);
 	else
 		concat2(&termlist, ")", 1);
+
+	return termlist;
+}
+
+/*
+ * known_word--
+ *  Pass an array of strings to this function and it will return the word with 
+ *  maximum frequency in the dictionary. If no word in the array list is found 
+ *  in the dictionary, it returns NULL
+ *  #TODO rename this function
+ */
+static char *
+known_word(sqlite3 *db, char **list, int n)
+{
+	int i, rc;
+	char *sqlstr;
+	char *correct = NULL;
+	sqlite3_stmt *stmt;
+	char *termlist = build_termlist(list, n);
 
 	easprintf(&sqlstr, "SELECT word FROM mandb_dict WHERE "
 						"frequency = (SELECT MAX(frequency) FROM mandb_dict "
@@ -643,6 +650,54 @@ spell(sqlite3 *db, char *word)
 	return correct;
 }
 
+char *
+get_suggestions(sqlite3 *db, char *query)
+{
+	char *retval = NULL;
+	char *term;
+	char *temp;
+	char *sqlstr;
+	int count;
+	int rc;
+	sqlite3_stmt *stmt;
+
+	if ((term = strrchr(query, ' ')) == NULL) {
+		term = query;
+		query = NULL;
+	} else {
+		*term++ = 0;
+	}
+
+	char **list = edits1(term);
+	int n = strlen(term);
+	count = n + n -1 + 26 * n + 26 * (n + 1);
+	char *termlist = build_termlist(list, count);
+	easprintf(&sqlstr, "SELECT word FROM mandb_dict "
+						"WHERE word IN %s ORDER BY frequency DESC LIMIT 10", termlist);
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		warnx("%s", sqlite3_errmsg(db));
+		return NULL;
+	}
+	easprintf(&temp, "{\n{ query:\'%s%s%s\',\n "
+			"suggestions:[", query ? query : "", query ? " " : "", term);
+	concat(&retval, temp);
+	free(temp);
+	count = 0;
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+		if (count++)
+			concat(&retval, ",");
+		easprintf(&temp, "\'%s %s\'\n", query ? query : "",sqlite3_column_text(stmt, 0));
+		concat(&retval, temp);
+		free(temp);
+	}
+	concat(&retval, "]\n}");
+	sqlite3_finalize(stmt);
+	free(sqlstr);
+	free(termlist);
+	free_list(list, count);
+	return retval;
+}
 
 /*
  * rank_func --

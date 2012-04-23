@@ -29,12 +29,12 @@
 
 
 #include <err.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "apropos-utils.h"
+#include "cgi-utils.h"
 
 typedef struct callback_data {
 	int count;
@@ -51,6 +51,10 @@ print_form(char *query)
 	printf("<html>\n");
 	printf("<head>\n");
 	printf("<title> NetBSD apropos </title>\n");
+	printf("<script type=\"text/javascript\" src=\"/jquery.js\"></script>\n");
+	printf("<script type=\"text/JavaScript\" src=\"/jquery.autocomplete.js\"></script>\n");
+	printf("<script type=\"text/javascript\" src=\"/ac.js\"></script>\n");	
+	printf("<link href=\"/ac.css\" rel=\"stylesheet\" type=\"text/css\" />\n");
 	printf("</head>\n");
 	printf("<body>\n");
 	printf("<center>\n");
@@ -59,138 +63,13 @@ print_form(char *query)
 	printf("<table style=\"%s\">\n", "margin:10px;>\n"); 
 	printf("<form action=\"/cgi-bin/apropos.cgi\">\n");
 	printf("<tr >\n");
-	printf("<td> <input type=\"text\" name=\"q\" value=\"%s\" size=\"30\"></td>\n",
+	printf("<td> <input type=\"text\" name=\"q\" value=\"%s\" size=\"30\" id=\"query\"></td>\n",
 			query ? query : "" );
 	printf("<td> <input type=\"submit\" value=\"Search\"> </td>\n");
 	printf("</tr>\n");
 	printf("</table>");
 
 }
-
-/*
- * Replaces all the occurrences of '+' in the given string with a space
- */
-static char *
-parse_space(char *str)
-{
-	if (str == NULL)
-		return str;
-
-	char *iter = str;
-	while ((iter = strchr(iter, '+')) != NULL)
-		*iter = ' ';
-	return str;
-}
-
-static char *
-parse_hex(char *str)
-{
-	char *percent_ptr;
-	char hexcode[2];
-	char *retval;
-	retval = malloc(strlen(str) + 1);
-	int i = 2;
-	int decval = 0;
-	size_t offset = 0;
-	size_t sz;
-	while ((percent_ptr = strchr(str, '%')) != NULL) {
-		i = 2;
-		sz = 0;
-		sz = percent_ptr - str;
-		decval = 0;
-		memcpy(retval + offset, str, sz);
-		percent_ptr++;
-		offset += sz;
-		while (i > 0) {
-			switch (*percent_ptr) {
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9':
-				decval += (*percent_ptr - 48) * pow(16, --i);
-				break;
-			case 'A':
-				decval += 10 * pow(16, --i);
-				break;
-			case 'B':
-				decval += 11 * pow(16, --i);
-				break;
-			case 'C':
-				decval += 12 * pow(16, --i);
-				break;
-			case 'D':
-				decval += 13 * pow(16, --i);
-				break;
-			case 'E':
-				decval += 14 * pow(16, --i);
-				break;
-			case 'F':
-				decval += 15 * pow(16, --i);
-				break;
-			}
-			percent_ptr++;
-		}
-		str = percent_ptr;
-		retval[offset++] = decval;
-	}
-	sz =  strlen(str);
-	memcpy(retval + offset, str, sz + 1);
-	return retval;
-}
-
-/*
- * Parse the given query string to extract the parameter pname
- * and return to the caller. (Not the best way to do it but
- * going for simplicity at the moment.)
- */
-static char *
-get_param(char *qstr, char *pname)
-{
-	if (qstr == NULL)
-		return NULL;
-
-	char *temp;
-	char *param = NULL;
-	char *value = NULL;
-	size_t sz;
-	while (*qstr) {
-		sz = strcspn(qstr, "=&");
-		if (qstr[sz] == '=') {
-			qstr[sz] = 0;
-			param = qstr;
-		}
-		qstr += sz + 1;
-		
-		if (param && strcmp(param, pname) == 0)
-			break;
-		else
-			param = NULL;
-	}
-	if (param == NULL) 
-		return NULL;
-
-	if ((temp = strchr(qstr, '&')) == NULL)
-		value = strdup(qstr);
-	else {
-		sz = temp - qstr;
-		value = malloc(sz + 1);
-		if (value == NULL)
-			errx(EXIT_FAILURE, "malloc failed");
-		memcpy(value, qstr, sz);
-		value[sz] = 0;
-	}
-	value = parse_space(value);
-	char *retval = parse_hex(value);
-	free(value);
-	return retval;
-}
-
 
 static int
 query_callback(void *data, const char *section, const char *name,
@@ -274,7 +153,7 @@ main(int argc, char *argv[])
 		page = 1;
 	else
 		page = atoi(p);
-	print_form(query);	
+	print_form(query);
 	search(db, query, &cbdata, page);
 
 	char *correct_query;
