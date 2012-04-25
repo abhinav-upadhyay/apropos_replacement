@@ -121,33 +121,10 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	char *query = get_param(qstr, "q");
-	query = remove_stopwords(lower(query));
+	lower(query);
+	query = remove_stopwords(query);
+	build_boolean_query(query);
 	
-	char *temp;
-	char *str = query;
-	while ((temp = strstr(str, "and")) || (temp = strstr(str, "not"))
-			|| (temp = strstr(str, "or"))) {
-		if (*(temp -1) == ' ') {
-			switch (temp[0]) {
-			case 'a':
-				temp[0] = 'A';
-				temp[1] = 'N';
-				temp[2] = 'D';
-				break;
-
-			case 'n':
-				temp[0] = 'N';
-				temp[1] = 'O';
-				temp[2] = 'T';
-				break;
-			case 'o':
-				temp[0] = 'O';
-				temp[1] = 'R';
-				break;
-			}
-		}
-		str = temp + 1;
-	}
 	char *p = get_param(qstr, "p");
 	if (p == NULL)
 		page = 1;

@@ -90,6 +90,7 @@ int run_query(sqlite3 *, const char *[3], query_args *);
 int run_query_html(sqlite3 *, query_args *);
 int run_query_pager(sqlite3 *, query_args *);
 char *remove_stopwords(const char *);
+char *build_boolean_query(char *);
 char *spell(sqlite3*, char *);
 char *get_suggestions(sqlite3 *, char *);
 #endif 

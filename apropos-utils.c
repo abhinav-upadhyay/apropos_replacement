@@ -1102,3 +1102,33 @@ int run_query_pager(sqlite3 *db, query_args *args)
 	args->callback_data = (void *) &orig_data;
 	return run_query(db, snippet_args, args);
 }
+
+char *
+build_boolean_query(char *query)
+{
+	char *boolop_ptr;
+	char *str;
+	str = query;
+	while ((boolop_ptr = strstr(str, "and")) || (boolop_ptr = strstr(str, "not"))
+			|| (boolop_ptr = strstr(str, "or"))) {
+		switch (boolop_ptr[0]) {
+			case 'a':
+				boolop_ptr[0] = 'A';
+				boolop_ptr[1] = 'N';
+				boolop_ptr[2] = 'D';
+				break;
+
+			case 'n':
+				boolop_ptr[0] = 'N';
+				boolop_ptr[1] = 'O';
+				boolop_ptr[2] = 'T';
+				break;
+			case 'o':
+				boolop_ptr[0] = 'O';
+				boolop_ptr[1] = 'R';
+				break;
+		}
+		str = boolop_ptr + 1;
+	}
+	return query;
+}
