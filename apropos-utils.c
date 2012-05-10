@@ -1092,7 +1092,8 @@ callback_pager(void *data, const char *section, const char *name,
  *  For this purpose it first calls it's own callback function callback_pager
  *  which then delegates the call to the user supplied callback.
  */
-int run_query_pager(sqlite3 *db, query_args *args)
+int
+run_query_pager(sqlite3 *db, query_args *args)
 {
 	struct orig_callback_data orig_data;
 	orig_data.callback = args->callback;
