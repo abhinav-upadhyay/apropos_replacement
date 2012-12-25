@@ -1,4 +1,4 @@
-/*	$NetBSD: apropos.c,v 1.5 2012/02/15 23:53:13 joerg Exp $	*/
+/*	$NetBSD: apropos.c,v 1.8 2012/10/06 15:33:59 wiz Exp $	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: apropos.c,v 1.5 2012/02/15 23:53:13 joerg Exp $");
+__RCSID("$NetBSD: apropos.c,v 1.8 2012/10/06 15:33:59 wiz Exp $");
 
 #include <err.h>
 #include <search.h>
@@ -153,7 +153,7 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "Try using more relevant keywords");
 
 	build_boolean_query(query);
-	if ((db = init_db(MANDB_WRITE)) == NULL)
+	if ((db = init_db(MANDB_READONLY, MANCONF)) == NULL)
 		exit(EXIT_FAILURE);
 
 	/* If user wants to page the output, then set some settings */
@@ -227,7 +227,7 @@ query_callback(void *data, const char *section, const char *name,
 	callback_data *cbdata = (callback_data *) data;
 	FILE *out = cbdata->out;
 	cbdata->count++;
-	fprintf(out, "%s(%s)\t%s\n", name, section, name_desc);
+	fprintf(out, "%s (%s)\t%s\n", name, section, name_desc);
 
 	if (cbdata->aflags->no_context == 0)
 		fprintf(out, "%s\n\n", snippet);
@@ -243,7 +243,7 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-		"Usage: %s [-n Number of records] [-p] [-123456789] [-S machine] query\n",
+		"Usage: %s [-n Number of records] [-123456789Ccp] [-S machine] query\n",
 		getprogname());
 	exit(1);
 }

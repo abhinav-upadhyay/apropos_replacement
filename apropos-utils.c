@@ -1,4 +1,4 @@
-/*	$NetBSD: apropos-utils.c,v 1.2 2012/02/07 19:17:16 joerg Exp $	*/
+/*	$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -31,8 +31,9 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: apropos-utils.c,v 1.2 2012/02/07 19:17:16 joerg Exp $");
+__RCSID("$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $");
 
+#include <sys/queue.h>
 #include <sys/stat.h>
 
 #include <assert.h>
@@ -46,6 +47,7 @@ __RCSID("$NetBSD: apropos-utils.c,v 1.2 2012/02/07 19:17:16 joerg Exp $");
 #include <zlib.h>
 
 #include "apropos-utils.h"
+#include "manconf.h"
 #include "mandoc.h"
 #include "sqlite3.h"
 
@@ -223,7 +225,7 @@ create_db(sqlite3 *db)
 			    "file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
 				//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
-			    "machine); "	//mandb_links
+			    "machine, md5_hash); "	//mandb_links
 			"CREATE TABLE mandb_dict(word UNIQUE, frequency);";	//mandb_dict;
 
 
@@ -234,7 +236,9 @@ create_db(sqlite3 *db)
 	sqlstr = "CREATE INDEX IF NOT EXISTS index_mandb_links ON mandb_links "
 			"(link); "
 			"CREATE INDEX IF NOT EXISTS index_mandb_meta_dev ON mandb_meta "
-			"(device, inode)";
+			"(device, inode); "
+			"CREATE INDEX IF NOT EXISTS index_mandb_links_md5 ON mandb_links "
+			"(md5_hash);";
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL)
 		goto out;
@@ -311,6 +315,28 @@ unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	sqlite3_result_text(pctx, (const char *) outbuf, stream.total_out, free);
 }
 
+/*
+ * get_dbpath --
+ *   Read the path of the database from man.conf and return.
+ */
+char *
+get_dbpath(const char *manconf)
+{
+	TAG *tp;
+	char *dbpath;
+
+	config(manconf);
+	tp = gettag("_mandb", 1);
+	if (!tp)
+		return NULL;
+	
+	if (TAILQ_EMPTY(&tp->entrylist))
+		return NULL;
+
+	dbpath = TAILQ_LAST(&tp->entrylist, tqh)->s;
+	return dbpath;
+}
+
 /* init_db --
  *   Prepare the database. Register the compress/uncompress functions and the
  *   stopword tokenizer.
@@ -327,7 +353,7 @@ unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
  *  	In normal cases the function should return a handle to the db.
  */
 sqlite3 *
-init_db(int db_flag)
+init_db(int db_flag, const char *manconf)
 {
 	sqlite3 *db = NULL;
 	sqlite3_stmt *stmt;
@@ -335,8 +361,11 @@ init_db(int db_flag)
 	int rc;
 	int create_db_flag = 0;
 
+	char *dbpath = get_dbpath(manconf);
+	if (dbpath == NULL)
+		errx(EXIT_FAILURE, "_mandb entry not found in man.conf");
 	/* Check if the database exists or not */
-	if (!(stat(DBPATH, &sb) == 0 && S_ISREG(sb.st_mode))) {
+	if (!(stat(dbpath, &sb) == 0 && S_ISREG(sb.st_mode))) {
 		/* Database does not exist, check if DB_CREATE was specified, and set
 		 * flag to create the database schema
 		 */
@@ -350,7 +379,7 @@ init_db(int db_flag)
 
 	/* Now initialize the database connection */
 	sqlite3_initialize();
-	rc = sqlite3_open_v2(DBPATH, &db, db_flag, NULL);
+	rc = sqlite3_open_v2(dbpath, &db, db_flag, NULL);
 	
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
@@ -365,12 +394,14 @@ init_db(int db_flag)
 
 	rc = sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("Unable to query schema version");
+		warnx("Unable to query schema version: %s",
+		    sqlite3_errmsg(db));
 		goto error;
 	}
 	if (sqlite3_step(stmt) != SQLITE_ROW) {
 		sqlite3_finalize(stmt);
-		warnx("Unable to query schema version");
+		warnx("Unable to query schema version: %s",
+		    sqlite3_errmsg(db));
 		goto error;
 	}
 	if (sqlite3_column_int(stmt, 0) != APROPOS_SCHEMA_VERSION) {
@@ -386,17 +417,20 @@ init_db(int db_flag)
 	/* Register the zip and unzip functions for FTS compression */
 	rc = sqlite3_create_function(db, "zip", 1, SQLITE_ANY, NULL, zip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("Unable to register function: compress");
+		warnx("Unable to register function: compress: %s",
+		    sqlite3_errmsg(db));
 		goto error;
 	}
 
 	rc = sqlite3_create_function(db, "unzip", 1, SQLITE_ANY, NULL, 
                                  unzip, NULL, NULL);
 	if (rc != SQLITE_OK) {
-		warnx("Unable to register function: uncompress");
+		warnx("Unable to register function: uncompress: %s",
+		    sqlite3_errmsg(db));
 		goto error;
 	}
 	return db;
+
 error:
 	sqlite3_close(db);
 	sqlite3_shutdown();
@@ -794,6 +828,8 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	const char *name_desc;
 	const char *machine;
 	const char *snippet;
+	const char *name_temp;
+	char *slash_ptr;
 	char *m = NULL;
 	int rc;
 	inverse_document_frequency idf = {0, 0};
@@ -806,9 +842,11 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
 	                             rank_func, NULL, NULL);
 	if (rc != SQLITE_OK) {
+		warnx("Unable to register the ranking function: %s",
+		    sqlite3_errmsg(db));
 		sqlite3_close(db);
 		sqlite3_shutdown();
-		errx(EXIT_FAILURE, "Unable to register the ranking function");
+		exit(EXIT_FAILURE);
 	}
 	
 	/* We want to build a query of the form: "select x,y,z from mandb where
@@ -892,13 +930,16 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (const char *) sqlite3_column_text(stmt, 0);
+		name_temp = (const char *) sqlite3_column_text(stmt, 1);
 		name_desc = (const char *) sqlite3_column_text(stmt, 2);
 		machine = (const char *) sqlite3_column_text(stmt, 3);
 		snippet = (const char *) sqlite3_column_text(stmt, 4);
+		if ((slash_ptr = strrchr(name_temp, '/')) != NULL)
+			name_temp = slash_ptr + 1;
 		if (machine && machine[0]) {
 			m = estrdup(machine);
 			easprintf(&name, "%s/%s", lower(m),
-				sqlite3_column_text(stmt, 1));
+				name_temp);
 			free(m);
 		} else {
 			name = estrdup((const char *) sqlite3_column_text(stmt, 1));

@@ -1,4 +1,4 @@
-/*	$NetBSD: apropos-utils.h,v 1.2 2012/02/07 19:17:16 joerg Exp $	*/
+/*	$NetBSD: apropos-utils.h,v 1.4 2012/10/06 15:33:59 wiz Exp $	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -35,7 +35,7 @@
 
 #include "sqlite3.h"
 
-#define DBPATH "/var/db/man.db"
+#define MANCONF "/etc/man.conf"
 #define SECMAX 9
 
 /* Flags for opening the database */
@@ -43,7 +43,7 @@
 #define MANDB_WRITE SQLITE_OPEN_READWRITE
 #define MANDB_CREATE SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
 
-#define APROPOS_SCHEMA_VERSION 20120130
+#define APROPOS_SCHEMA_VERSION 20120507
 
 /*
  * Used to identify the section of a man(7) page.
@@ -84,8 +84,9 @@ typedef struct query_args {
 char *lower(char *);
 void concat(char **, const char *);
 void concat2(char **, const char *, size_t);
-sqlite3 *init_db(int);
+sqlite3 *init_db(int, const char *);
 void close_db(sqlite3 *);
+char *get_dbpath(const char *);
 int run_query(sqlite3 *, const char *[3], query_args *);
 int run_query_html(sqlite3 *, query_args *);
 int run_query_pager(sqlite3 *, query_args *);
