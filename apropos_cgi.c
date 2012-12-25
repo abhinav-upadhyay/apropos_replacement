@@ -115,7 +115,7 @@ main(int argc, char *argv[])
 	char *qstr = getenv("QUERY_STRING");
 	char *errmsg;
 	
-	sqlite3 *db = init_db(MANDB_READONLY);
+	sqlite3 *db = init_db(MANDB_READONLY, MANCONF);
 	if (db == NULL) {
 		printf("Could not open database connection\n");
 		exit(EXIT_FAILURE);

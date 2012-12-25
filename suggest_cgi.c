@@ -46,7 +46,7 @@ main(int argc, char **argv)
 	if ((query = get_param(qstr, "query")) == NULL)
 		exit(EXIT_FAILURE);
 
-	db = init_db(MANDB_READONLY);
+	db = init_db(MANDB_READONLY, MANCONF);
 	printf("Content-type:application/json;\n");
 	query = parse_space(query);
 	char *suggestions = get_suggestions(db, query);
