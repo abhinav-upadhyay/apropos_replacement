@@ -87,4 +87,4 @@ estrdup(const char *s)
         err(EXIT_FAILURE, "Cannot copy string");
     return ret;
 }
-
+#endif
