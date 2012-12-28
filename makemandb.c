@@ -33,7 +33,7 @@ __RCSID("$NetBSD: makemandb.c,v 1.16 2012/11/08 19:17:54 christos Exp $");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <util.h>
+#include "util.h"
 
 #include "apropos-utils.h"
 #include "man.h"

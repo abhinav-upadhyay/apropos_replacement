@@ -1,0 +1,24 @@
+all:	makemandb apropos whatis apropos.cgi suggest.cgi
+
+makemandb:	makemandb.o apropos-utils.o manconf.o
+
+apropos:	apropos.o apropos-utils.o manconf.o
+
+whatis:	whatis.o apropos-utils.o manconf.o
+
+apropos.cgi:	apropos_cgi.o apropos-utils.o manconf.o cgi-utils.o
+
+suggest.cgi:	suggest_cgi.o cgi-utils.o apropos-utils.o manconf.o
+
+makemandb.o:	makemandb.c apropos-utils.c manconf.c 
+
+apropos.o:	apropos.c apropos-utils.c manconf.c
+
+whatis.o:	whatis.c apropos-utils.c manconf.c
+
+apropos_cgi.o:	apropos_cgi.c apropos-utils.c cgi-utils.c manconf.c
+
+suggest_cgi.o:	suggest_cgi.c apropos-utils.c cgi-utils.c manconf.c
+
+
+

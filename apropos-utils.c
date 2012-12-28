@@ -322,6 +322,7 @@ unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 char *
 get_dbpath(const char *manconf)
 {
+#ifndef __linux__
 	TAG *tp;
 	char *dbpath;
 
@@ -335,6 +336,9 @@ get_dbpath(const char *manconf)
 
 	dbpath = TAILQ_LAST(&tp->entrylist, tqh)->s;
 	return dbpath;
+#else
+    return "/var/db/man.db";
+#endif
 }
 
 /* init_db --
