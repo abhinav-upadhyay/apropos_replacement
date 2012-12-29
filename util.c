@@ -73,6 +73,7 @@ emalloc(size_t n)
 void *
 erealloc(void *p, size_t n)
 {
+    //TODO Probably the caller should not be calling realloc with 0 bytes requirement, should check.
     if (n == 0)
         return p;
     void *ret = realloc(p, n);
