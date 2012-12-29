@@ -47,6 +47,9 @@
     man(1) which would print the search path for man pages in a new line separated 
     format on stdout. That is required for building the Full Text Search Index 
     using makemandb. And of course the Makefile might require some modifications.
+
+    GNU/Linux: Please checkout the linux branch for using this code on Linux.
+    Currently, it is still a work in progress.
     
     
 3. USING:
