@@ -1,6 +1,8 @@
 CFLAGS=-Wall -c -I/usr/local/include/mandoc
 LFLAGS=-L/usr/local/lib/mandoc -lm -mandoc -lz
-all:	makemandb apropos whatis apropos.cgi suggest.cgi
+TOOL_NBPERF=gperf
+TOOL_SED=sed
+all:	makemandb apropos whatis apropos.cgi suggest.cgi 
 
 makemandb:	makemandb.o apropos-utils.o 
 	${CC} ${LFLAGS} -o makemandb makemandb.o apropos-utils.o 
@@ -16,6 +18,16 @@ apropos.cgi:	apropos_cgi.o apropos-utils.o cgi-utils.o
 
 suggest.cgi:	suggest_cgi.o cgi-utils.o apropos-utils.o 
 	${CC} ${LFLAGS}-o suggest.cgi suggest_cgu.o cgi-utils.o apropos-utils.o 
+
+apropos-utils.o:	apropos-utils.c stopwords.c
+	${CC} ${CFLAGS} apropos-utils.c 
+
+stopwords.c:	stopwords.txt
+	( set -e; ${TOOL_NBPERF} -N stopwords_hash stopwords.txt;    \
+	echo 'static const char *stopwords[] = {';          \
+	${TOOL_SED} -e 's|^\(.*\)$$|    "\1",|' stopwords.txt;     \
+	echo '};'                           \
+	) > stopwords.c
 
 makemandb.o:	makemandb.c apropos-utils.c 
 	${CC} ${CFLAGS} makemandb.c apropos-utils.c 
