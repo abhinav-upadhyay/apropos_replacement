@@ -73,6 +73,8 @@ emalloc(size_t n)
 void *
 erealloc(void *p, size_t n)
 {
+    if (n == 0)
+        return p;
     void *ret = realloc(p, n);
     if (ret == NULL)
         err(EXIT_FAILURE, "Cannot re-allocate %zu bytes", n);
