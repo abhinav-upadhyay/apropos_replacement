@@ -1,4 +1,4 @@
-CFLAGS=-Wall -c -I/usr/local/include/mandoc
+CFLAGS=-Wall -c -I/usr/local/include/mandoc -g
 LFLAGS=-L/usr/local/lib/mandoc -lm -lmandoc -lz -lpthread -larchive -lbsd -ldl
 TOOL_NBPERF=gperf
 TOOL_SED=sed
@@ -26,7 +26,7 @@ util.o:	util.c
 	${CC} ${CFLAGS} util.c
 
 sqlite3.o:	sqlite3.c
-	${CC} ${CFLAGS} sqlite3.c
+	${CC} ${CFLAGS} -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS sqlite3.c
 
 stopwords.c:	stopwords.txt
 	( set -e; ${TOOL_NBPERF} -N stopwords_hash stopwords.txt;    \
