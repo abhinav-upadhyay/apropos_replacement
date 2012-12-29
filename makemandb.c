@@ -22,6 +22,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#ifdef __linux__
+#include <bsd/stdlib.h>
+#endif
+
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -29,7 +33,7 @@
 #include <archive.h>
 #include <libgen.h>
 #ifdef __linux__
-    #include <openssl/md5.h>
+    #include <bsd/md5.h>
 #else
     #include <md5.h>
 #endif
@@ -341,6 +345,7 @@ main(int argc, char *argv[])
 	init_secbuffs(&rec);
 	mp = mparse_alloc(MPARSE_AUTO, MANDOCLEVEL_FATAL, NULL, NULL);
 
+#ifndef __linux__
 	if (manconf) {
 		char *arg;
 		size_t command_len = shquote(manconf, NULL, 0) + 1;
@@ -352,6 +357,10 @@ main(int argc, char *argv[])
 		command = estrdup("man -p");
 		manconf = MANCONF;
 	}
+#else
+    /* At least this should work on Ubuntu */
+    command = "manpath | sed -e \'s/:/\\n/g\'";
+#endif
 
 	if (mflags.recreate)
 		remove(get_dbpath(manconf));

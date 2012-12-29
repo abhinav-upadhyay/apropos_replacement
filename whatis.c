@@ -31,12 +31,17 @@
 #include <sys/cdefs.h>
 //__RCSID("$NetBSD: whatis.c,v 1.4 2012/10/06 15:33:59 wiz Exp $");
 
+#ifdef __linux__
+#include <bsd/stdlib.h>
+#endif
+
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include "apropos-utils.h"
+#include "util.h"
 
 __dead static void
 usage(void)

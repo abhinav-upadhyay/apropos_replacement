@@ -39,7 +39,7 @@
 #include "util.h"
 
 int
-easprintf(char **restrict ret, const char *fmt, ...)
+easprintf(char **__restrict ret, const char *fmt, ...)
 {
 
     int rv;

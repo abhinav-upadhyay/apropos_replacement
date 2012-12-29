@@ -339,7 +339,7 @@ get_dbpath(const char *manconf)
 	dbpath = TAILQ_LAST(&tp->entrylist, tqh)->s;
 	return dbpath;
 #else
-    return "/var/db/man.db";
+    return "/var/man.db";
 #endif
 }
 

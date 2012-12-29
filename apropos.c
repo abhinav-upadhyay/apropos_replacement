@@ -33,15 +33,19 @@
 #include <sys/cdefs.h>
 //__RCSID("$NetBSD: apropos.c,v 1.8 2012/10/06 15:33:59 wiz Exp $");
 
+#ifdef __linux__
+#include <bsd/stdlib.h>
+#endif
+
 #include <err.h>
 #include <search.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <util.h>
 
 #include "apropos-utils.h"
+#include "util.h"
 #include "sqlite3.h"
 
 typedef struct apropos_flags {
