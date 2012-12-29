@@ -359,7 +359,8 @@ main(int argc, char *argv[])
 	}
 #else
     /* At least this should work on Ubuntu */
-    command = "manpath | sed -e \'s/:/\\n/g\'";
+    command = estrdup("manpath | sed -e \'s/:/\\n/g\'");
+    manconf = MANCONF;
 #endif
 
 	if (mflags.recreate)
