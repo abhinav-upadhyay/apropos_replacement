@@ -15,6 +15,8 @@
    table implementation using gperf or some other memory leaks. This needs
    further investigation and work.
 
+   run make -f Makefile.linux to build.
+
 1. INTRODUCTION
     Unix systems have had a culture and one of the main reasons behind
     the long standing success of Unix has been to follow this culture
