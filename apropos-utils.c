@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $");
+//__RCSID("$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $");
 
 #include <sys/queue.h>
 #include <sys/stat.h>
@@ -43,12 +43,14 @@ __RCSID("$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $");
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <util.h>
 #include <zlib.h>
 
 #include "apropos-utils.h"
-#include "manconf.h"
+#ifndef __linux__
+    #include "manconf.h"
+#endif
 #include "mandoc.h"
+#include "util.h"
 #include "sqlite3.h"
 
 #define BUFLEN 1024

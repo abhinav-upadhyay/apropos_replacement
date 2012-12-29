@@ -1,24 +1,35 @@
+CFLAGS=-Wall -c -I/usr/local/include/mandoc
+LFLAGS=-L/usr/local/lib/mandoc -lm -mandoc -lz
 all:	makemandb apropos whatis apropos.cgi suggest.cgi
 
-makemandb:	makemandb.o apropos-utils.o manconf.o
+makemandb:	makemandb.o apropos-utils.o 
+	${CC} ${LFLAGS} -o makemandb makemandb.o apropos-utils.o 
 
-apropos:	apropos.o apropos-utils.o manconf.o
+apropos:	apropos.o apropos-utils.o 
+	${CC} ${LFLAGS} -o apropos apropos.o apropos-utils.o 
 
-whatis:	whatis.o apropos-utils.o manconf.o
+whatis:	whatis.o apropos-utils.o 
+	${CC} ${LFLAGS} -o whatis whatis.o apropos-utils.o 
 
-apropos.cgi:	apropos_cgi.o apropos-utils.o manconf.o cgi-utils.o
+apropos.cgi:	apropos_cgi.o apropos-utils.o cgi-utils.o
+	${CC} ${LFLAGS} -o apropos.cgi apropos-utils.o cgi-utils.o
 
-suggest.cgi:	suggest_cgi.o cgi-utils.o apropos-utils.o manconf.o
+suggest.cgi:	suggest_cgi.o cgi-utils.o apropos-utils.o 
+	${CC} ${LFLAGS}-o suggest.cgi suggest_cgu.o cgi-utils.o apropos-utils.o 
 
-makemandb.o:	makemandb.c apropos-utils.c manconf.c 
+makemandb.o:	makemandb.c apropos-utils.c 
+	${CC} ${CFLAGS} makemandb.c apropos-utils.c 
 
-apropos.o:	apropos.c apropos-utils.c manconf.c
+apropos.o:	apropos.c apropos-utils.c 
+	${CC} ${CFLAGS} apropos.c apropos-utils.c 
 
-whatis.o:	whatis.c apropos-utils.c manconf.c
+whatis.o:	whatis.c apropos-utils.c 
+	${CC} ${CFLAGS} whatis.c apropos-utils.c 
 
-apropos_cgi.o:	apropos_cgi.c apropos-utils.c cgi-utils.c manconf.c
+apropos_cgi.o:	apropos_cgi.c apropos-utils.c cgi-utils.c 
+	${CC} ${CFLAGS} apropos_cgi.c apropos-utils.c cgi-utils.c 
 
-suggest_cgi.o:	suggest_cgi.c apropos-utils.c cgi-utils.c manconf.c
-
+suggest_cgi.o:	suggest_cgi.c apropos-utils.c cgi-utils.c 
+	${CC} ${CFLAGS} suggest_cgi.c apropos-utils.c cgi-utils.c 
 
 

@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: whatis.c,v 1.4 2012/10/06 15:33:59 wiz Exp $");
+//__RCSID("$NetBSD: whatis.c,v 1.4 2012/10/06 15:33:59 wiz Exp $");
 
 #include <err.h>
 #include <stdio.h>

@@ -17,7 +17,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: makemandb.c,v 1.16 2012/11/08 19:17:54 christos Exp $");
+//__RCSID("$NetBSD: makemandb.c,v 1.16 2012/11/08 19:17:54 christos Exp $");
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -28,7 +28,11 @@ __RCSID("$NetBSD: makemandb.c,v 1.16 2012/11/08 19:17:54 christos Exp $");
 #include <err.h>
 #include <archive.h>
 #include <libgen.h>
-#include <md5.h>
+#ifdef __linux__
+    #include <openssl/md5.h>
+#else
+    #include <md5.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
