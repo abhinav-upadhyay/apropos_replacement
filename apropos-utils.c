@@ -544,6 +544,11 @@ edits1 (char *word)
 			counter++;
 		}
 	}
+
+    for (i = 0; i < n + 1; i++) {
+        free(splits[i].a);
+        free(splits[i].b);
+    }
 	return candidates;
 }
 
@@ -626,14 +631,15 @@ known_word(sqlite3 *db, char **list, int n)
 static void
 free_list(char **list, int n)
 {
-	int i = 0;
-	if (list == NULL)
-		return;
+    int i = 0;
+    if (list == NULL)
+        return;
 
-	while (i < n) {
-		free(list[i]);
-		i++;
+    while (i < n) {
+        free(list[i]);
+        i++;
 	}
+    free(list);
 }
 
 /*
