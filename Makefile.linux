@@ -54,4 +54,4 @@ cgi-utils.o: cgi-utils.c util.c
 	${CC} ${CFLAGS} cgi-utils.c
 
 clean:
-	rm -f *.o makemandb apropos whatis suggest.cgi apropos.cgi
+	rm -f *.o makemandb apropos whatis suggest.cgi apropos.cgi stopwords.c
