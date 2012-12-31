@@ -19,7 +19,7 @@ apropos.cgi:	apropos_cgi.o apropos-utils.o cgi-utils.o util.o sqlite3.o
 suggest.cgi:	suggest_cgi.o cgi-utils.o apropos-utils.o util.o sqlite3.o
 	${CC} -o suggest.cgi util.o suggest_cgi.o cgi-utils.o apropos-utils.o sqlite3.o ${LFLAGS}
 
-apropos-utils.o:	apropos-utils.c stopwords.c util.c sqlite3.c
+apropos-utils.o:	stopwords.c apropos-utils.c util.c sqlite3.c
 	${CC} ${CFLAGS} apropos-utils.c
 
 util.o:	util.c
@@ -27,6 +27,8 @@ util.o:	util.c
 
 sqlite3.o:	sqlite3.c
 	${CC} ${CFLAGS} -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS sqlite3.c
+
+apropos-utils.c: stopwords.c
 
 stopwords.c:	stopwords.txt
 	( set -e; ${TOOL_NBPERF} -N stopwords_hash stopwords.txt;    \
