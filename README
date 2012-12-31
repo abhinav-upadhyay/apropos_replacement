@@ -3,7 +3,7 @@
 
    As of now, the code is building successfully on Ubuntu 12.10.
 
-   Dependencies: zlib, libarchive-dev, libbsd-dev
+   Dependencies: zlib, libarchive-dev, libbsd-dev, gperf
    Also, you should download, build and install mdocml (from mdocml.bsd.lv).
    The makefile is not very sophisticated, it assumes mandoc is installed in
    its standard location (/usr/local/mandoc).
