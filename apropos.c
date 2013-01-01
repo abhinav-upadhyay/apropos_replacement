@@ -200,6 +200,7 @@ main(int argc, char *argv[])
 				concat(&correct_query, correct);
 			else
 				concat(&correct_query, term);
+            free(correct);
 		}
 
 		printf("Did you mean %s ?\n", correct_query);
