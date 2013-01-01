@@ -538,6 +538,11 @@ edits1 (char *word)
 			counter++;
 		}
 	}
+
+    for (i = 0; i < n + 1; i++) {
+        free(splits[i].a);
+        free(splits[i].b);
+    }
 	return candidates;
 }
 
@@ -628,6 +633,7 @@ free_list(char **list, int n)
 		free(list[i]);
 		i++;
 	}
+    free(list);
 }
 
 /*
