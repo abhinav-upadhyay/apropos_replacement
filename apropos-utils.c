@@ -226,6 +226,8 @@ create_db(sqlite3 *db)
 				//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
 			    "machine, md5_hash); "	//mandb_links
+            "CREATE TABLE IF NOT EXISTS mandb_graph(src_name, src_section, "
+                "target_name, target_section); " // mandb_graph
 			"CREATE TABLE mandb_dict(word UNIQUE, frequency);";	//mandb_dict;
 
 

@@ -61,6 +61,11 @@ typedef struct makemandb_flags {
 	int verbosity;	// 0: quiet, 1: default, 2: verbose
 } makemandb_flags;
 
+typedef struct mandb_graph_edge {
+    char *target_name;
+    char *target_section;
+} mandb_graph_edge;
+
 typedef struct mandb_rec {
 	/* Fields for mandb table */
 	char *name;	// for storing the name of the man page
@@ -88,6 +93,9 @@ typedef struct mandb_rec {
 	char *links; //all the links to a page in a space separated form
 	char *file_path;
 
+    /* for mandb_graph */
+    struct mandb_graph_edge m_edge;
+
 	/* Non-db fields */
 	int page_type; //Indicates the type of page: mdoc or man
 } mandb_rec;
@@ -114,6 +122,7 @@ static void pman_node(const struct man_node *n, mandb_rec *);
 static void pman_parse_node(const struct man_node *, secbuff *);
 static void pman_parse_name(const struct man_node *, mandb_rec *);
 static void pman_sh(const struct man_node *, mandb_rec *);
+//static void pman_BR(const struct man_node *, mandb_rec *);
 static void pman_block(const struct man_node *, mandb_rec *);
 static void traversedir(const char *, const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *, mandb_rec *);
@@ -947,6 +956,7 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 	}
 }
 
+
 /*
  * pmdoc_Nd --
  *  Extracts the one line description of the man page from the .Nd macro
@@ -974,8 +984,9 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 			n = n->next;
 			easprintf(&buf, "%s(%s)", temp, n->string);
 			concat(&rec->name_desc, buf);
+            rec->m_edge.target_name = temp;
+            rec->m_edge.target_section = estrdup(n->string);
 			free(buf);
-			free(temp);
 		} else {
 			concat(&rec->name_desc, n->string);
 		}
@@ -1161,6 +1172,7 @@ mdoc_parse_section(enum mdoc_sec sec, const char *string, mandb_rec *rec)
 	case SEC_HISTORY:
 	case SEC_AUTHORS:
 	case SEC_BUGS:
+    case SEC_SEE_ALSO:
 		break;
 	default:
 		append(&rec->desc, string);
@@ -1874,6 +1886,51 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		exit(EXIT_FAILURE);
 	}
 
+/* ---------------------- Populate the mandb_graph table ------------------- */
+	sqlstr = "INSERT INTO mandb_graph VALUES (:src_name, :src_section, :target_name,"
+		 " :target_section)";
+
+    if (rec->m_edge.target_name && rec->m_edge.target_section) {
+
+        rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+        if (rc != SQLITE_OK)
+            goto Out;
+
+        idx = sqlite3_bind_parameter_index(stmt, ":src_name");
+        rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
+        if (rc != SQLITE_OK) {
+            sqlite3_finalize(stmt);
+            goto Out;
+        }
+
+        idx = sqlite3_bind_parameter_index(stmt, ":src_section");
+        rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
+        if (rc != SQLITE_OK) {
+            sqlite3_finalize(stmt);
+            goto Out;
+        }
+
+        idx = sqlite3_bind_parameter_index(stmt, ":target_name");
+        rc = sqlite3_bind_text(stmt, idx, rec->m_edge.target_name, -1, NULL);
+        if (rc != SQLITE_OK) {
+            sqlite3_finalize(stmt);
+            goto Out;
+        }
+
+        idx = sqlite3_bind_parameter_index(stmt, ":target_section");
+        rc = sqlite3_bind_text(stmt, idx, rec->m_edge.target_section, -1, NULL);
+        if (rc != SQLITE_OK) {
+            sqlite3_finalize(stmt);
+            goto Out;
+        }
+
+        rc = sqlite3_step(stmt);
+        if (rc != SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            warnx("Failed to update mandb_graph.");
+        }
+    }
+
 /*------------------------ Populate the mandb_links table---------------------*/
 	char *str = NULL;
 	char *links;	
@@ -1944,6 +2001,8 @@ check_md5(const char *file, sqlite3 *db, const char *table, char **md5sum,
 	    table);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
+		if (mflags.verbosity)
+			warnx("%s: %s", sqlite3_errmsg(db), file);
 		free(sqlstr);
 		free(*md5sum);
 		*md5sum = NULL;
@@ -2026,6 +2085,12 @@ cleanup(mandb_rec *rec)
 
 	free(rec->md5_hash);
 	rec->md5_hash = NULL;
+
+    free(rec->m_edge.target_name);
+    rec->m_edge.target_name = NULL;
+
+    free(rec->m_edge.target_section);
+    rec->m_edge.target_section = NULL;
 }
 
 /*
