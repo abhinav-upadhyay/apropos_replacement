@@ -984,9 +984,8 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 			n = n->next;
 			easprintf(&buf, "%s(%s)", temp, n->string);
 			concat(&rec->name_desc, buf);
-            rec->m_edge.target_name = temp;
-            rec->m_edge.target_section = estrdup(n->string);
 			free(buf);
+            free(temp);
 		} else {
 			concat(&rec->name_desc, n->string);
 		}
@@ -1048,6 +1047,8 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 			buf[len + 2] = ')';
 			buf[len + 3] = 0;
 			mdoc_parse_section(n->sec, buf, rec);
+            rec->m_edge.target_name = estrdup(sn->string);
+            rec->m_edge.target_section = estrdup(n->string);
 			free(buf);
 		}
 
@@ -1887,7 +1888,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 
 /* ---------------------- Populate the mandb_graph table ------------------- */
-	sqlstr = "INSERT INTO mandb_graph VALUES (:src_name, :src_section, :target_name,"
+	sqlstr = "INSERT INTO mandb_graph VALUES (:src_md5, :target_name,"
 		 " :target_section)";
 
     if (rec->m_edge.target_name && rec->m_edge.target_section) {
@@ -1896,15 +1897,8 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
         if (rc != SQLITE_OK)
             goto Out;
 
-        idx = sqlite3_bind_parameter_index(stmt, ":src_name");
-        rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
-        if (rc != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            goto Out;
-        }
-
-        idx = sqlite3_bind_parameter_index(stmt, ":src_section");
-        rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
+        idx = sqlite3_bind_parameter_index(stmt, ":src_md5");
+        rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
         if (rc != SQLITE_OK) {
             sqlite3_finalize(stmt);
             goto Out;
