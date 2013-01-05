@@ -1,3 +1,8 @@
+0. Linux Support:
+    Recently I started work on porting this code to GNU/Linux. I have
+    been successfully able to build it on Ubuntu 12.04/12.10 and the code
+    is available in the linux branch of this repository. 
+
 1. INTRODUCTION
     Unix systems have had a culture and one of the main reasons behind
     the long standing success of Unix has been to follow this culture
