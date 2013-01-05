@@ -36,6 +36,7 @@ __RCSID("$NetBSD: makemandb.c,v 1.16 2012/11/08 19:17:54 christos Exp $");
 #include <util.h>
 
 #include "apropos-utils.h"
+#include "linkedlist.h"
 #include "man.h"
 #include "mandoc.h"
 #include "mdoc.h"
@@ -93,8 +94,8 @@ typedef struct mandb_rec {
 	char *links; //all the links to a page in a space separated form
 	char *file_path;
 
-    /* for mandb_graph */
-    struct mandb_graph_edge m_edge;
+    /* list of outgoing man page references*/
+    mandb_list *edge_list;
 
 	/* Non-db fields */
 	int page_type; //Indicates the type of page: mdoc or man
@@ -133,6 +134,7 @@ static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
 static char *parse_escape(const char *);
+static void free_mandb_edge(void *);
 static makemandb_flags mflags = { .verbosity = 1 };
 
 typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
@@ -794,6 +796,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			rec->file_path = estrdup(file);
 			// file_path is freed by insert_into_db itself.
 			chdir(parent);
+            rec->edge_list = mandb_list_init(free_mandb_edge);
 			begin_parse(file, mp, rec, buf, buflen);
 			if (insert_into_db(db, rec) < 0) {
 				if (mflags.verbosity)
@@ -1047,8 +1050,10 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 			buf[len + 2] = ')';
 			buf[len + 3] = 0;
 			mdoc_parse_section(n->sec, buf, rec);
-            rec->m_edge.target_name = estrdup(sn->string);
-            rec->m_edge.target_section = estrdup(n->string);
+            mandb_graph_edge *edge = emalloc(sizeof(mandb_graph_edge));
+            edge->target_name = estrdup(sn->string);
+            edge->target_section = estrdup(n->string);
+            mandb_list_add_node(rec->edge_list, (void **) &edge); 
 			free(buf);
 		}
 
@@ -1891,37 +1896,43 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	sqlstr = "INSERT INTO mandb_graph VALUES (:src_md5, :target_name,"
 		 " :target_section)";
 
-    if (rec->m_edge.target_name && rec->m_edge.target_section) {
+    mandb_list_node *n;
+    n = rec->edge_list->head;
+    for (; n != NULL; n = n->next) {
+        mandb_graph_edge *m_edge = (mandb_graph_edge *) n->data;
 
-        rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-        if (rc != SQLITE_OK)
-            goto Out;
+        if (m_edge->target_name && m_edge->target_section) {
 
-        idx = sqlite3_bind_parameter_index(stmt, ":src_md5");
-        rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
-        if (rc != SQLITE_OK) {
+            rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+            if (rc != SQLITE_OK)
+                continue;
+
+            idx = sqlite3_bind_parameter_index(stmt, ":src_md5");
+            rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
+            if (rc != SQLITE_OK) {
+                sqlite3_finalize(stmt);
+                continue;
+            }
+
+            idx = sqlite3_bind_parameter_index(stmt, ":target_name");
+            rc = sqlite3_bind_text(stmt, idx, m_edge->target_name, -1, NULL);
+            if (rc != SQLITE_OK) {
+                sqlite3_finalize(stmt);
+                continue;
+            }
+
+            idx = sqlite3_bind_parameter_index(stmt, ":target_section");
+            rc = sqlite3_bind_text(stmt, idx, m_edge->target_section, -1, NULL);
+            if (rc != SQLITE_OK) {
+                sqlite3_finalize(stmt);
+                continue;
+            }
+
+            rc = sqlite3_step(stmt);
             sqlite3_finalize(stmt);
-            goto Out;
-        }
-
-        idx = sqlite3_bind_parameter_index(stmt, ":target_name");
-        rc = sqlite3_bind_text(stmt, idx, rec->m_edge.target_name, -1, NULL);
-        if (rc != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            goto Out;
-        }
-
-        idx = sqlite3_bind_parameter_index(stmt, ":target_section");
-        rc = sqlite3_bind_text(stmt, idx, rec->m_edge.target_section, -1, NULL);
-        if (rc != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            goto Out;
-        }
-
-        rc = sqlite3_step(stmt);
-        if (rc != SQLITE_DONE) {
-            sqlite3_finalize(stmt);
-            warnx("Failed to update mandb_graph.");
+            if (rc != SQLITE_DONE) {
+                warnx("Failed to update mandb_graph.");
+            }
         }
     }
 
@@ -2080,11 +2091,8 @@ cleanup(mandb_rec *rec)
 	free(rec->md5_hash);
 	rec->md5_hash = NULL;
 
-    free(rec->m_edge.target_name);
-    rec->m_edge.target_name = NULL;
-
-    free(rec->m_edge.target_section);
-    rec->m_edge.target_section = NULL;
+    mandb_list_free(rec->edge_list);
+    rec->edge_list = NULL;
 }
 
 /*
@@ -2252,6 +2260,14 @@ append(secbuff *sbuff, const char *src)
 	memcpy(sbuff->data + sbuff->offset, temp, srclen);
 	sbuff->offset += srclen;
 	free(temp);
+}
+
+static void
+free_mandb_edge(void *data)
+{
+    mandb_graph_edge *e = (mandb_graph_edge *) data;
+    free(e->target_name);
+    free(e->target_section);
 }
 
 static void
