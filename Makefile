@@ -6,10 +6,12 @@ MDIST=	${NETBSDSRCDIR}/external/bsd/mdocml/dist
 MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
 MANCONFDIR=${NETBSDSRCDIR}/usr.bin/man
 
-PROGS=			makemandb apropos whatis
+PROGS=			makemandb apropos whatis apropos.cgi suggest.cgi
 SRCS.makemandb=		makemandb.c apropos-utils.c manconf.c
 SRCS.apropos=	apropos.c apropos-utils.c manconf.c
 SRCS.whatis=	whatis.c apropos-utils.c manconf.c
+SRCS.apropos.cgi=	apropos_cgi.c apropos-utils.c cgi-utils.c manconf.c
+SRCS.suggest.cgi=	suggest_cgi.c cgi-utils.c apropos-utils.c manconf.c
 MAN.makemandb=	makemandb.8
 MAN.apropos=	apropos.1
 MAN.whatis=	whatis.1

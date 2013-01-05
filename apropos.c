@@ -58,7 +58,6 @@ typedef struct callback_data {
 	apropos_flags *aflags;
 } callback_data;
 
-static char *remove_stopwords(const char *);
 static int query_callback(void *, const char * , const char *, const char *,
 	const char *, size_t);
 __dead static void usage(void);
@@ -76,6 +75,8 @@ main(int argc, char *argv[])
 	char *errmsg = NULL;
 	char *str;
 	int ch, rc = 0;
+	char *correct_query;
+	char *correct;
 	int s;
 	callback_data cbdata;
 	cbdata.out = stdout;		// the default output stream
@@ -151,6 +152,7 @@ main(int argc, char *argv[])
 	if (query == NULL)
 		errx(EXIT_FAILURE, "Try using more relevant keywords");
 
+	build_boolean_query(query);
 	if ((db = init_db(MANDB_READONLY, MANCONF)) == NULL)
 		exit(EXIT_FAILURE);
 
@@ -181,24 +183,34 @@ main(int argc, char *argv[])
 	rc = run_query_pager(db, &args);
 #endif
 
-	free(query);
-	close_db(db);
-	if (errmsg) {
+	if (errmsg || rc < 0) {
 		warnx("%s", errmsg);
 		free(errmsg);
+		free(query);
+		close_db(db);
 		exit(EXIT_FAILURE);
 	}
 
-	if (rc < 0) {
-		/* Something wrong with the database. Exit */
-		exit(EXIT_FAILURE);
-	}
-	
+	char *orig_query =  query;
+	char *term;
 	if (cbdata.count == 0) {
-		warnx("No relevant results obtained.\n"
+		correct_query = NULL;
+		for (term = strtok(query, " "); term; term = strtok(NULL, " ")) {
+			if ((correct = spell(db, term)))
+				concat(&correct_query, correct);
+			else
+				concat(&correct_query, term);
+            free(correct);
+		}
+
+		printf("Did you mean %s ?\n", correct_query);
+/*		warnx("No relevant results obtained.\n"
 			  "Please make sure that you spelled all the terms correctly "
-			  "or try using better keywords.");
+			  "or try using better keywords.");*/
+		free(correct_query);
 	}
+	free(orig_query);
+	close_db(db);
 	return 0;
 }
 
@@ -222,51 +234,6 @@ query_callback(void *data, const char *section, const char *name,
 		fprintf(out, "%s\n\n", snippet);
 
 	return 0;
-}
-
-#include "stopwords.c"
-
-/*
- * remove_stopwords--
- *  Scans the query and removes any stop words from it.
- *  Returns the modified query or NULL, if it contained only stop words.
- */
-
-static char *
-remove_stopwords(const char *query)
-{
-	size_t len, idx;
-	char *output, *buf;
-	const char *sep, *next;
-
-	output = buf = emalloc(strlen(query) + 1);
-
-	for (; query[0] != '\0'; query = next) {
-		sep = strchr(query, ' ');
-		if (sep == NULL) {
-			len = strlen(query);
-			next = query + len;
-		} else {
-			len = sep - query;
-			next = sep + 1;
-		}
-		if (len == 0)
-			continue;
-		idx = stopwords_hash(query, len);
-		if (memcmp(stopwords[idx], query, len) == 0 &&
-		    stopwords[idx][len] == '\0')
-			continue;
-		memcpy(buf, query, len);
-		buf += len;
-		*buf++ = ' ';
-	}
-
-	if (output == buf) {
-		free(output);
-		return NULL;
-	}
-	buf[-1] = '\0';
-	return output;
 }
 
 /*

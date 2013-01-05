@@ -388,10 +388,15 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 		
-	sqlstr = "CREATE TABLE metadb.file_cache(device, inode, mtime, parent,"
-		 " file PRIMARY KEY);"
+	sqlstr = "CREATE TABLE metadb.file_cache(device, inode,"
+		 " mtime, parent, file PRIMARY KEY);"
 		 "CREATE UNIQUE INDEX metadb.index_file_cache_dev"
-		 " ON file_cache (device, inode)";
+		 " ON file_cache (device, inode); "
+		 "CREATE VIRTUAL TABLE metadb.mandb_dup USING fts4(section, name, "
+		   "name_desc, desc, lib, return_vals, env, files, "
+		   "exit_status, diagnostics, errors, machine "
+		    "); "	//mandb_dup
+		"CREATE VIRTUAL TABLE metadb.mandb_dupaux USING fts4aux(mandb_dup); ";	// mandb_dict
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
 	if (errmsg != NULL) {
@@ -438,6 +443,15 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
+	sqlstr = "INSERT OR IGNORE INTO mandb_dict SELECT term, occurrences "
+		     "FROM metadb.mandb_dupaux; "
+		     "DROP TABLE metadb.mandb_dup; "
+			 "DROP TABLE metadb.mandb_dupaux;";
+	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
+	if (errmsg != NULL) {
+		warnx("%s", errmsg);
+		free(errmsg);
+	}
 	if (mflags.optimize)
 		optimize(db);
 
@@ -1509,6 +1523,116 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		free(rec->links);
 		rec->links = tmp;
 	}
+
+/*------------------------ Populate the mandb_dup table---------------------------*/
+	sqlstr = "INSERT INTO metadb.mandb_dup VALUES (:section, :name, :name_desc, :desc,"
+		 " :lib, :return_vals, :env, :files, :exit_status,"
+		 " :diagnostics, :errors, :machine)";
+
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		goto Out;
+
+	idx = sqlite3_bind_parameter_index(stmt, ":name");
+	rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":section");
+	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":name_desc");
+	rc = sqlite3_bind_text(stmt, idx, rec->name_desc, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":desc");
+	rc = sqlite3_bind_text(stmt, idx, rec->desc.data,
+	                       rec->desc.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":lib");
+	rc = sqlite3_bind_text(stmt, idx, rec->lib.data, rec->lib.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":return_vals");
+	rc = sqlite3_bind_text(stmt, idx, rec->return_vals.data,
+	                      rec->return_vals.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":env");
+	rc = sqlite3_bind_text(stmt, idx, rec->env.data, rec->env.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":files");
+	rc = sqlite3_bind_text(stmt, idx, rec->files.data,
+	                       rec->files.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
+	rc = sqlite3_bind_text(stmt, idx, rec->exit_status.data,
+	                       rec->exit_status.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":diagnostics");
+	rc = sqlite3_bind_text(stmt, idx, rec->diagnostics.data,
+	                       rec->diagnostics.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":errors");
+	rc = sqlite3_bind_text(stmt, idx, rec->errors.data,
+	                       rec->errors.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+	
+	idx = sqlite3_bind_parameter_index(stmt, ":machine");
+	if (rec->machine)
+		rc = sqlite3_bind_text(stmt, idx, rec->machine, -1, NULL);
+	else
+		rc = sqlite3_bind_null(stmt, idx);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	sqlite3_finalize(stmt);
 
 /*------------------------ Populate the mandb table---------------------------*/
 	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc,"
