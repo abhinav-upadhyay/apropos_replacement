@@ -123,7 +123,7 @@ static void pman_node(const struct man_node *n, mandb_rec *);
 static void pman_parse_node(const struct man_node *, secbuff *);
 static void pman_parse_name(const struct man_node *, mandb_rec *);
 static void pman_sh(const struct man_node *, mandb_rec *);
-//static void pman_BR(const struct man_node *, mandb_rec *);
+static void pman_BR(const struct man_node *, mandb_rec *);
 static void pman_block(const struct man_node *, mandb_rec *);
 static void traversedir(const char *, const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *, mandb_rec *);
@@ -264,7 +264,7 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Ta */
 };
 
-static	const pman_nf mans[MAN_MAX] = {
+static const pman_nf mans[MAN_MAX] = {
 	NULL,	//br
 	NULL,	//TH
 	pman_sh, //SH
@@ -279,7 +279,7 @@ static	const pman_nf mans[MAN_MAX] = {
 	NULL,	//SB
 	NULL,	//BI
 	NULL,	//IB
-	NULL,	//BR
+	pman_BR,	//BR
 	NULL,	//RB
 	NULL,	//R
 	pman_block,	//B
@@ -1244,6 +1244,11 @@ pman_block(const struct man_node *n, mandb_rec *rec)
 {
 }
 
+static void
+pman_BR(const struct man_node *n, mandb_rec *rec)
+{
+}
+
 /* 
  * pman_sh --
  * This function does one of the two things:
@@ -1280,6 +1285,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 	    { MANSEC_BUGS, "BUGS" },
 	    { MANSEC_AUTHORS, "AUTHORS" },
 	    { MANSEC_COPYRIGHT, "COPYRIGHT" },
+        { MANSEC_SEE_ALSO, "SEE ALSO" },
 	};
 	const struct man_node *head;
 	char *name_desc;
@@ -1401,6 +1407,14 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		return;
 	}
 
+	/* The SEE ALSO section might be specified in multiple ways */
+	if (strcmp(head->string, "SEE") == 0 &&
+	    head->next != NULL && head->next->type == MAN_TEXT &&
+	    strcmp(head->next->string, "ALSO") == 0) {
+		man_parse_section(MANSEC_SEE_ALSO, n, rec);
+		return;
+	}
+
 	/* Store the rest of the content in desc. */
 	man_parse_section(MANSEC_NONE, n, rec);
 }
@@ -1421,6 +1435,63 @@ pman_parse_node(const struct man_node *n, secbuff *s)
 		
 	pman_parse_node(n->child, s);
 	pman_parse_node(n->next, s);
+}
+
+static void
+pman_parse_see_also(const struct man_node *n, mandb_rec *rec)
+{
+
+    warnx("pman_parse_see_also called");
+    if (n == NULL)
+        return;
+
+    if (n->type == MAN_TEXT) {
+        if (n->next) {
+            const struct man_node *name_node = n;
+            n = n->next;
+            while (n && n->type != MAN_TEXT)
+                n = n->next;
+
+            if (n && n->type == MAN_TEXT) {
+                mandb_graph_edge *e = emalloc(sizeof(mandb_graph_edge));
+                e->target_name = estrdup(name_node->string);
+                e->target_section = estrdup(&n->string[1]);
+                mandb_list_add_node(rec->edge_list, (void **) &e);
+            }
+        } else {
+            char *see_also_str = n->string;
+            char *comma_pos = strchr(see_also_str, ',');
+            while (see_also_str && comma_pos != NULL) {
+                char *open_paren_pos = strchr(see_also_str, '(');
+                char *close_paren_pos = strchr(see_also_str, ')');
+
+                if (open_paren_pos == NULL || close_paren_pos == NULL)
+                    break;
+
+                if (open_paren_pos > comma_pos || close_paren_pos > comma_pos)
+                    break;
+
+                mandb_graph_edge *e = emalloc(sizeof(mandb_graph_edge));
+                size_t name_len = open_paren_pos - see_also_str + 1;
+                e->target_name = emalloc(name_len);
+                memcpy(e->target_name, see_also_str, name_len - 1);
+                e->target_name[name_len] = 0;
+                see_also_str = open_paren_pos + 1;
+                size_t section_len = close_paren_pos - see_also_str + 1;
+                e->target_section = emalloc(section_len);
+                memcpy(e->target_section, see_also_str, section_len);
+                e->target_section[section_len] = 0;
+                mandb_list_add_node(rec->edge_list, (void **) &e);
+                see_also_str = comma_pos + 1;
+                comma_pos = strchr(see_also_str, ',');
+            }
+        }
+    } 
+
+    if (n) {
+        pman_parse_see_also(n->child, rec);
+        pman_parse_see_also(n->next, rec);
+    }
 }
 
 /*
@@ -1463,6 +1534,9 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 	case MANSEC_ERRORS:
 		pman_parse_node(n, &rec->errors);
 		break;
+    case MANSEC_SEE_ALSO:
+        pman_parse_see_also(n, rec);
+        break;
 	case MANSEC_NAME:
 	case MANSEC_SYNOPSIS:
 	case MANSEC_EXAMPLES:
@@ -1898,6 +1972,12 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 
     mandb_list_node *n;
     n = rec->edge_list->head;
+    if (rec->page_type == MAN) {
+        if (n)
+            printf("Able to parse %s\n", rec->file_path);
+        else
+            printf("Unable to parse %s\n", rec->file_path);
+    }
     for (; n != NULL; n = n->next) {
         mandb_graph_edge *m_edge = (mandb_graph_edge *) n->data;
 
