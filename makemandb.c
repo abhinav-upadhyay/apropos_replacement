@@ -1454,7 +1454,7 @@ pman_parse_see_also(const struct man_node *n, mandb_rec *rec)
 
             if (n && n->type == MAN_TEXT) {
                 mandb_graph_edge *e = emalloc(sizeof(mandb_graph_edge));
-                e->target_name = estrdup(name_node->string);
+                e->target_name = parse_escape(name_node->string);
                 e->target_section = estrdup(&n->string[1]);
                 mandb_list_add_node(rec->edge_list, (void **) &e);
             }
@@ -1473,9 +1473,12 @@ pman_parse_see_also(const struct man_node *n, mandb_rec *rec)
 
                 mandb_graph_edge *e = emalloc(sizeof(mandb_graph_edge));
                 size_t name_len = open_paren_pos - see_also_str + 1;
-                e->target_name = emalloc(name_len);
-                memcpy(e->target_name, see_also_str, name_len - 1);
-                e->target_name[name_len] = 0;
+                char *target_name;
+                target_name = emalloc(name_len);
+                memcpy(target_name, see_also_str, name_len - 1);
+                target_name[name_len] = 0;
+                e->target_name = parse_escape(target_name);
+                free(target_name);
                 see_also_str = open_paren_pos + 1;
                 size_t section_len = close_paren_pos - see_also_str + 1;
                 e->target_section = emalloc(section_len);
