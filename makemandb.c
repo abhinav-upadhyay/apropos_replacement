@@ -1975,12 +1975,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 
     mandb_list_node *n;
     n = rec->edge_list->head;
-    if (rec->page_type == MAN) {
-        if (n)
-            printf("Able to parse %s\n", rec->file_path);
-        else
-            printf("Unable to parse %s\n", rec->file_path);
-    }
+    if (rec->page_type == MDOC) {
     for (; n != NULL; n = n->next) {
         mandb_graph_edge *m_edge = (mandb_graph_edge *) n->data;
 
@@ -2017,7 +2012,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
                 warnx("Failed to update mandb_graph.");
             }
         }
-    }
+    }}
 
 /*------------------------ Populate the mandb_links table---------------------*/
 	char *str = NULL;
