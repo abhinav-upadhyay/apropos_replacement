@@ -7,7 +7,7 @@ MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
 MANCONFDIR=${NETBSDSRCDIR}/usr.bin/man
 
 PROGS=			makemandb apropos whatis apropos.cgi suggest.cgi
-SRCS.makemandb=		makemandb.c apropos-utils.c manconf.c
+SRCS.makemandb=		makemandb.c apropos-utils.c manconf.c linkedlist.c
 SRCS.apropos=	apropos.c apropos-utils.c manconf.c
 SRCS.whatis=	whatis.c apropos-utils.c manconf.c
 SRCS.apropos.cgi=	apropos_cgi.c apropos-utils.c cgi-utils.c manconf.c
@@ -23,6 +23,7 @@ BINDIR.whatis=		/usr/bin
 .PATH: ${MANCONFDIR}
 
 CPPFLAGS+=-I${MDIST} -I${MANCONFDIR} -I${.OBJDIR}
+CPPFLAGS+=-g
 
 MDOCMLOBJDIR!=	cd ${MDOCDIR}/lib/libmandoc && ${PRINTOBJDIR}
 MDOCMLLIB=	${MDOCMLOBJDIR}/libmandoc.a

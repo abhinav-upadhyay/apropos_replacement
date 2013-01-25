@@ -36,6 +36,7 @@ __RCSID("$NetBSD: makemandb.c,v 1.16 2012/11/08 19:17:54 christos Exp $");
 #include <util.h>
 
 #include "apropos-utils.h"
+#include "linkedlist.h"
 #include "man.h"
 #include "mandoc.h"
 #include "mdoc.h"
@@ -93,8 +94,8 @@ typedef struct mandb_rec {
 	char *links; //all the links to a page in a space separated form
 	char *file_path;
 
-    /* for mandb_graph */
-    struct mandb_graph_edge m_edge;
+    /* list of outgoing man page references*/
+    mandb_list *edge_list;
 
 	/* Non-db fields */
 	int page_type; //Indicates the type of page: mdoc or man
@@ -122,7 +123,7 @@ static void pman_node(const struct man_node *n, mandb_rec *);
 static void pman_parse_node(const struct man_node *, secbuff *);
 static void pman_parse_name(const struct man_node *, mandb_rec *);
 static void pman_sh(const struct man_node *, mandb_rec *);
-//static void pman_BR(const struct man_node *, mandb_rec *);
+static void pman_BR(const struct man_node *, mandb_rec *);
 static void pman_block(const struct man_node *, mandb_rec *);
 static void traversedir(const char *, const char *, sqlite3 *, struct mparse *);
 static void mdoc_parse_section(enum mdoc_sec, const char *, mandb_rec *);
@@ -133,6 +134,7 @@ static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
 static char *parse_escape(const char *);
+static void free_mandb_edge(void *);
 static makemandb_flags mflags = { .verbosity = 1 };
 
 typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
@@ -262,7 +264,7 @@ static	const pmdoc_nf mdocs[MDOC_MAX] = {
 	NULL, /* Ta */
 };
 
-static	const pman_nf mans[MAN_MAX] = {
+static const pman_nf mans[MAN_MAX] = {
 	NULL,	//br
 	NULL,	//TH
 	pman_sh, //SH
@@ -277,7 +279,7 @@ static	const pman_nf mans[MAN_MAX] = {
 	NULL,	//SB
 	NULL,	//BI
 	NULL,	//IB
-	NULL,	//BR
+	pman_BR,	//BR
 	NULL,	//RB
 	NULL,	//R
 	pman_block,	//B
@@ -794,6 +796,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			rec->file_path = estrdup(file);
 			// file_path is freed by insert_into_db itself.
 			chdir(parent);
+            rec->edge_list = mandb_list_init(free_mandb_edge);
 			begin_parse(file, mp, rec, buf, buflen);
 			if (insert_into_db(db, rec) < 0) {
 				if (mflags.verbosity)
@@ -984,9 +987,8 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 			n = n->next;
 			easprintf(&buf, "%s(%s)", temp, n->string);
 			concat(&rec->name_desc, buf);
-            rec->m_edge.target_name = temp;
-            rec->m_edge.target_section = estrdup(n->string);
 			free(buf);
+            free(temp);
 		} else {
 			concat(&rec->name_desc, n->string);
 		}
@@ -1048,6 +1050,10 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 			buf[len + 2] = ')';
 			buf[len + 3] = 0;
 			mdoc_parse_section(n->sec, buf, rec);
+            mandb_graph_edge *edge = emalloc(sizeof(mandb_graph_edge));
+            edge->target_name = estrdup(sn->string);
+            edge->target_section = estrdup(n->string);
+            mandb_list_add_node(rec->edge_list, (void **) &edge); 
 			free(buf);
 		}
 
@@ -1238,6 +1244,11 @@ pman_block(const struct man_node *n, mandb_rec *rec)
 {
 }
 
+static void
+pman_BR(const struct man_node *n, mandb_rec *rec)
+{
+}
+
 /* 
  * pman_sh --
  * This function does one of the two things:
@@ -1274,6 +1285,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 	    { MANSEC_BUGS, "BUGS" },
 	    { MANSEC_AUTHORS, "AUTHORS" },
 	    { MANSEC_COPYRIGHT, "COPYRIGHT" },
+        { MANSEC_SEE_ALSO, "SEE ALSO" },
 	};
 	const struct man_node *head;
 	char *name_desc;
@@ -1395,6 +1407,14 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		return;
 	}
 
+	/* The SEE ALSO section might be specified in multiple ways */
+	if (strcmp(head->string, "SEE") == 0 &&
+	    head->next != NULL && head->next->type == MAN_TEXT &&
+	    strcmp(head->next->string, "ALSO") == 0) {
+		man_parse_section(MANSEC_SEE_ALSO, n, rec);
+		return;
+	}
+
 	/* Store the rest of the content in desc. */
 	man_parse_section(MANSEC_NONE, n, rec);
 }
@@ -1415,6 +1435,66 @@ pman_parse_node(const struct man_node *n, secbuff *s)
 		
 	pman_parse_node(n->child, s);
 	pman_parse_node(n->next, s);
+}
+
+static void
+pman_parse_see_also(const struct man_node *n, mandb_rec *rec)
+{
+
+    warnx("pman_parse_see_also called");
+    if (n == NULL)
+        return;
+
+    if (n->type == MAN_TEXT) {
+        if (n->next) {
+            const struct man_node *name_node = n;
+            n = n->next;
+            while (n && n->type != MAN_TEXT)
+                n = n->next;
+
+            if (n && n->type == MAN_TEXT) {
+                mandb_graph_edge *e = emalloc(sizeof(mandb_graph_edge));
+                e->target_name = parse_escape(name_node->string);
+                e->target_section = estrdup(&n->string[1]);
+                mandb_list_add_node(rec->edge_list, (void **) &e);
+            }
+        } else {
+            char *see_also_str = n->string;
+            char *comma_pos = strchr(see_also_str, ',');
+            while (see_also_str && comma_pos != NULL) {
+                char *open_paren_pos = strchr(see_also_str, '(');
+                char *close_paren_pos = strchr(see_also_str, ')');
+
+                if (open_paren_pos == NULL || close_paren_pos == NULL)
+                    break;
+
+                if (open_paren_pos > comma_pos || close_paren_pos > comma_pos)
+                    break;
+
+                mandb_graph_edge *e = emalloc(sizeof(mandb_graph_edge));
+                size_t name_len = open_paren_pos - see_also_str + 1;
+                char *target_name;
+                target_name = emalloc(name_len);
+                memcpy(target_name, see_also_str, name_len - 1);
+                target_name[name_len] = 0;
+                e->target_name = parse_escape(target_name);
+                free(target_name);
+                see_also_str = open_paren_pos + 1;
+                size_t section_len = close_paren_pos - see_also_str + 1;
+                e->target_section = emalloc(section_len);
+                memcpy(e->target_section, see_also_str, section_len);
+                e->target_section[section_len] = 0;
+                mandb_list_add_node(rec->edge_list, (void **) &e);
+                see_also_str = comma_pos + 1;
+                comma_pos = strchr(see_also_str, ',');
+            }
+        }
+    } 
+
+    if (n) {
+        pman_parse_see_also(n->child, rec);
+        pman_parse_see_also(n->next, rec);
+    }
 }
 
 /*
@@ -1457,6 +1537,9 @@ man_parse_section(enum man_sec sec, const struct man_node *n, mandb_rec *rec)
 	case MANSEC_ERRORS:
 		pman_parse_node(n, &rec->errors);
 		break;
+    case MANSEC_SEE_ALSO:
+        pman_parse_see_also(n, rec);
+        break;
 	case MANSEC_NAME:
 	case MANSEC_SYNOPSIS:
 	case MANSEC_EXAMPLES:
@@ -1887,49 +1970,49 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	}
 
 /* ---------------------- Populate the mandb_graph table ------------------- */
-	sqlstr = "INSERT INTO mandb_graph VALUES (:src_name, :src_section, :target_name,"
+	sqlstr = "INSERT INTO mandb_graph VALUES (:src_md5, :target_name,"
 		 " :target_section)";
 
-    if (rec->m_edge.target_name && rec->m_edge.target_section) {
+    mandb_list_node *n;
+    n = rec->edge_list->head;
+    if (rec->page_type == MDOC) {
+    for (; n != NULL; n = n->next) {
+        mandb_graph_edge *m_edge = (mandb_graph_edge *) n->data;
 
-        rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-        if (rc != SQLITE_OK)
-            goto Out;
+        if (m_edge->target_name && m_edge->target_section) {
 
-        idx = sqlite3_bind_parameter_index(stmt, ":src_name");
-        rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
-        if (rc != SQLITE_OK) {
+            rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+            if (rc != SQLITE_OK)
+                continue;
+
+            idx = sqlite3_bind_parameter_index(stmt, ":src_md5");
+            rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
+            if (rc != SQLITE_OK) {
+                sqlite3_finalize(stmt);
+                continue;
+            }
+
+            idx = sqlite3_bind_parameter_index(stmt, ":target_name");
+            rc = sqlite3_bind_text(stmt, idx, m_edge->target_name, -1, NULL);
+            if (rc != SQLITE_OK) {
+                sqlite3_finalize(stmt);
+                continue;
+            }
+
+            idx = sqlite3_bind_parameter_index(stmt, ":target_section");
+            rc = sqlite3_bind_text(stmt, idx, m_edge->target_section, -1, NULL);
+            if (rc != SQLITE_OK) {
+                sqlite3_finalize(stmt);
+                continue;
+            }
+
+            rc = sqlite3_step(stmt);
             sqlite3_finalize(stmt);
-            goto Out;
+            if (rc != SQLITE_DONE) {
+                warnx("Failed to update mandb_graph.");
+            }
         }
-
-        idx = sqlite3_bind_parameter_index(stmt, ":src_section");
-        rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
-        if (rc != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            goto Out;
-        }
-
-        idx = sqlite3_bind_parameter_index(stmt, ":target_name");
-        rc = sqlite3_bind_text(stmt, idx, rec->m_edge.target_name, -1, NULL);
-        if (rc != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            goto Out;
-        }
-
-        idx = sqlite3_bind_parameter_index(stmt, ":target_section");
-        rc = sqlite3_bind_text(stmt, idx, rec->m_edge.target_section, -1, NULL);
-        if (rc != SQLITE_OK) {
-            sqlite3_finalize(stmt);
-            goto Out;
-        }
-
-        rc = sqlite3_step(stmt);
-        if (rc != SQLITE_DONE) {
-            sqlite3_finalize(stmt);
-            warnx("Failed to update mandb_graph.");
-        }
-    }
+    }}
 
 /*------------------------ Populate the mandb_links table---------------------*/
 	char *str = NULL;
@@ -2086,11 +2169,8 @@ cleanup(mandb_rec *rec)
 	free(rec->md5_hash);
 	rec->md5_hash = NULL;
 
-    free(rec->m_edge.target_name);
-    rec->m_edge.target_name = NULL;
-
-    free(rec->m_edge.target_section);
-    rec->m_edge.target_section = NULL;
+    mandb_list_free(rec->edge_list);
+    rec->edge_list = NULL;
 }
 
 /*
@@ -2258,6 +2338,14 @@ append(secbuff *sbuff, const char *src)
 	memcpy(sbuff->data + sbuff->offset, temp, srclen);
 	sbuff->offset += srclen;
 	free(temp);
+}
+
+static void
+free_mandb_edge(void *data)
+{
+    mandb_graph_edge *e = (mandb_graph_edge *) data;
+    free(e->target_name);
+    free(e->target_section);
 }
 
 static void
