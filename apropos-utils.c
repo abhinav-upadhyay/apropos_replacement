@@ -1,4 +1,4 @@
-/*	$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $	*/
+/*	$NetBSD: apropos-utils.c,v 1.19 2015/12/03 21:01:50 christos Exp $	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $");
+__RCSID("$NetBSD: apropos-utils.c,v 1.19 2015/12/03 21:01:50 christos Exp $");
 
 #include <sys/queue.h>
 #include <sys/stat.h>
@@ -45,13 +45,14 @@ __RCSID("$NetBSD: apropos-utils.c,v 1.7 2012/10/06 15:33:59 wiz Exp $");
 #include <string.h>
 #include <util.h>
 #include <zlib.h>
+#include <term.h>
+#undef tab	// XXX: manconf.h
 
 #include "apropos-utils.h"
 #include "manconf.h"
 #include "mandoc.h"
 #include "sqlite3.h"
 
-#define BUFLEN 1024
 
 typedef struct orig_callback_data {
 	void *data;
@@ -821,8 +822,8 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
  *  arpopos-utils.h for the description of individual fields.
  *  
  */
-int
-run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
+static int
+run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 {
 	const char *default_snippet_args[3];
 	char *section_clause = NULL;
@@ -902,6 +903,21 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		default_snippet_args[2] = "...";
 		snippet_args = default_snippet_args;
 	}
+	if (args->legacy) {
+	    char *wild;
+	    easprintf(&wild, "%%%s%%", args->search_str);
+	    query = sqlite3_mprintf("SELECT section, name, name_desc, machine,"
+		" snippet(mandb, %Q, %Q, %Q, -1, 40 )"
+		" FROM mandb"
+		" WHERE name LIKE %Q OR name_desc LIKE %Q "
+		"%s"
+		"%s",
+		snippet_args[0], snippet_args[1], snippet_args[2],
+		wild, wild,
+		section_clause ? section_clause : "",
+		limit_clause ? limit_clause : "");
+		free(wild);
+	} else {
 	query = sqlite3_mprintf("SELECT section, name, name_desc, machine,"
 	    " snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
 	    " rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
@@ -910,10 +926,11 @@ run_query(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	    "%s"
 	    " ORDER BY rank DESC"
 	    "%s",
-	    snippet_args[0], snippet_args[1], snippet_args[2], args->search_str,
-	    machine_clause ? machine_clause : "",
+		snippet_args[0], snippet_args[1], snippet_args[2],
+		args->search_str, machine_clause ? machine_clause : "",
 	    section_clause ? section_clause : "",
 	    limit_clause ? limit_clause : "");
+	}
 
 	free(machine_clause);
 	free(section_clause);
@@ -1039,9 +1056,9 @@ callback_html(void *data, const char *section, const char *name,
 			break;
 		}
 	}
-	qsnippet[++i] = 0;
+	qsnippet[i] = 0;
 	(*callback)(orig_data->data, section, name, name_desc,
-		(const char *)qsnippet,	qsnippet_length);
+		(const char *)qsnippet,	strlen(qsnippet));
 	free(qsnippet);
 	return 0;
 }
@@ -1049,12 +1066,12 @@ callback_html(void *data, const char *section, const char *name,
 /*
  * run_query_html --
  *  Utility function to output query result in HTML format.
- *  It internally calls run_query only, but it first passes the output to it's 
+ *  It internally calls run_query only, but it first passes the output to its
  *  own custom callback function, which preprocess the snippet for quoting
  *  inline HTML fragments.
  *  After that it delegates the call the actual user supplied callback function.
  */
-int
+static int
 run_query_html(sqlite3 *db, query_args *args)
 {
 	struct orig_callback_data orig_data;
@@ -1063,7 +1080,32 @@ run_query_html(sqlite3 *db, query_args *args)
 	const char *snippet_args[] = {"\002", "\003", "..."};
 	args->callback = &callback_html;
 	args->callback_data = (void *) &orig_data;
-	return run_query(db, snippet_args, args);
+	return run_query_internal(db, snippet_args, args);
+}
+
+/*
+ * underline a string, pager style.
+ */
+static char *
+ul_pager(int ul, const char *s)
+{
+	size_t len;
+	char *dst, *d;
+
+	if (!ul)
+		return estrdup(s);
+
+	// a -> _\ba
+	len = strlen(s) * 3 + 1;
+
+	d = dst = emalloc(len);
+	while (*s) {
+		*d++ = '_';
+		*d++ = '\b';
+		*d++ = *s++;
+	}
+	*d = '\0';
+	return dst;
 }
 
 /*
@@ -1080,7 +1122,7 @@ callback_pager(void *data, const char *section, const char *name,
 	char *psnippet;
 	const char *temp = snippet;
 	int count = 0;
-	int i = 0;
+	int i = 0, did;
 	size_t sz = 0;
 	size_t psnippet_length;
 
@@ -1105,6 +1147,7 @@ callback_pager(void *data, const char *section, const char *name,
 	 * 2. The bytes after \002 need to be overstriked till we encounter \003.
 	 * 3. To overstrike a byte 'A' we need to write 'A\bA'
 	 */
+	did = 0;
 	while (*snippet) {
 		sz = strcspn(snippet, "\002");
 		memcpy(&psnippet[i], snippet, sz);
@@ -1117,6 +1160,7 @@ callback_pager(void *data, const char *section, const char *name,
 		if (*snippet == '\002')
 			snippet++;
 		while (*snippet && *snippet != '\003') {
+			did = 1;
 			psnippet[i++] = *snippet;
 			psnippet[i++] = '\b';
 			psnippet[i++] = *snippet++;
@@ -1126,9 +1170,57 @@ callback_pager(void *data, const char *section, const char *name,
 	}
 
 	psnippet[i] = 0;
-	(orig_data->callback)(orig_data->data, section, name, name_desc, psnippet,
-		psnippet_length);
+	char *ul_section = ul_pager(did, section);
+	char *ul_name = ul_pager(did, name);
+	char *ul_name_desc = ul_pager(did, name_desc);
+	(orig_data->callback)(orig_data->data, ul_section, ul_name,
+	    ul_name_desc, psnippet, psnippet_length);
+	free(ul_section);
+	free(ul_name);
+	free(ul_name_desc);
 	free(psnippet);
+	return 0;
+}
+
+struct term_args {
+	struct orig_callback_data *orig_data;
+	const char *smul;
+	const char *rmul;
+};
+
+/*
+ * underline a string, pager style.
+ */
+static char *
+ul_term(const char *s, const struct term_args *ta)
+{
+	char *dst;
+
+	easprintf(&dst, "%s%s%s", ta->smul, s, ta->rmul);
+	return dst;
+}
+
+/*
+ * callback_term --
+ *  A callback similar to callback_html. It overstrikes the matching text in
+ *  the snippet so that it appears emboldened when viewed using a pager like
+ *  more or less.
+ */
+static int
+callback_term(void *data, const char *section, const char *name,
+	const char *name_desc, const char *snippet, size_t snippet_length)
+{
+	struct term_args *ta = data;
+	struct orig_callback_data *orig_data = ta->orig_data;
+
+	char *ul_section = ul_term(section, ta);
+	char *ul_name = ul_term(name, ta);
+	char *ul_name_desc = ul_term(name_desc, ta);
+	(orig_data->callback)(orig_data->data, ul_section, ul_name,
+	    ul_name_desc, snippet, snippet_length);
+	free(ul_section);
+	free(ul_name);
+	free(ul_name_desc);
 	return 0;
 }
 
@@ -1136,47 +1228,140 @@ callback_pager(void *data, const char *section, const char *name,
  * run_query_pager --
  *  Utility function similar to run_query_html. This function tries to
  *  pre-process the result assuming it will be piped to a pager.
- *  For this purpose it first calls it's own callback function callback_pager
+ *  For this purpose it first calls its own callback function callback_pager
  *  which then delegates the call to the user supplied callback.
  */
-int
+static int
 run_query_pager(sqlite3 *db, query_args *args)
 {
 	struct orig_callback_data orig_data;
 	orig_data.callback = args->callback;
 	orig_data.data = args->callback_data;
-	const char *snippet_args[] = {"\002", "\003", "..."};
+	const char *snippet_args[3] = { "\002", "\003", "..." };
 	args->callback = &callback_pager;
 	args->callback_data = (void *) &orig_data;
-	return run_query(db, snippet_args, args);
+	return run_query_internal(db, snippet_args, args);
 }
 
-char *
-build_boolean_query(char *query)
-{
-	char *boolop_ptr;
-	char *str;
-	str = query;
-	while ((boolop_ptr = strstr(str, "and")) || (boolop_ptr = strstr(str, "not"))
-			|| (boolop_ptr = strstr(str, "or"))) {
-		switch (boolop_ptr[0]) {
-			case 'a':
-				boolop_ptr[0] = 'A';
-				boolop_ptr[1] = 'N';
-				boolop_ptr[2] = 'D';
-				break;
+struct nv {
+	char *s;
+	size_t l;
+};
 
-			case 'n':
-				boolop_ptr[0] = 'N';
-				boolop_ptr[1] = 'O';
-				boolop_ptr[2] = 'T';
-				break;
-			case 'o':
-				boolop_ptr[0] = 'O';
-				boolop_ptr[1] = 'R';
-				break;
+static int
+term_putc(int c, void *p)
+{
+	struct nv *nv = p;
+	nv->s[nv->l++] = c;
+	return 0;
+}
+
+static char *
+term_fix_seq(TERMINAL *ti, const char *seq)
+{
+	char *res = estrdup(seq);
+	struct nv nv;
+
+	if (ti == NULL)
+	    return res;
+
+	nv.s = res;
+	nv.l = 0;
+	ti_puts(ti, seq, 1, term_putc, &nv);
+	nv.s[nv.l] = '\0';
+
+	return res;
 		}
-		str = boolop_ptr + 1;
+static void
+term_init(int fd, const char *sa[5])
+{
+	TERMINAL *ti;
+	int error;
+	const char *bold, *sgr0, *smso, *rmso, *smul, *rmul;
+
+	if (ti_setupterm(&ti, NULL, fd, &error) == -1) {
+		bold = sgr0 = NULL;
+		smso = rmso = smul = rmul = "";
+		ti = NULL;
+	} else {
+		bold = ti_getstr(ti, "bold");
+		sgr0 = ti_getstr(ti, "sgr0");
+		if (bold == NULL || sgr0 == NULL) {
+			smso = ti_getstr(ti, "smso");
+
+			if (smso == NULL ||
+			    (rmso = ti_getstr(ti, "rmso")) == NULL)
+				smso = rmso = "";
+			bold = sgr0 = NULL;
+		} else
+			smso = rmso = "";
+
+		smul = ti_getstr(ti, "smul");
+		if (smul == NULL || (rmul = ti_getstr(ti, "rmul")) == NULL)
+			smul = rmul = "";
 	}
-	return query;
+	sa[0] = term_fix_seq(ti, bold ? bold : smso);
+	sa[1] = term_fix_seq(ti, sgr0 ? sgr0 : rmso);
+	sa[2] = estrdup("...");
+	sa[3] = term_fix_seq(ti, smul);
+	sa[4] = term_fix_seq(ti, rmul);
+
+	if (ti)
+		del_curterm(ti);
+}
+
+/*
+ * run_query_term --
+ *  Utility function similar to run_query_html. This function tries to
+ *  pre-process the result assuming it will be displayed on a terminal
+ *  For this purpose it first calls its own callback function callback_pager
+ *  which then delegates the call to the user supplied callback.
+ */
+static int
+run_query_term(sqlite3 *db, query_args *args)
+{
+	struct orig_callback_data orig_data;
+	struct term_args ta;
+	orig_data.callback = args->callback;
+	orig_data.data = args->callback_data;
+	const char *snippet_args[5];
+
+	term_init(STDOUT_FILENO, snippet_args);
+	ta.smul = snippet_args[3];
+	ta.rmul = snippet_args[4];
+	ta.orig_data = (void *) &orig_data;
+
+	args->callback = &callback_term;
+	args->callback_data = &ta;
+	return run_query_internal(db, snippet_args, args);
+}
+
+static int
+run_query_none(sqlite3 *db, query_args *args)
+{
+	struct orig_callback_data orig_data;
+	orig_data.callback = args->callback;
+	orig_data.data = args->callback_data;
+	const char *snippet_args[3] = { "", "", "..." };
+	args->callback = &callback_pager;
+	args->callback_data = (void *) &orig_data;
+	return run_query_internal(db, snippet_args, args);
+}
+
+int
+run_query(sqlite3 *db, query_format fmt, query_args *args)
+{
+	switch (fmt) {
+	case APROPOS_NONE:
+		return run_query_none(db, args);
+	case APROPOS_HTML:
+		return run_query_html(db, args);
+	case APROPOS_TERM:
+		return run_query_term(db, args);
+	case APROPOS_PAGER:
+		return run_query_pager(db, args);
+	default:
+		warnx("Unknown query format %d", (int)fmt);
+		return -1;
+	}
 }

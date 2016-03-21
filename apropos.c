@@ -1,4 +1,4 @@
-/*	$NetBSD: apropos.c,v 1.8 2012/10/06 15:33:59 wiz Exp $	*/
+/*	$NetBSD: apropos.c,v 1.17 2015/12/20 19:45:29 christos Exp $	*/
 /*-
  * Copyright (c) 2011 Abhinav Upadhyay <er.abhinav.upadhyay@gmail.com>
  * All rights reserved.
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: apropos.c,v 1.8 2012/10/06 15:33:59 wiz Exp $");
+__RCSID("$NetBSD: apropos.c,v 1.17 2015/12/20 19:45:29 christos Exp $");
 
 #include <err.h>
 #include <search.h>
@@ -49,6 +49,8 @@ typedef struct apropos_flags {
 	int nresults;
 	int pager;
 	int no_context;
+	query_format format;
+	int legacy;
 	const char *machine;
 } apropos_flags;
 
@@ -58,25 +60,83 @@ typedef struct callback_data {
 	apropos_flags *aflags;
 } callback_data;
 
+static char *remove_stopwords(const char *);
 static int query_callback(void *, const char * , const char *, const char *,
 	const char *, size_t);
 __dead static void usage(void);
 
 #define _PATH_PAGER	"/usr/bin/more -s"
 
+static void
+parseargs(int argc, char **argv, struct apropos_flags *aflags)
+{
+	int ch;
+	while ((ch = getopt(argc, argv, "123456789Cchiln:PprS:s:")) != -1) {
+		switch (ch) {
+		case '1':
+		case '2':
+		case '3':
+		case '4':
+		case '5':
+		case '6':
+		case '7':
+		case '8':
+		case '9':
+			aflags->sec_nums[ch - '1'] = 1;
+			break;
+		case 'C':
+			aflags->no_context = 1;
+			break;
+		case 'c':
+			aflags->no_context = 0;
+			break;
+		case 'h':
+			aflags->format = APROPOS_HTML;
+			break;
+		case 'i':
+			aflags->format = APROPOS_TERM;
+			break;
+		case 'l':
+			aflags->legacy = 1;
+			aflags->no_context = 1;
+			aflags->format = APROPOS_NONE;
+			break;
+		case 'n':
+			aflags->nresults = atoi(optarg);
+			break;
+		case 'p':	// user wants a pager
+			aflags->pager = 1;
+			/*FALLTHROUGH*/
+		case 'P':
+			aflags->format = APROPOS_PAGER;
+			break;
+		case 'r':
+			aflags->format = APROPOS_NONE;
+			break;
+		case 'S':
+			aflags->machine = optarg;
+			break;
+		case 's':
+			ch = atoi(optarg);
+			if (ch < 1 || ch > 9)
+				errx(EXIT_FAILURE, "Invalid section");
+			aflags->sec_nums[ch - 1] = 1;
+			break;
+		case '?':
+		default:
+			usage();
+		}
+	}
+}
+
 int
 main(int argc, char *argv[])
 {
-#ifdef NOTYET
-	static const char *snippet_args[] = {"\033[1m", "\033[0m", "..."};
-#endif
 	query_args args;
 	char *query = NULL;	// the user query
 	char *errmsg = NULL;
 	char *str;
-	int ch, rc = 0;
-	char *correct_query;
-	char *correct;
+	int rc = 0;
 	int s;
 	callback_data cbdata;
 	cbdata.out = stdout;		// the default output stream
@@ -89,51 +149,33 @@ main(int argc, char *argv[])
 		usage();
 
 	memset(&aflags, 0, sizeof(aflags));
-	
-	/*If the user specifies a section number as an option, the corresponding 
-	 * index element in sec_nums is set to the string representing that 
-	 * section number.
-	 */
-	while ((ch = getopt(argc, argv, "123456789Ccn:pS:s:")) != -1) {
-		switch (ch) {
-		case '1':
-		case '2':
-		case '3':
-		case '4':
-		case '5':
-		case '6':
-		case '7':
-		case '8':
-		case '9':
-			aflags.sec_nums[ch - '1'] = 1;
-			break;
-		case 'C':
-			aflags.no_context = 1;
-			break;
-		case 'c':
-			aflags.no_context = 0;
-			break;
-		case 'n':
-			aflags.nresults = atoi(optarg);
-			break;
-		case 'p':	//user wants to view more than 10 results and page them
-			aflags.pager = 1;
-			aflags.nresults = -1;	// Fetch all records
-			break;
-		case 'S':
-			aflags.machine = optarg;
-			break;
-		case 's':
-			s = atoi(optarg);
-			if (s < 1 || s > 9)
-				errx(EXIT_FAILURE, "Invalid section");
-			aflags.sec_nums[s - 1] = 1;
-			break;
-		case '?':
-		default:
-			usage();
-		}
+
+	if (!isatty(STDOUT_FILENO))
+		aflags.format = APROPOS_NONE;
+	else
+		aflags.format = APROPOS_TERM;
+
+	if ((str = getenv("APROPOS")) != NULL) {
+		char **ptr = emalloc((strlen(str) + 2) * sizeof(*ptr));
+#define WS "\t\n\r "
+		ptr[0] = __UNCONST(getprogname());
+		for (s = 1, str = strtok(str, WS); str;
+		    str = strtok(NULL, WS), s++)
+			ptr[s] = str;
+		ptr[s] = NULL;
+		parseargs(s, ptr, &aflags);
+		free(ptr);
+		optreset = 1;
+		optind = 1;
 	}
+
+	parseargs(argc, argv, &aflags);
+
+	/*
+	 * If the user specifies a section number as an option, the
+	 * corresponding index element in sec_nums is set to the string
+	 * representing that section number.
+	 */
 	
 	argc -= optind;
 	argv += optind;
@@ -146,11 +188,15 @@ main(int argc, char *argv[])
 		concat(&str, *argv++);
 	/* Eliminate any stopwords from the query */
 	query = remove_stopwords(lower(str));
-	free(str);
 
-	/* if any error occured in remove_stopwords, exit */
+	/*
+	 * If the query consisted only of stopwords and we removed all of
+	 * them, use the original query.
+	 */
 	if (query == NULL)
-		errx(EXIT_FAILURE, "Try using more relevant keywords");
+		query = str;
+	else
+		free(str);
 
 	build_boolean_query(query);
 	if ((db = init_db(MANDB_READONLY, MANCONF)) == NULL)
@@ -170,37 +216,35 @@ main(int argc, char *argv[])
 
 	args.search_str = query;
 	args.sec_nums = aflags.sec_nums;
-	args.nrec = aflags.nresults ? aflags.nresults : 10;
+	args.legacy = aflags.legacy;
+	args.nrec = aflags.nresults ? aflags.nresults : -1;
 	args.offset = 0;
 	args.machine = aflags.machine;
 	args.callback = &query_callback;
 	args.callback_data = &cbdata;
 	args.errmsg = &errmsg;
 
-#ifdef NOTYET
-	rc = run_query(db, snippet_args, &args);
-#else
-	rc = run_query_pager(db, &args);
-#endif
+	if (aflags.format == APROPOS_HTML) {
+		fprintf(cbdata.out, "<html>\n<header>\n<title>apropos results "
+		    "for %s</title></header>\n<body>\n<table cellpadding=\"4\""
+		    "style=\"border: 1px solid #000000; border-collapse:"
+		    "collapse;\" border=\"1\">\n", query);
+	}
+	rc = run_query(db, aflags.format, &args);
+	if (aflags.format == APROPOS_HTML)
+		fprintf(cbdata.out, "</table>\n</body>\n</html>\n");
 
-	if (errmsg || rc < 0) {
+	free(query);
+	close_db(db);
+	if (errmsg) {
 		warnx("%s", errmsg);
 		free(errmsg);
-		free(query);
-		close_db(db);
 		exit(EXIT_FAILURE);
 	}
 
-	char *orig_query =  query;
-	char *term;
-	if (cbdata.count == 0) {
-		correct_query = NULL;
-		for (term = strtok(query, " "); term; term = strtok(NULL, " ")) {
-			if ((correct = spell(db, term)))
-				concat(&correct_query, correct);
-			else
-				concat(&correct_query, term);
-            free(correct);
+	if (rc < 0) {
+		/* Something wrong with the database. Exit */
+		exit(EXIT_FAILURE);
 		}
 
 		printf("Did you mean %s ?\n", correct_query);
@@ -228,14 +272,66 @@ query_callback(void *data, const char *section, const char *name,
 	callback_data *cbdata = (callback_data *) data;
 	FILE *out = cbdata->out;
 	cbdata->count++;
-	fprintf(out, "%s (%s)\t%s\n", name, section, name_desc);
+	if (cbdata->aflags->format != APROPOS_HTML) {
+	    fprintf(out, cbdata->aflags->legacy ? "%s(%s) - %s\n" :
+		"%s (%s)\t%s\n", name, section, name_desc);
 
 	if (cbdata->aflags->no_context == 0)
 		fprintf(out, "%s\n\n", snippet);
+	} else {
+	    fprintf(out, "<tr><td>%s(%s)</td><td>%s</td></tr>\n", name,
+		section, name_desc);
+	    if (cbdata->aflags->no_context == 0)
+		    fprintf(out, "<tr><td colspan=2>%s</td></tr>\n", snippet);
+	}
 
 	return 0;
 }
 
+#include "stopwords.c"
+
+/*
+ * remove_stopwords--
+ *  Scans the query and removes any stop words from it.
+ *  Returns the modified query or NULL, if it contained only stop words.
+ */
+
+static char *
+remove_stopwords(const char *query)
+{
+	size_t len, idx;
+	char *output, *buf;
+	const char *sep, *next;
+
+	output = buf = emalloc(strlen(query) + 1);
+
+	for (; query[0] != '\0'; query = next) {
+		sep = strchr(query, ' ');
+		if (sep == NULL) {
+			len = strlen(query);
+			next = query + len;
+		} else {
+			len = sep - query;
+			next = sep + 1;
+		}
+		if (len == 0)
+			continue;
+		idx = stopwords_hash(query, len);
+		if (memcmp(stopwords[idx], query, len) == 0 &&
+		    stopwords[idx][len] == '\0')
+			continue;
+		memcpy(buf, query, len);
+		buf += len;
+		*buf++ = ' ';
+	}
+
+	if (output == buf) {
+		free(output);
+		return NULL;
+	}
+	buf[-1] = '\0';
+	return output;
+}
 /*
  * usage --
  *	print usage message and die
@@ -243,8 +339,8 @@ query_callback(void *data, const char *section, const char *name,
 static void
 usage(void)
 {
-	fprintf(stderr,
-		"Usage: %s [-n Number of records] [-123456789Ccp] [-S machine] query\n",
+	fprintf(stderr, "Usage: %s [-123456789Ccilpr] [-n results] "
+	    "[-S machine] [-s section] query\n",
 		getprogname());
 	exit(1);
 }
