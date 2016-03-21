@@ -16,6 +16,10 @@
    further investigation and work.
 
    run make -f Makefile.linux to build.
+0. Linux Support:
+    Recently I started work on porting this code to GNU/Linux. I have
+    been successfully able to build it on Ubuntu 12.04/12.10 and the code
+    is available in the linux branch of this repository. 
 
 1. INTRODUCTION
     Unix systems have had a culture and one of the main reasons behind
@@ -66,6 +70,9 @@
     man(1) which would print the search path for man pages in a new line separated 
     format on stdout. That is required for building the Full Text Search Index 
     using makemandb. And of course the Makefile might require some modifications.
+
+    GNU/Linux: Please checkout the linux branch for using this code on Linux.
+    Currently, it is still a work in progress.
     
     
 3. USING:
