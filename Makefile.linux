@@ -1,8 +1,8 @@
-CFLAGS=-Wall -c -I/usr/local/include/mandoc -g
+CFLAGS=-Wall -c -I/usr/local/include/mandoc -g -std=gnu99 -O2
 LFLAGS=-L/usr/local/lib/mandoc -lm -lmandoc -lz -lpthread -larchive -lbsd -ldl
 TOOL_NBPERF=gperf
 TOOL_SED=sed
-all:	makemandb apropos whatis apropos.cgi suggest.cgi 
+all:	makemandb apropos whatis #apropos.cgi suggest.cgi
 
 makemandb:	makemandb.o util.o apropos-utils.o sqlite3.o 
 	${CC}  -o makemandb util.o makemandb.o apropos-utils.o sqlite3.o ${LFLAGS}
@@ -13,11 +13,11 @@ apropos:	apropos.o util.o apropos-utils.o sqlite3.o
 whatis:	whatis.o apropos-utils.o sqlite3.o util.o
 	${CC} -o whatis whatis.o util.o apropos-utils.o sqlite3.o ${LFLAGS}
 
-apropos.cgi:	apropos_cgi.o apropos-utils.o cgi-utils.o util.o sqlite3.o
-	${CC} -o apropos.cgi apropos_cgi.o util.o apropos-utils.o cgi-utils.o sqlite3.o ${LFLAGS}
+#apropos.cgi:	apropos_cgi.o apropos-utils.o cgi-utils.o util.o sqlite3.o
+#	${CC} -o apropos.cgi apropos_cgi.o util.o apropos-utils.o cgi-utils.o sqlite3.o ${LFLAGS}
 
-suggest.cgi:	suggest_cgi.o cgi-utils.o apropos-utils.o util.o sqlite3.o
-	${CC} -o suggest.cgi util.o suggest_cgi.o cgi-utils.o apropos-utils.o sqlite3.o ${LFLAGS}
+#suggest.cgi:	suggest_cgi.o cgi-utils.o apropos-utils.o util.o sqlite3.o
+	#${CC} -o suggest.cgi util.o suggest_cgi.o cgi-utils.o apropos-utils.o sqlite3.o ${LFLAGS}
 
 apropos-utils.o:	stopwords.c apropos-utils.c util.c sqlite3.c
 	${CC} ${CFLAGS} apropos-utils.c

@@ -47,6 +47,8 @@
 #include <term.h>
 #undef tab	// XXX: manconf.h
 
+#define BUFLEN 1024
+
 #include "apropos-utils.h"
 #ifndef __linux__
     #include "manconf.h"
@@ -553,7 +555,7 @@ edits1 (char *word)
 	return candidates;
 }
 
-/* Build termlist: a comma separated list of all the words in the list for 
+/* Build termlist: a comma separated list of all the words in the list for
  * use in the SQL query later.
  */
 static char *
@@ -605,7 +607,7 @@ build_termlist(char **list, int n)
 static char *
 known_word(sqlite3 *db, char **list, int n)
 {
-	int i, rc;
+	int rc;
 	char *sqlstr;
 	char *correct = NULL;
 	sqlite3_stmt *stmt;
@@ -658,8 +660,6 @@ spell(sqlite3 *db, char *word)
 	char **candidates;
 	int count2;
 	char **cand2 = NULL;
-	char *errmsg;
-	const char *sqlstr;
 	int n;
 	int count;
 	
@@ -1188,6 +1188,7 @@ callback_pager(void *data, const char *section, const char *name,
 	return 0;
 }
 
+#ifndef __linux__
 struct term_args {
 	struct orig_callback_data *orig_data;
 	const char *smul;
@@ -1229,6 +1230,7 @@ callback_term(void *data, const char *section, const char *name,
 	free(ul_name_desc);
 	return 0;
 }
+#endif
 
 /*
  * run_query_pager --
@@ -1254,6 +1256,7 @@ struct nv {
 	size_t l;
 };
 
+#ifndef __linux__
 static int
 term_putc(int c, void *p)
 {
@@ -1277,7 +1280,8 @@ term_fix_seq(TERMINAL *ti, const char *seq)
 	nv.s[nv.l] = '\0';
 
 	return res;
-		}
+}
+
 static void
 term_init(int fd, const char *sa[5])
 {
@@ -1341,6 +1345,7 @@ run_query_term(sqlite3 *db, query_args *args)
 	args->callback_data = &ta;
 	return run_query_internal(db, snippet_args, args);
 }
+#endif
 
 static int
 run_query_none(sqlite3 *db, query_args *args)
@@ -1363,11 +1368,45 @@ run_query(sqlite3 *db, query_format fmt, query_args *args)
 	case APROPOS_HTML:
 		return run_query_html(db, args);
 	case APROPOS_TERM:
-		return run_query_term(db, args);
+		#ifdef __linux__
+			return run_query_none(db, args);
+		#else
+			return run_query_term(db, args);
+		#endif
 	case APROPOS_PAGER:
 		return run_query_pager(db, args);
 	default:
 		warnx("Unknown query format %d", (int)fmt);
 		return -1;
 	}
+}
+
+char *
+build_boolean_query(char *query)
+{
+	char *boolop_ptr;
+	char *str;
+	str = query;
+	while ((boolop_ptr = strstr(str, "and")) || (boolop_ptr = strstr(str, "not"))
+		   || (boolop_ptr = strstr(str, "or"))) {
+		switch (boolop_ptr[0]) {
+			case 'a':
+				boolop_ptr[0] = 'A';
+				boolop_ptr[1] = 'N';
+				boolop_ptr[2] = 'D';
+				break;
+
+			case 'n':
+				boolop_ptr[0] = 'N';
+				boolop_ptr[1] = 'O';
+				boolop_ptr[2] = 'T';
+				break;
+			case 'o':
+				boolop_ptr[0] = 'O';
+				boolop_ptr[1] = 'R';
+				break;
+		}
+		str = boolop_ptr + 1;
+	}
+	return query;
 }

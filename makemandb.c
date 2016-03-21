@@ -17,7 +17,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: makemandb.c,v 1.31 2016/01/28 03:32:29 christos Exp $");
+//__RCSID("$NetBSD: makemandb.c,v 1.31 2016/01/28 03:32:29 christos Exp $");
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -109,7 +109,7 @@ static void set_section(const struct mdoc *, const struct man *, mandb_rec *);
 static void set_machine(const struct mdoc *, mandb_rec *);
 static int insert_into_db(sqlite3 *, mandb_rec *);
 static	void begin_parse(const char *, struct mparse *, mandb_rec *,
-			 const void *, size_t len);
+			 void *, size_t len);
 static void pmdoc_node(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_Nm(const struct mdoc_node *, mandb_rec *);
 static void pmdoc_Nd(const struct mdoc_node *, mandb_rec *);
@@ -895,7 +895,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
  */
 static void
 begin_parse(const char *file, struct mparse *mp, mandb_rec *rec,
-    const void *buf, size_t len)
+    void *buf, size_t len)
 {
 	struct mdoc *mdoc;
 	struct man *man;

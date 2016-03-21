@@ -95,4 +95,5 @@ sqlite3 *init_db(int, const char *);
 void close_db(sqlite3 *);
 char *get_dbpath(const char *);
 int run_query(sqlite3 *, query_format, query_args *);
+char *build_boolean_query(char *);
 #endif 
