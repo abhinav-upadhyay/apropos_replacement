@@ -44,18 +44,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
-#include <term.h>
-#undef tab	// XXX: manconf.h
 
 #define BUFLEN 1024
 
 #include "apropos-utils.h"
 #ifndef __linux__
-    #include "manconf.h"
+#include <term.h>
+#undef tab	// XXX: manconf.h
+#include "manconf.h"
 #endif
-#include "mandoc.h"
 #include "util.h"
-#include "sqlite3.h"
 
 
 typedef struct orig_callback_data {
@@ -342,7 +340,7 @@ get_dbpath(const char *manconf)
 	dbpath = TAILQ_LAST(&tp->entrylist, tqh)->s;
 	return dbpath;
 #else
-    return "./man.db";
+    return "/var/man.db";
 #endif
 }
 
