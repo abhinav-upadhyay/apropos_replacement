@@ -77,7 +77,7 @@ typedef struct query_args {
 	int legacy;
 	const char *machine;
 	int (*callback) (void *, const char *, const char *, const char *,
-		const char *, size_t);	// The callback function
+		const char *, size_t, unsigned int);	// The callback function
 	void *callback_data;	// data to pass to the callback function
 	char **errmsg;		// buffer for storing the error msg
 } query_args;
@@ -86,7 +86,8 @@ typedef enum query_format {
     APROPOS_NONE,
     APROPOS_PAGER,
     APROPOS_TERM,
-    APROPOS_HTML
+    APROPOS_HTML,
+	APROPOS_JSON
 } query_format;
 char *lower(char *);
 void concat(char **, const char *);
@@ -96,4 +97,6 @@ void close_db(sqlite3 *);
 char *get_dbpath(const char *);
 int run_query(sqlite3 *, query_format, query_args *);
 char *build_boolean_query(char *);
-#endif 
+char *spell(sqlite3*, char *);
+char *remove_stopwords(const char *);
+#endif

@@ -61,7 +61,7 @@
 typedef struct orig_callback_data {
 	void *data;
 	int (*callback) (void *, const char *, const char *, const char *,
-		const char *, size_t);
+		const char *, size_t, unsigned int);
 } orig_callback_data;
 
 typedef struct inverse_document_frequency {
@@ -342,7 +342,7 @@ get_dbpath(const char *manconf)
 	dbpath = TAILQ_LAST(&tp->entrylist, tqh)->s;
 	return dbpath;
 #else
-    return "/var/man.db";
+    return "./man.db";
 #endif
 }
 
@@ -957,6 +957,7 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		return -1;
 	}
 
+	unsigned int result_index = 0;
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
 		section = (const char *) sqlite3_column_text(stmt, 0);
 		name_temp = (const char *) sqlite3_column_text(stmt, 1);
@@ -975,14 +976,85 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		}
 
 		(args->callback)(args->callback_data, section, name, name_desc, snippet,
-			strlen(snippet));
-
+			strlen(snippet), result_index++);
 		free(name);
 	}
 
 	sqlite3_finalize(stmt);
 	sqlite3_free(query);
 	return *(args->errmsg) == NULL ? 0 : -1;
+}
+
+static char *
+get_escaped_html_string(const char *string, size_t *string_length)
+{
+	/* First scan the string to find out the number of occurrences of {'>', '<'
+	 * '"', '&'}.
+	 * Then allocate a new buffer with sufficient space to be able to store the
+	 * quoted versions of the special characters {&gt;, &lt;, &quot;, &amp;}.
+	 * Copy over the characters from the original string into this buffer while
+	 * replacing the special characters with their quoted versions.
+	 */
+
+	int i = 0;
+	size_t sz;
+	int count = 0;
+	const char *temp = string;
+	while (*temp) {
+		sz = strcspn(temp, "<>\"&\002\003");
+		temp += sz + 1;
+		count++;
+	}
+	size_t new_string_length = *string_length + count * 5 + 1;
+	*string_length = new_string_length;
+	char *new_string = emalloc(new_string_length);
+	sz = 0;
+	while (*string) {
+		sz = strcspn(string, "<>\"&\002\003");
+		if (sz) {
+			memcpy(&new_string[i], string, sz);
+			string += sz;
+			i += sz;
+		}
+
+		switch (*string++) {
+			case '<':
+				memcpy(&new_string[i], "&lt;", 4);
+				i += 4;
+				break;
+			case '>':
+				memcpy(&new_string[i], "&gt;", 4);
+				i += 4;
+				break;
+			case '\"':
+				memcpy(&new_string[i], "&quot;", 6);
+				i += 6;
+				break;
+			case '&':
+				/* Don't perform the quoting if this & is part of an mdoc escape
+				 * sequence, e.g. \&
+				 */
+				if (i && *(string - 2) != '\\') {
+					memcpy(&new_string[i], "&amp;", 5);
+					i += 5;
+				} else {
+					new_string[i++] = '&';
+				}
+				break;
+			case '\002':
+				memcpy(&new_string[i], "<b>", 3);
+				i += 3;
+				break;
+			case '\003':
+				memcpy(&new_string[i], "</b>", 4);
+				i += 4;
+				break;
+			default:
+				break;
+		}
+	}
+	new_string[i] = 0;
+	return new_string;
 }
 
 /*
@@ -992,82 +1064,24 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
  */
 static int
 callback_html(void *data, const char *section, const char *name,
-	const char *name_desc, const char *snippet, size_t snippet_length)
+	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
-	const char *temp = snippet;
-	int i = 0;
-	size_t sz = 0;
-	int count = 0;
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	int (*callback) (void *, const char *, const char *, const char *, 
-		const char *, size_t) = orig_data->callback;
+		const char *, size_t, unsigned int) = orig_data->callback;
 
-	/* First scan the snippet to find out the number of occurrences of {'>', '<'
-	 * '"', '&'}.
-	 * Then allocate a new buffer with sufficient space to be able to store the
-	 * quoted versions of the special characters {&gt;, &lt;, &quot;, &amp;}.
-	 * Copy over the characters from the original snippet to this buffer while
-	 * replacing the special characters with their quoted versions.
-	 */
 
-	while (*temp) {
-		sz = strcspn(temp, "<>\"&\002\003");
-		temp += sz + 1;
-		count++;
-	}
-	size_t qsnippet_length = snippet_length + count * 5;
-	char *qsnippet = emalloc(qsnippet_length + 1);
-	sz = 0;
-	while (*snippet) {
-		sz = strcspn(snippet, "<>\"&\002\003");
-		if (sz) {
-			memcpy(&qsnippet[i], snippet, sz);
-			snippet += sz;
-			i += sz;
-		}
-
-		switch (*snippet++) {
-		case '<':
-			memcpy(&qsnippet[i], "&lt;", 4);
-			i += 4;
-			break;
-		case '>':
-			memcpy(&qsnippet[i], "&gt;", 4);
-			i += 4;
-			break;
-		case '\"':
-			memcpy(&qsnippet[i], "&quot;", 6);
-			i += 6;
-			break;
-		case '&':
-			/* Don't perform the quoting if this & is part of an mdoc escape
-			 * sequence, e.g. \&
-			 */
-			if (i && *(snippet - 2) != '\\') {
-				memcpy(&qsnippet[i], "&amp;", 5);
-				i += 5;
-			} else {
-				qsnippet[i++] = '&';
-			}
-			break;
-		case '\002':
-			memcpy(&qsnippet[i], "<b>", 3);
-			i += 3;
-			break;
-		case '\003':
-			memcpy(&qsnippet[i], "</b>", 4);
-			i += 4;
-			break;
-		default:
-			break;
-		}
-	}
-	qsnippet[i] = 0;
-	(*callback)(orig_data->data, section, name, name_desc,
-		(const char *)qsnippet,	strlen(qsnippet));
+	size_t length = snippet_length;
+	size_t name_description_length = strlen(name_desc);
+	char *qsnippet = get_escaped_html_string(snippet, &length);
+	char *qname_description = get_escaped_html_string(name_desc, &name_description_length);
+	(*callback)(orig_data->data, section, name, qname_description,
+		(const char *)qsnippet,	length, result_index);
 	free(qsnippet);
+	free(qname_description);
 	return 0;
 }
+
 
 /*
  * run_query_html --
@@ -1122,7 +1136,7 @@ ul_pager(int ul, const char *s)
  */
 static int
 callback_pager(void *data, const char *section, const char *name, 
-	const char *name_desc, const char *snippet, size_t snippet_length)
+	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
 	char *psnippet;
@@ -1180,7 +1194,7 @@ callback_pager(void *data, const char *section, const char *name,
 	char *ul_name = ul_pager(did, name);
 	char *ul_name_desc = ul_pager(did, name_desc);
 	(orig_data->callback)(orig_data->data, ul_section, ul_name,
-	    ul_name_desc, psnippet, psnippet_length);
+	    ul_name_desc, psnippet, psnippet_length, result_index);
 	free(ul_section);
 	free(ul_name);
 	free(ul_name_desc);
@@ -1215,7 +1229,7 @@ ul_term(const char *s, const struct term_args *ta)
  */
 static int
 callback_term(void *data, const char *section, const char *name,
-	const char *name_desc, const char *snippet, size_t snippet_length)
+	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
 	struct term_args *ta = data;
 	struct orig_callback_data *orig_data = ta->orig_data;
@@ -1366,6 +1380,7 @@ run_query(sqlite3 *db, query_format fmt, query_args *args)
 	case APROPOS_NONE:
 		return run_query_none(db, args);
 	case APROPOS_HTML:
+	case APROPOS_JSON:
 		return run_query_html(db, args);
 	case APROPOS_TERM:
 		#ifdef __linux__
