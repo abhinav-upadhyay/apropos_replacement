@@ -41,7 +41,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#ifdef __linux__
+	#include <bsd/unistd.h>
+#else
+	#include <unistd.h>
+#endif
 
 #include "apropos-utils.h"
 #include "util.h"
