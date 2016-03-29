@@ -27,7 +27,6 @@
 #endif
 
 #include <assert.h>
-#include <ctype.h>
 #include <dirent.h>
 #include <err.h>
 #include <archive.h>
@@ -47,7 +46,6 @@
 #include "man.h"
 #include "mandoc.h"
 #include "mdoc.h"
-#include "sqlite3.h"
 
 #define BUFLEN 1024
 #define MDOC 0	//If the page is of mdoc(7) type
@@ -1009,7 +1007,9 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
 
 	for (n = n->child; n; n = n->next) {
 		if (n->type == MDOC_TEXT) {
-			concat(&rec->name, n->string);
+			char *escaped_name = parse_escape(n->string);
+			concat(&rec->name, escaped_name);
+			free(escaped_name);
 		}
 	}
 }
@@ -1041,8 +1041,9 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 			concat(&rec->name_desc, buf);
 			free(buf);
 		} else {
-			nd_text = estrdup(n->string);
-			replace_hyph(nd_text);
+			/*nd_text = estrdup(n->string);
+			replace_hyph(nd_text);*/
+			nd_text = parse_escape(n->string);
 			concat(&rec->name_desc, nd_text);
 			free(nd_text);
 		}
@@ -1325,7 +1326,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 	};
 	const struct man_node *head;
 	char *name_desc;
-	int sz;
+	size_t sz;
 	size_t i;
 
 	if ((head = n->parent->head) == NULL || (head = head->child) == NULL ||
@@ -1415,6 +1416,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 
 		/* Parse any escape sequences that might be there */
 		char *temp = parse_escape(name_desc);
+
 		free(rec->name_desc);
 		rec->name_desc = temp;
 		temp = parse_escape(rec->name);
@@ -2194,7 +2196,7 @@ parse_escape(const char *str)
 		if (backslash[1] == '-' || backslash[1] == ' ') {
 			*iter++ = backslash[1];
 			last_backslash = backslash + 2;
-			backslash = strchr(backslash + 2, '\\');
+			backslash = strchr(last_backslash, '\\');
 		} else {
 			++backslash;
 			mandoc_escape(&backslash, NULL, NULL);
