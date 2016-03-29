@@ -38,7 +38,6 @@
 #endif
 
 #include <err.h>
-#include <search.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,7 +45,6 @@
 
 #include "apropos-utils.h"
 #include "util.h"
-#include "sqlite3.h"
 
 typedef struct apropos_flags {
 	int sec_nums[SECMAX];
@@ -64,9 +62,8 @@ typedef struct callback_data {
 	apropos_flags *aflags;
 } callback_data;
 
-static char *remove_stopwords(const char *);
 static int query_callback(void *, const char * , const char *, const char *,
-	const char *, size_t);
+	const char *, size_t, unsigned int);
 __dead static void usage(void);
 
 #define _PATH_PAGER	"/usr/bin/more -s"
@@ -75,7 +72,7 @@ static void
 parseargs(int argc, char **argv, struct apropos_flags *aflags)
 {
 	int ch;
-	while ((ch = getopt(argc, argv, "123456789Cchiln:PprS:s:")) != -1) {
+	while ((ch = getopt(argc, argv, "123456789Cchijln:PprS:s:")) != -1) {
 		switch (ch) {
 		case '1':
 		case '2':
@@ -99,6 +96,9 @@ parseargs(int argc, char **argv, struct apropos_flags *aflags)
 			break;
 		case 'i':
 			aflags->format = APROPOS_TERM;
+			break;
+		case 'j':
+			aflags->format = APROPOS_JSON;
 			break;
 		case 'l':
 			aflags->legacy = 1;
@@ -236,9 +236,15 @@ main(int argc, char *argv[])
 		    "style=\"border: 1px solid #000000; border-collapse:"
 		    "collapse;\" border=\"1\">\n", query);
 	}
+
+	if (aflags.format == APROPOS_JSON)
+		fprintf(cbdata.out, "[");
+
 	rc = run_query(db, aflags.format, &args);
 	if (aflags.format == APROPOS_HTML)
 		fprintf(cbdata.out, "</table>\n</body>\n</html>\n");
+	if (aflags.format == APROPOS_JSON)
+		fprintf(cbdata.out, "]");
 
 	free(query);
 	close_db(db);
@@ -248,7 +254,6 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	char *orig_query =  query;
 	char *term;
 	if (rc < 0) {
 		correct_query = NULL;
@@ -267,7 +272,6 @@ main(int argc, char *argv[])
 			  "or try using better keywords.");*/
 		free(correct_query);
 	}
-	free(orig_query);
 	close_db(db);
 	return 0;
 }
@@ -281,24 +285,43 @@ main(int argc, char *argv[])
  */
 static int
 query_callback(void *data, const char *section, const char *name,
-	const char *name_desc, const char *snippet, size_t snippet_length)
+	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
 	callback_data *cbdata = (callback_data *) data;
 	FILE *out = cbdata->out;
 	cbdata->count++;
-	if (cbdata->aflags->format != APROPOS_HTML) {
-	    fprintf(out, cbdata->aflags->legacy ? "%s(%s) - %s\n" :
-		"%s (%s)\t%s\n", name, section, name_desc);
+	switch (cbdata->aflags->format) {
+		case APROPOS_NONE:
+		case APROPOS_PAGER:
+		case APROPOS_TERM:
+			fprintf(out, cbdata->aflags->legacy ? "%s(%s) - %s\n" :
+						 "%s (%s)\t%s\n", name, section, name_desc);
 
-	if (cbdata->aflags->no_context == 0)
-		fprintf(out, "%s\n\n", snippet);
-	} else {
-	    fprintf(out, "<tr><td>%s(%s)</td><td>%s</td></tr>\n", name,
-		section, name_desc);
-	    if (cbdata->aflags->no_context == 0)
-		    fprintf(out, "<tr><td colspan=2>%s</td></tr>\n", snippet);
+			if (cbdata->aflags->no_context == 0)
+				fprintf(out, "%s\n\n", snippet);
+			break;
+		case APROPOS_HTML:
+			fprintf(out, "<tr><td>%s(%s)</td><td>%s</td></tr>\n", name,
+					section, name_desc);
+			if (cbdata->aflags->no_context == 0)
+				fprintf(out, "<tr><td colspan=2>%s</td></tr>\n", snippet);
+			break;
+		case APROPOS_JSON:
+			/**
+			 * [
+			 *		{"name": "ls", "section": "1", "short_description": "foo", "snippet": "bar"},
+			 *		{"name": "cp", "section": "1", "short_description": "foo", "snippet": "bar"},
+			 *		{"name": "cp", "section": "1", "short_description": "foo", "snippet": "bar"}
+			 * ]
+			 */
+			if (result_index > 0)
+				fprintf(out, ",");
+			fprintf(out, "{\"name\": \"%s\", \"section\": \"%s\", \"description\": \"%s\"", name,
+					section, name_desc);
+			if (cbdata->aflags->no_context == 0)
+				fprintf(out, ", \"snippet\": \"%s\"", snippet);
+			fprintf(out, "}\n");
 	}
-
 	return 0;
 }
 
