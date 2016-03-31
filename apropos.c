@@ -245,19 +245,6 @@ main(int argc, char *argv[])
 		fprintf(cbdata.out, "[");
 
 	rc = run_query(db, aflags.format, &args);
-	if (aflags.format == APROPOS_HTML)
-		fprintf(cbdata.out, "</table>\n</body>\n</html>\n");
-	if (aflags.format == APROPOS_JSON)
-		fprintf(cbdata.out, "]");
-
-	free(query);
-	close_db(db);
-	if (errmsg) {
-		warnx("%s", errmsg);
-		free(errmsg);
-		exit(EXIT_FAILURE);
-	}
-
 	char *term;
 	if (rc < 0) {
 		correct_query = NULL;
@@ -266,17 +253,24 @@ main(int argc, char *argv[])
 				concat(&correct_query, correct);
 			else
 				concat(&correct_query, term);
-            free(correct);
-
+			free(correct);
+			printf("Did you mean %s ?\n", correct_query);
+			free(correct_query);
+		}
+	} else {
+		if (aflags.format == APROPOS_HTML)
+			fprintf(cbdata.out, "</table>\n</body>\n</html>\n");
+		if (aflags.format == APROPOS_JSON)
+			fprintf(cbdata.out, "]");
 	}
 
-		printf("Did you mean %s ?\n", correct_query);
-/*		warnx("No relevant results obtained.\n"
-			  "Please make sure that you spelled all the terms correctly "
-			  "or try using better keywords.");*/
-		free(correct_query);
-	}
+	free(query);
 	close_db(db);
+	if (errmsg) {
+		warnx("%s", errmsg);
+		free(errmsg);
+		exit(EXIT_FAILURE);
+	}
 	return 0;
 }
 
