@@ -980,7 +980,7 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 
 	sqlite3_finalize(stmt);
 	sqlite3_free(query);
-	return *(args->errmsg) == NULL ? 0 : -1;
+	return result_index == 0 ? -1 : 0;
 }
 
 static char *
