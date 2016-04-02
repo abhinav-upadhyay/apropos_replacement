@@ -360,13 +360,14 @@ get_dbpath(const char *manconf)
  *  	In normal cases the function should return a handle to the db.
  */
 sqlite3 *
-init_db(int db_flag, const char *manconf)
+init_db(mandb_access_mode db_flag, const char *manconf)
 {
 	sqlite3 *db = NULL;
 	sqlite3_stmt *stmt;
 	struct stat sb;
 	int rc;
 	int create_db_flag = 0;
+	int access_mode;
 
 	char *dbpath = get_dbpath(manconf);
 	if (dbpath == NULL)
@@ -382,6 +383,12 @@ init_db(int db_flag, const char *manconf)
 			return NULL;
 		}
 		create_db_flag = 1;
+	} else {
+		access_mode = db_flag == MANDB_CREATE || db_flag == MANDB_WRITE? R_OK | W_OK: R_OK;
+		if ((access(dbpath, access_mode)) != 0) {
+			warnx("Unable to access the database, please check permissions for %s", dbpath);
+			return NULL;
+		}
 	}
 
 	/* Now initialize the database connection */
@@ -390,8 +397,7 @@ init_db(int db_flag, const char *manconf)
 	
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
-		sqlite3_shutdown();
-		return NULL;
+		goto error;
 	}
 
 	if (create_db_flag && create_db(db) < 0) {
@@ -439,8 +445,7 @@ init_db(int db_flag, const char *manconf)
 	return db;
 
 error:
-	sqlite3_close(db);
-	sqlite3_shutdown();
+	close_db(db);
 	return NULL;
 }
 
