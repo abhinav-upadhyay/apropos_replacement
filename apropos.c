@@ -253,10 +253,11 @@ main(int argc, char *argv[])
 				concat(&correct_query, correct);
 			else
 				concat(&correct_query, term);
-			free(correct);
-			printf("Did you mean %s ?\n", correct_query);
-			free(correct_query);
+            if (correct)
+                free(correct);
 		}
+		printf("Did you mean %s?\n", correct_query);
+		free(correct_query);
 	} else {
 		if (aflags.format == APROPOS_HTML)
 			fprintf(cbdata.out, "</table>\n</body>\n</html>\n");
