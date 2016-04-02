@@ -557,10 +557,10 @@ edits1 (char *word)
  * use in the SQL query later.
  */
 static char *
-build_termlist(char **list, int n)
+build_termlist(char **list, size_t n)
 {
 	char *termlist = NULL;
-	int total_len = BUFLEN * 20;	/* total bytes allocated to termlist */
+	size_t total_len = BUFLEN * 20;	/* total bytes allocated to termlist */
 	termlist = emalloc(total_len);
 	int offset = 0;	/* Next byte to write at in termlist */
 	int i;
@@ -568,7 +568,7 @@ build_termlist(char **list, int n)
 	offset++;
 
 	for (i = 0; i < n; i++) {
-		int d = strlen(list[i]);
+		size_t d = strlen(list[i]);
 		if (total_len - offset < d + 3) {
 			termlist = erealloc(termlist, offset + total_len);
 			total_len *= 2;
@@ -603,7 +603,7 @@ build_termlist(char **list, int n)
  *  #TODO rename this function
  */
 static char *
-known_word(sqlite3 *db, char **list, int n)
+known_word(sqlite3 *db, char **list, size_t n)
 {
 	int rc;
 	char *sqlstr;
@@ -630,9 +630,9 @@ known_word(sqlite3 *db, char **list, int n)
 }
 
 static void
-free_list(char **list, int n)
+free_list(char **list, size_t n)
 {
-    int i = 0;
+    size_t i = 0;
     if (list == NULL)
         return;
 
@@ -656,10 +656,10 @@ spell(sqlite3 *db, char *word)
 	int i;
 	char *correct;
 	char **candidates;
-	int count2;
+	int count2 = 0;
 	char **cand2 = NULL;
-	int n;
-	int count;
+	size_t n;
+	size_t count;
 	
 	lower(word);
 	correct = known_word(db, &word, 1);
@@ -702,7 +702,7 @@ get_suggestions(sqlite3 *db, char *query)
 	char *term;
 	char *temp;
 	char *sqlstr;
-	int count;
+	size_t count;
 	int rc;
 	sqlite3_stmt *stmt;
 
@@ -714,7 +714,7 @@ get_suggestions(sqlite3 *db, char *query)
 	}
 
 	char **list = edits1(term);
-	int n = strlen(term);
+	size_t n = strlen(term);
 	count = n + n -1 + 26 * n + 26 * (n + 1);
 	char *termlist = build_termlist(list, count);
 	easprintf(&sqlstr, "SELECT word FROM mandb_dict "
