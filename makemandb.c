@@ -698,7 +698,7 @@ read_and_decompress(const char *file, void **bufp, size_t *len)
 	for (;;) {
 		r = archive_read_data(a, buf + off, *len - off);
 		if (r == ARCHIVE_OK) {
-			archive_read_close(a);
+			archive_read_finish(a);
 			*bufp = buf;
 			*len = off;
 			return 0;
@@ -714,7 +714,7 @@ read_and_decompress(const char *file, void **bufp, size_t *len)
 				if (mflags.verbosity)
 					warnx("File too large: %s", file);
 				free(buf);
-				archive_read_close(a);
+				archive_read_finish(a);
 				return -1;
 			}
 			buf = erealloc(buf, *len);
@@ -723,7 +723,7 @@ read_and_decompress(const char *file, void **bufp, size_t *len)
 
 archive_error:
 	warnx("Error while reading `%s': %s", file, archive_error_string(a));
-	archive_read_close(a);
+	archive_read_finish(a);
 	return -1;
 }
 
@@ -769,7 +769,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		if (mflags.verbosity)
-		warnx("%s", sqlite3_errmsg(db));
+			warnx("%s", sqlite3_errmsg(db));
 		close_db(db);
 		errx(EXIT_FAILURE, "Could not query file cache");
 	}
@@ -837,12 +837,20 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			 * This means is either a new file or an updated file.
 			 * We should go ahead with parsing.
 			 */
+			if (chdir(parent) != 0) {
+				if (mflags.verbosity)
+					warn("chdir failed for %s, could not index %s", parent, file);
+				err_count++;
+				free(md5sum);
+				continue;
+			}
+
 			if (mflags.verbosity == 2)
 				printf("Parsing: %s\n", file);
 			rec->md5_hash = md5sum;
 			rec->file_path = estrdup(file);
 			// file_path is freed by insert_into_db itself.
-			chdir(parent);
+
 			begin_parse(file, mp, rec, buf, buflen);
 			if (insert_into_db(db, rec) < 0) {
 				if (mflags.verbosity)
@@ -853,7 +861,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			}
 		}
 	}
-	
+
 	if (mflags.verbosity == 2) {
 		printf("Total Number of new or updated pages encountered = %d\n"
 			"Total number of (hard or symbolic) links found = %d\n"
@@ -1376,6 +1384,7 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 		 * When there are no more commas left, break out.
 		 */
 		int has_alias = 0;	// Any more aliases left?
+		//TODO move this to a different function for better readability
 		while (*name_desc) {
 			/* Remove any leading spaces or hyphens. */
 			if (name_desc[0] == ' ' || name_desc[0] =='-') {
@@ -1406,9 +1415,15 @@ pman_sh(const struct man_node *n, mandb_rec *rec)
 					 */
 					has_alias = 0;
 				}
-				name_desc[sz] = 0;
+				size_t increment;
+				if (name_desc[sz] != 0) {
+					name_desc[sz] = 0;
+					increment = sz + 1;
+				} else {
+					increment = sz;
+				}
 				concat2(&rec->links, name_desc, sz);
-				name_desc += sz + 1;
+				name_desc += increment;
 				continue;
 			}
 			break;
