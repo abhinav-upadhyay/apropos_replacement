@@ -58,7 +58,7 @@
 
 typedef struct orig_callback_data {
 	void *data;
-	int (*callback) (void *, const char *, const char *, const char *,
+	int (*callback) (void *, const char *, const char *, const char *, const char *,
 		const char *, size_t, unsigned int);
 } orig_callback_data;
 
@@ -978,7 +978,7 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 			name = estrdup((const char *) sqlite3_column_text(stmt, 1));
 		}
 
-		(args->callback)(args->callback_data, section, name, name_desc, snippet,
+		(args->callback)(args->callback_data, args->search_str, section, name, name_desc, snippet,
 			strlen(snippet), result_index++);
 		free(name);
 	}
@@ -1066,11 +1066,11 @@ get_escaped_html_string(const char *string, size_t *string_length)
  *  calls the actual user supplied callback function.
  */
 static int
-callback_html(void *data, const char *section, const char *name,
+callback_html(void *data, const char *query, const char *section, const char *name,
 	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
-	int (*callback) (void *, const char *, const char *, const char *, 
+	int (*callback) (void *, const char *, const char *, const char *, const char *,
 		const char *, size_t, unsigned int) = orig_data->callback;
 
 
@@ -1078,7 +1078,7 @@ callback_html(void *data, const char *section, const char *name,
 	size_t name_description_length = strlen(name_desc);
 	char *qsnippet = get_escaped_html_string(snippet, &length);
 	char *qname_description = get_escaped_html_string(name_desc, &name_description_length);
-	(*callback)(orig_data->data, section, name, qname_description,
+	(*callback)(orig_data->data, query, section, name, qname_description,
 		(const char *)qsnippet,	length, result_index);
 	free(qsnippet);
 	free(qname_description);
@@ -1138,7 +1138,7 @@ ul_pager(int ul, const char *s)
  *  more or less.
  */
 static int
-callback_pager(void *data, const char *section, const char *name, 
+callback_pager(void *data, const char * query, const char *section, const char *name,
 	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
 	struct orig_callback_data *orig_data = (struct orig_callback_data *) data;
@@ -1196,7 +1196,7 @@ callback_pager(void *data, const char *section, const char *name,
 	char *ul_section = ul_pager(did, section);
 	char *ul_name = ul_pager(did, name);
 	char *ul_name_desc = ul_pager(did, name_desc);
-	(orig_data->callback)(orig_data->data, ul_section, ul_name,
+	(orig_data->callback)(orig_data->data, query, ul_section, ul_name,
 	    ul_name_desc, psnippet, psnippet_length, result_index);
 	free(ul_section);
 	free(ul_name);

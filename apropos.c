@@ -66,9 +66,18 @@ typedef struct callback_data {
 	apropos_flags *aflags;
 } callback_data;
 
-static int query_callback(void *, const char * , const char *, const char *,
-	const char *, size_t, unsigned int);
+static char *const end_table_tags = "</table>\n</body>\n</html>\n";
+
+static char *const html_table_start = "<html>\n<header>\n<title>apropos results "
+						"for %s</title></header>\n<body>\n<table cellpadding=\"4\""
+						"style=\"border: 1px solid #000000; border-collapse:"
+						"collapse;\" border=\"1\">\n";
+
+static int query_callback(void *, const char *, const char * , const char *, const char *,
+						  const char *, size_t, unsigned int);
 __dead static void usage(void);
+
+char *get_correct_query(const char *query, sqlite3 *db, char **correct_query);
 
 #define _PATH_PAGER	"/usr/bin/more -s"
 
@@ -153,7 +162,6 @@ main(int argc, char *argv[])
 	cbdata.aflags = &aflags;
 	sqlite3 *db;
 	char * correct_query;
-	char *correct;
 	setprogname(argv[0]);
 	if (argc < 2)
 		usage();
@@ -234,37 +242,44 @@ main(int argc, char *argv[])
 	args.callback_data = &cbdata;
 	args.errmsg = &errmsg;
 
-	if (aflags.format == APROPOS_HTML) {
-		fprintf(cbdata.out, "<html>\n<header>\n<title>apropos results "
-		    "for %s</title></header>\n<body>\n<table cellpadding=\"4\""
-		    "style=\"border: 1px solid #000000; border-collapse:"
-		    "collapse;\" border=\"1\">\n", query);
-	}
 
-	if (aflags.format == APROPOS_JSON)
-		fprintf(cbdata.out, "[");
 
 	rc = run_query(db, aflags.format, &args);
-	char *term;
-	if (rc < 0) {
-		correct_query = NULL;
-		for (term = strtok(query, " "); term; term = strtok(NULL, " ")) {
-			if ((correct = spell(db, term)))
-				concat(&correct_query, correct);
-			else
-				concat(&correct_query, term);
-            if (correct)
-                free(correct);
+	if (cbdata.count == 0) {
+		correct_query = get_correct_query(query, db, &correct_query);
+		if (strcmp(correct_query, query) == 0) {
+			if (aflags.format == APROPOS_HTML) {
+				fprintf(cbdata.out, html_table_start, query);
+				fprintf(cbdata.out, "<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
+				fprintf(cbdata.out, end_table_tags);
+			} else if (aflags.format == APROPOS_JSON) {
+				fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"bad_query\"}");
+			} else {
+				warnx("No relevant results obtained\n"
+					  "Please try using better keywords");
+			}
+			free(correct_query);
+			goto error;
 		}
-		printf("Did you mean %s?\n", correct_query);
+		if (aflags.format == APROPOS_HTML) {
+			fprintf(cbdata.out, html_table_start, query);
+			fprintf(cbdata.out, "<tr><td> Did you mean %s? </td></tr>", correct_query);
+			fprintf(cbdata.out, end_table_tags);
+		}
+		else if (aflags.format == APROPOS_JSON) {
+			fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"spell\", \"suggestion\": \"%s\"}", correct_query);
+		} else
+			warnx("Did you mean %s?\n", correct_query);
 		free(correct_query);
-	} else {
-		if (aflags.format == APROPOS_HTML)
-			fprintf(cbdata.out, "</table>\n</body>\n</html>\n");
-		if (aflags.format == APROPOS_JSON)
-			fprintf(cbdata.out, "]");
+		goto error;
 	}
 
+	if (aflags.format == APROPOS_HTML)
+		fprintf(cbdata.out, end_table_tags);
+	if (aflags.format == APROPOS_JSON)
+		fprintf(cbdata.out, "]}");
+
+	error:
 	free(query);
 	close_db(db);
 	if (errmsg) {
@@ -272,7 +287,24 @@ main(int argc, char *argv[])
 		free(errmsg);
 		exit(EXIT_FAILURE);
 	}
-	return 0;
+	return rc;
+}
+
+char *get_correct_query(const char *query, sqlite3 *db, char **correct_query) {
+	(*correct_query) = NULL;
+	char *correct;
+	char *term;
+	char *dupq = estrdup(query);
+	for (term = strtok(dupq, " "); term; term = strtok(NULL, " ")) {
+			if ((correct = spell(db, term)))
+				concat(correct_query, correct);
+			else
+				concat(correct_query, term);
+            if (correct)
+                free(correct);
+	}
+	free(dupq);
+	return (*correct_query);
 }
 
 /*
@@ -283,7 +315,7 @@ main(int argc, char *argv[])
  *  output stream.
  */
 static int
-query_callback(void *data, const char *section, const char *name,
+query_callback(void *data, const char *query, const char *section, const char *name,
 	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
 	callback_data *cbdata = (callback_data *) data;
@@ -300,6 +332,9 @@ query_callback(void *data, const char *section, const char *name,
 				fprintf(out, "%s\n\n", snippet);
 			break;
 		case APROPOS_HTML:
+			if (result_index == 0)
+				fprintf(out, html_table_start, query);
+
 			fprintf(out, "<tr><td>%s(%s)</td><td>%s</td></tr>\n", name,
 					section, name_desc);
 			if (cbdata->aflags->no_context == 0)
@@ -307,13 +342,17 @@ query_callback(void *data, const char *section, const char *name,
 			break;
 		case APROPOS_JSON:
 			/**
-			 * [
+			 * {
+			 *  "results: [
 			 *		{"name": "ls", "section": "1", "short_description": "foo", "snippet": "bar"},
 			 *		{"name": "cp", "section": "1", "short_description": "foo", "snippet": "bar"},
 			 *		{"name": "cp", "section": "1", "short_description": "foo", "snippet": "bar"}
-			 * ]
+			 *   ]
+             *  }
 			 */
-			if (result_index > 0)
+			if (result_index == 0)
+				fprintf(out, "{\"results\": [");
+			else
 				fprintf(out, ",");
 			fprintf(out, "{\"name\": \"%s\", \"section\": \"%s\", \"description\": \"%s\"", name,
 					section, name_desc);

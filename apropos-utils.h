@@ -78,7 +78,7 @@ typedef struct query_args {
 	int offset;		//From which position to start processing the records
 	int legacy;
 	const char *machine;
-	int (*callback) (void *, const char *, const char *, const char *,
+	int (*callback) (void *, const char *, const char *, const char *, const char *,
 		const char *, size_t, unsigned int);	// The callback function
 	void *callback_data;	// data to pass to the callback function
 	char **errmsg;		// buffer for storing the error msg
