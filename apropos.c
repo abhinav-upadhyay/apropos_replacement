@@ -251,7 +251,7 @@ main(int argc, char *argv[])
 			if (aflags.format == APROPOS_HTML) {
 				fprintf(cbdata.out, html_table_start, query);
 				fprintf(cbdata.out, "<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
-				fprintf(cbdata.out, end_table_tags);
+				fprintf(cbdata.out, "%s", end_table_tags);
 			} else if (aflags.format == APROPOS_JSON) {
 				fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"bad_query\"}");
 			} else {
@@ -264,7 +264,7 @@ main(int argc, char *argv[])
 		if (aflags.format == APROPOS_HTML) {
 			fprintf(cbdata.out, html_table_start, query);
 			fprintf(cbdata.out, "<tr><td> Did you mean %s? </td></tr>", correct_query);
-			fprintf(cbdata.out, end_table_tags);
+			fprintf(cbdata.out, "%s", end_table_tags);
 		}
 		else if (aflags.format == APROPOS_JSON) {
 			fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"spell\", \"suggestion\": \"%s\"}", correct_query);
@@ -275,7 +275,7 @@ main(int argc, char *argv[])
 	}
 
 	if (aflags.format == APROPOS_HTML)
-		fprintf(cbdata.out, end_table_tags);
+		fprintf(cbdata.out, "%s", end_table_tags);
 	if (aflags.format == APROPOS_JSON)
 		fprintf(cbdata.out, "]}");
 
