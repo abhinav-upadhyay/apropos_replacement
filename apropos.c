@@ -245,21 +245,23 @@ main(int argc, char *argv[])
 
 
 	rc = run_query(db, aflags.format, &args);
-	if (cbdata.count == 0) {
+	if (cbdata.count <= 10) {
 		correct_query = get_correct_query(query, db, &correct_query);
 		if (strcmp(correct_query, query) == 0) {
-			if (aflags.format == APROPOS_HTML) {
-				fprintf(cbdata.out, html_table_start, query);
-				fprintf(cbdata.out, "<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
-				fprintf(cbdata.out, "%s", end_table_tags);
-			} else if (aflags.format == APROPOS_JSON) {
-				fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"bad_query\"}");
-			} else {
-				warnx("No relevant results obtained\n"
-					  "Please try using better keywords");
-			}
-			free(correct_query);
-			goto error;
+            if (cbdata.count == 0) {
+                if (aflags.format == APROPOS_HTML) {
+                    fprintf(cbdata.out, html_table_start, query);
+                    fprintf(cbdata.out, "<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
+                    fprintf(cbdata.out, "%s", end_table_tags);
+                } else if (aflags.format == APROPOS_JSON) {
+                    fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"bad_query\"}");
+                } else {
+                    warnx("No relevant results obtained\n"
+                            "Please try using better keywords");
+                }
+            }
+            free(correct_query);
+            goto error;
 		}
 		if (aflags.format == APROPOS_HTML) {
 			fprintf(cbdata.out, html_table_start, query);
