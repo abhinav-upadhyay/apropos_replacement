@@ -115,9 +115,13 @@ remove_stopwords(const char *query)
 		}
 		if (len == 0)
 			continue;
+#ifndef linux
 		idx = stopwords_hash(query, len);
 		if (memcmp(stopwords[idx], query, len) == 0 &&
 		    stopwords[idx][len] == '\0')
+#else
+        if (in_word_set(query, len))
+#endif
 			continue;
 		memcpy(buf, query, len);
 		buf += len;
