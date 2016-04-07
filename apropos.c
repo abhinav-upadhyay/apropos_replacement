@@ -271,7 +271,7 @@ main(int argc, char *argv[])
 		else if (aflags.format == APROPOS_JSON) {
 			fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"spell\", \"suggestion\": \"%s\"}", correct_query);
 		} else
-			warnx("Did you mean %s?\n", correct_query);
+			warnx("Did you mean %s?", correct_query);
 		free(correct_query);
 		goto error;
 	}
