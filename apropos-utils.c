@@ -115,7 +115,7 @@ remove_stopwords(const char *query)
 		}
 		if (len == 0)
 			continue;
-#ifndef linux
+#ifndef __linux__
 		idx = stopwords_hash(query, len);
 		if (memcmp(stopwords[idx], query, len) == 0 &&
 		    stopwords[idx][len] == '\0')
