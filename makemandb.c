@@ -33,14 +33,15 @@
 #include <libgen.h>
 #ifdef __linux__
     #include <bsd/md5.h>
+    #include "util.h"
 #else
     #include <md5.h>
+    #include <util.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "util.h"
 
 #include "apropos-utils.h"
 #include "man.h"
@@ -472,8 +473,8 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	sqlstr = "INSERT OR IGNORE INTO mandb_dict SELECT term, occurrences "
-		     "FROM metadb.mandb_dupaux; "
+	sqlstr = "INSERT OR IGNORE INTO mandb_dict SELECT term, occurrences * 0.001 /(10 + documents) "
+		     "FROM metadb.mandb_dupaux where col!=\'desc\'; "
 		     "DROP TABLE metadb.mandb_dup; "
 			 "DROP TABLE metadb.mandb_dupaux;";
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);
