@@ -95,6 +95,20 @@ static const double col_weights[] = {
  *  Returns the modified query or NULL, if it contained only stop words.
  */
 
+int
+is_stopword(const char *w, size_t len)
+{
+#ifndef __linux__
+	unsigned int idx = stopwords_hash(query, len);
+	if (memcmp(stopwords[idx], query, len) == 0 &&
+		stopwords[idx][len] == '\0')
+		return 1;
+	return 0;
+#else
+	return (int) in_word_set(w, len);
+#endif
+}
+
 char *
 remove_stopwords(const char *query)
 {
@@ -115,14 +129,10 @@ remove_stopwords(const char *query)
 		}
 		if (len == 0)
 			continue;
-#ifndef __linux__
-		idx = stopwords_hash(query, len);
-		if (memcmp(stopwords[idx], query, len) == 0 &&
-		    stopwords[idx][len] == '\0')
-#else
-        if (in_word_set(query, len))
-#endif
+
+		if (is_stopword(query, len))
 			continue;
+
 		memcpy(buf, query, len);
 		buf += len;
 		*buf++ = ' ';
@@ -475,18 +485,18 @@ error:
  *      time. 26 * (n + 1) possible permutations.
  */
 static char **
-edits1 (char *word)
+edits1 (char *word, size_t *result_size)
 {
-	int i;
-	int len_a;
-	int len_b;
-	int counter = 0;
+	unsigned int i;
+	size_t len_a;
+	size_t len_b;
+	unsigned int counter = 0;
 	char alphabet;
-	int n = strlen(word);
+	size_t n = strlen(word);
 	set splits[n + 1];
 	
 	/* calculate number of possible permutations and allocate memory */
-	size_t size = n + n -1 + 26 * n + 26 * (n + 1);
+	size_t size = COMBINATIONS(n);
 	char **candidates = emalloc (size * sizeof(char *));
 
 	/* Start by generating a split up of the characters in the word */
@@ -509,49 +519,65 @@ edits1 (char *word)
 
 		/* Deletes */
 		if (i < n) {
-			candidates[counter] = emalloc(n);
-			memcpy(candidates[counter], splits[i].a, len_a);
+			char *candidate = emalloc(n);
+			memcpy(candidate, splits[i].a, len_a);
 			if (len_b -1 > 0)
-				memcpy(candidates[counter] + len_a , splits[i].b + 1, len_b - 1);
-			candidates[counter][n - 1] =0;
-			counter++;
+				memcpy(candidate + len_a , splits[i].b + 1, len_b - 1);
+			candidate[n - 1] =0;
+			if (is_stopword(candidate, n - 1)) {
+				free(candidate);
+			} else {
+				candidates[counter++] = candidate;
+			}
 		}
 
 		/* Transposes */
 		if (i < n - 1) {
-			candidates[counter] = emalloc(n + 1);
-			memcpy(candidates[counter], splits[i].a, len_a);
+			char *candidate = emalloc(n + 1);
+			memcpy(candidate, splits[i].a, len_a);
 			if (len_b >= 1)
-				memcpy(candidates[counter] + len_a, splits[i].b + 1, 1);
+				memcpy(candidate + len_a, splits[i].b + 1, 1);
 			if (len_b >= 1)
-				memcpy(candidates[counter] + len_a + 1, splits[i].b, 1);
+				memcpy(candidate + len_a + 1, splits[i].b, 1);
 			if (len_b >= 2)
-				memcpy(candidates[counter] + len_a + 2, splits[i].b + 2, len_b - 2);
-			candidates[counter][n] = 0;
-			counter++;
+				memcpy(candidate + len_a + 2, splits[i].b + 2, len_b - 2);
+			candidate[n] = 0;
+			if (is_stopword(candidate, n)) {
+				free(candidate);
+			} else {
+				candidates[counter++] = candidate;
+			}
 		}
 
 		/* For replaces and inserts, run a loop from 'a' to 'z' */
 		for (alphabet = 'a'; alphabet <= 'z'; alphabet++) {
 			/* Replaces */
 			if (i < n) {
-				candidates[counter] = emalloc(n + 1);
-				memcpy(candidates[counter], splits[i].a, len_a);
-				memcpy(candidates[counter] + len_a, &alphabet, 1);
+				char *candidate = emalloc(n + 1);
+				memcpy(candidate, splits[i].a, len_a);
+				memcpy(candidate + len_a, &alphabet, 1);
 				if (len_b - 1 >= 1)
-					memcpy(candidates[counter] + len_a + 1, splits[i].b + 1, len_b - 1);
-				candidates[counter][n] = 0;
-				counter++;
+					memcpy(candidate + len_a + 1, splits[i].b + 1, len_b - 1);
+				candidate[n] = 0;
+				if (is_stopword(candidate, n)) {
+					free(candidate);
+				} else {
+					candidates[counter++] = candidate;
+				}
 			}
 
 			/* Inserts */
-			candidates[counter] = emalloc(n + 2);
-			memcpy(candidates[counter], splits[i].a, len_a);
-			memcpy(candidates[counter] + len_a, &alphabet, 1);
+			char *candidate = emalloc(n + 2);
+			memcpy(candidate, splits[i].a, len_a);
+			memcpy(candidate + len_a, &alphabet, 1);
 			if (len_b >=1)
-				memcpy(candidates[counter] + len_a + 1, splits[i].b, len_b);
-			candidates[counter][n + 1] = 0;
-			counter++;
+				memcpy(candidate + len_a + 1, splits[i].b, len_b);
+			candidate[n + 1] = 0;
+			if (is_stopword(candidate, n + 1)) {
+				free(candidate);
+			} else {
+				candidates[counter++] = candidate;
+			}
 		}
 	}
 
@@ -559,6 +585,7 @@ edits1 (char *word)
         free(splits[i].a);
         free(splits[i].b);
     }
+	*result_size = counter;
 	return candidates;
 }
 
@@ -577,24 +604,21 @@ build_termlist(char **list, size_t n)
 	offset++;
 
 	for (i = 0; i < n; i++) {
-		size_t d = strlen(list[i]);
-		if (total_len - offset < d + 3) {
+		size_t len_i = strlen(list[i]);
+		if (total_len - offset < len_i + 3) {
 			termlist = erealloc(termlist, offset + total_len);
 			total_len *= 2;
 		}
 		memcpy(termlist + offset++, "\'", 1);
-		memcpy(termlist + offset, list[i], d);
-		offset += d;
+		memcpy(termlist + offset, list[i], len_i);
+		offset += len_i;
 
 		if (i == n - 1) {
-			memcpy(termlist + offset, "\'", 1);
-			offset++;
-		}
-		else {
+			memcpy(termlist + offset++, "\'", 1);
+		} else {
 			memcpy(termlist + offset, "\',", 2);
 			offset += 2;
 		}
-
 	}
 	if (total_len - offset > 3)
 		memcpy(termlist + offset, ")", 2);
@@ -620,17 +644,20 @@ known_word(sqlite3 *db, char **list, size_t n)
 	sqlite3_stmt *stmt;
 	char *termlist = build_termlist(list, n);
 
-	easprintf(&sqlstr, "SELECT word FROM mandb_dict WHERE "
-						"frequency = (SELECT MAX(frequency) FROM mandb_dict "
-						"WHERE word IN %s) AND word IN %s", termlist, termlist);
+	easprintf(&sqlstr, "SELECT MAX(frequency), word FROM mandb_dict WHERE "
+						"word IN %s", termlist);
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		warnx("%s", sqlite3_errmsg(db));
 		return NULL;
 	}
 	
-	if (sqlite3_step(stmt) == SQLITE_ROW)
-			correct = strdup((char *) sqlite3_column_text(stmt, 0));
+	if (sqlite3_step(stmt) == SQLITE_ROW) {
+		correct = (char *) sqlite3_column_text(stmt, 1);
+		if (correct) {
+			correct = estrdup(correct);
+		}
+	}
 
 	sqlite3_finalize(stmt);
 	free(sqlstr);
@@ -663,44 +690,37 @@ char *
 spell(sqlite3 *db, char *word)
 {
 	int i;
-	char *correct;
+	char *correct = NULL;
 	char **candidates;
-	int count2 = 0;
+	size_t count2 = 0;
 	char **cand2 = NULL;
-	size_t n;
 	size_t count;
 	
 	lower(word);
-	correct = known_word(db, &word, 1);
-	
-	if (!correct) {
-		n = strlen(word);
-		count = n + n -1 + 26 * n + 26 * (n + 1);
-		candidates = edits1(word);
-		correct = known_word(db, candidates, count);
-		/* No matches found ? Let's go further and find matches at edit distance 2.
-		 * To make the search fast we use a heuristic. Take one word at a time from 
-		 * candidates, generate it's permutations and look if a match is found.
-		 * If a match is found, exit the loop. Works reasonably fast but accuracy 
-		 * is not quite there in some cases.
-		 */
-		if (correct == NULL) {	
-			for (i = 0; i < count; i++) {
-				n = strlen(candidates[i]);
-				count2 = n + n - 1 + 26 * n + 26 * (n + 1);
-				cand2 = edits1(candidates[i]);
-				if ((correct = known_word(db, cand2, count2)))
-					break;
-				else {
-					free_list(cand2, count2);
-					cand2 = NULL;
-				}
+	//correct = known_word(db, &word, 1);
+
+
+	candidates = edits1(word, &count);
+	correct = known_word(db, candidates, count);
+	/* No matches found ? Let's go further and find matches at edit distance 2.
+	 * To make the search fast we use a heuristic. Take one word at a time from 
+	 * candidates, generate it's permutations and look if a match is found.
+	 * If a match is found, exit the loop. Works reasonably fast but accuracy 
+	 * is not quite there in some cases.
+	 */
+	if (correct == NULL) {
+		for (i = 0; i < count; i++) {
+			cand2 = edits1(candidates[i], &count2);
+			if ((correct = known_word(db, cand2, count2)))
+				break;
+			else {
+				free_list(cand2, count2);
+				cand2 = NULL;
 			}
 		}
-		free_list(candidates, count);
-		free_list(cand2, count2);
 	}
-
+	free_list(candidates, count);
+	free_list(cand2, count2);
 	return correct;
 }
 
@@ -722,9 +742,7 @@ get_suggestions(sqlite3 *db, char *query)
 		*term++ = 0;
 	}
 
-	char **list = edits1(term);
-	size_t n = strlen(term);
-	count = n + n -1 + 26 * n + 26 * (n + 1);
+	char **list = edits1(term, &count);
 	char *termlist = build_termlist(list, count);
 	easprintf(&sqlstr, "SELECT word FROM mandb_dict "
 						"WHERE word IN %s ORDER BY frequency DESC LIMIT 10", termlist);

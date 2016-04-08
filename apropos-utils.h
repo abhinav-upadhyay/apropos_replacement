@@ -47,6 +47,7 @@ typedef enum mandb_access_mode {
 
 #define APROPOS_SCHEMA_VERSION 20120507
 
+#define COMBINATIONS(n) n + n - 1 + 26 * n + 26 * (n + 1)
 /*
  * Used to identify the section of a man(7) page.
  * This is similar to the enum mdoc_sec defined in mdoc.h from mdocml project.
