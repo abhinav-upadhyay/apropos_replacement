@@ -112,7 +112,7 @@ is_stopword(const char *w, size_t len)
 char *
 remove_stopwords(const char *query)
 {
-	size_t len, idx;
+	size_t len;
 	char *output, *buf;
 	const char *sep, *next;
 
