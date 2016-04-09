@@ -243,37 +243,43 @@ main(int argc, char *argv[])
 	args.errmsg = &errmsg;
 
 
+	if (aflags.format == APROPOS_HTML)
+		fprintf(cbdata.out, html_table_start, query);
+
+	if (aflags.format == APROPOS_JSON)
+		fprintf(cbdata.out, "{\"results\": [");
 
 	rc = run_query(db, aflags.format, &args);
-	if (cbdata.count <= 10) {
+	if (cbdata.count < 10) {
 		correct_query = get_correct_query(query, db, &correct_query);
 		if (strcmp(correct_query, query) == 0) {
-            if (cbdata.count == 0) {
-                if (aflags.format == APROPOS_HTML) {
-                    fprintf(cbdata.out, html_table_start, query);
-                    fprintf(cbdata.out, "<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
-                    fprintf(cbdata.out, "%s", end_table_tags);
-                } else if (aflags.format == APROPOS_JSON) {
-                    fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"bad_query\"}");
-                } else {
-                    warnx("No relevant results obtained\n"
-                            "Please try using better keywords");
-                }
-            }
-            free(correct_query);
-            goto error;
+			if (cbdata.count == 0) {
+				if (aflags.format == APROPOS_HTML) {
+					fprintf(cbdata.out,
+							"<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
+				} else if (aflags.format == APROPOS_JSON) {
+					fprintf(cbdata.out, "],\"error\"{\"message\": \"no results found\", \"category\": \"bad_query\"}}");
+				} else {
+					warnx("No relevant results obtained\n"
+								  "Please try using better keywords");
+				}
+			}
+			free(correct_query);
+			goto error;
+		} else {
+			if (aflags.format == APROPOS_JSON) {
+				//TODO new format "error: {"message": "asndsa", "category": "adasd"
+				fprintf(cbdata.out,
+						"],\"error\": {\"message\": \"no results found\", \"category\": \"spell\", \"suggestion\": \"%s\"}}",
+						correct_query);
+			} else if (aflags.format == APROPOS_HTML) {
+				fprintf(cbdata.out, "<tr><td> Did you mean %s?</td></tr>\n", correct_query);
+				fprintf(cbdata.out, "%s", end_table_tags);
+			} else
+				warnx("Did you mean %s?", correct_query);
+			free(correct_query);
+			goto error;
 		}
-		if (aflags.format == APROPOS_HTML) {
-			fprintf(cbdata.out, html_table_start, query);
-			fprintf(cbdata.out, "<tr><td> Did you mean %s? </td></tr>", correct_query);
-			fprintf(cbdata.out, "%s", end_table_tags);
-		}
-		else if (aflags.format == APROPOS_JSON) {
-			fprintf(cbdata.out, "{\"error\": \"no results found\", \"category\": \"spell\", \"suggestion\": \"%s\"}", correct_query);
-		} else
-			warnx("Did you mean %s?", correct_query);
-		free(correct_query);
-		goto error;
 	}
 
 	if (aflags.format == APROPOS_HTML)
@@ -334,8 +340,6 @@ query_callback(void *data, const char *query, const char *section, const char *n
 				fprintf(out, "%s\n\n", snippet);
 			break;
 		case APROPOS_HTML:
-			if (result_index == 0)
-				fprintf(out, html_table_start, query);
 
 			fprintf(out, "<tr><td>%s(%s)</td><td>%s</td></tr>\n", name,
 					section, name_desc);
@@ -350,11 +354,9 @@ query_callback(void *data, const char *query, const char *section, const char *n
 			 *		{"name": "cp", "section": "1", "short_description": "foo", "snippet": "bar"},
 			 *		{"name": "cp", "section": "1", "short_description": "foo", "snippet": "bar"}
 			 *   ]
-             *  }
+			 *  }
 			 */
-			if (result_index == 0)
-				fprintf(out, "{\"results\": [");
-			else
+			if (result_index > 0)
 				fprintf(out, ",");
 			fprintf(out, "{\"name\": \"%s\", \"section\": \"%s\", \"description\": \"%s\"", name,
 					section, name_desc);
