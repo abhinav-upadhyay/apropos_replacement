@@ -258,7 +258,7 @@ main(int argc, char *argv[])
 					fprintf(cbdata.out,
 							"<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
 				} else if (aflags.format == APROPOS_JSON) {
-					fprintf(cbdata.out, "],\"error\"{\"message\": \"no results found\", \"category\": \"bad_query\"}}");
+					fprintf(cbdata.out, "],\"error\": {\"message\": \"no results found\", \"category\": \"bad_query\"}}");
 				} else {
 					warnx("No relevant results obtained\n"
 								  "Please try using better keywords");
