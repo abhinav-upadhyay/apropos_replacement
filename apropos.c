@@ -263,6 +263,11 @@ main(int argc, char *argv[])
 					warnx("No relevant results obtained\n"
 								  "Please try using better keywords");
 				}
+			} else {
+				if (aflags.format == APROPOS_HTML)
+					fprintf(cbdata.out, "%s", end_table_tags);
+				else if (aflags.format == APROPOS_JSON)
+					fprintf(cbdata.out, "]}");
 			}
 			free(correct_query);
 			goto error;
