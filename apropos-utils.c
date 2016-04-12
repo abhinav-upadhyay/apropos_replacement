@@ -909,7 +909,7 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 				sections_str[len] = 0;
 				sections_str += len + 1;
 			}
-			easprintf(&temp, " OR section = \'%s\'", sec);
+			easprintf(&temp, "\'%s\',", sec);
 			if (section_clause) {
 				concat(&section_clause, temp);
                 free(temp);
@@ -921,9 +921,11 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
             /*
              * At least one section requested, add glue for query.
              */
+			size_t section_clause_len = strlen(section_clause);
+			if (section_clause[section_clause_len - 1] == ',')
+				section_clause[section_clause_len - 1] = 0;
             temp = section_clause;
-            /* Skip " OR " before first term. */
-            easprintf(&section_clause, " AND (%s)", temp + 4);
+            easprintf(&section_clause, " AND section in (%s)", temp);
             free(temp);
         }
 	}
