@@ -80,7 +80,7 @@ typedef struct mandb_rec {
 	secbuff exit_status; // EXIT STATUS
 	secbuff diagnostics; // DIAGNOSTICS
 	secbuff errors; // ERRORS
-	char section[2];
+	char *section;
 
 	int xr_found; // To track whether a .Xr was seen when parsing a section
 
@@ -949,15 +949,15 @@ set_section(const struct mdoc *md, const struct man *m, mandb_rec *rec)
 	if (md) {
 		const struct mdoc_meta *md_meta = mdoc_meta(md);
 		if (md_meta->msec == NULL) {
-			rec->section[0] = '?';
+			rec->section = estrdup("?");
 		} else
-		rec->section[0] = md_meta->msec[0];
+		rec->section = estrdup(md_meta->msec);
 	} else if (m) {
 		const struct man_meta *m_meta = man_meta(m);
 		if (m_meta->msec == NULL)
-			rec->section[0] = '?';
+			rec->section = estrdup("?");
 		else
-		rec->section[0] = m_meta->msec[0];
+		rec->section = estrdup(m_meta->msec);
 	} else
 		return;
 
@@ -1187,7 +1187,7 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 
 /*
  * mdoc_parse_section--
- *  Utility function for parsing sections of the mdoc type pages.
+ *  Utility function for parsing sec_nums of the mdoc type pages.
  *  Takes two params:
  *   1. sec is an enum which indicates the section in which we are present
  *   2. string is the string which we need to append to the secbuff for this
@@ -1588,7 +1588,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		char *tmp;
 		rec->links = estrdup(rec->name);
 		free(rec->name);
-		int sz = strcspn(rec->links, " \0");
+		size_t sz = strcspn(rec->links, " \0");
 		rec->name = emalloc(sz + 1);
 		memcpy(rec->name, rec->links, sz);
 		if(rec->name[sz - 1] == ',')
@@ -2104,6 +2104,9 @@ cleanup(mandb_rec *rec)
 
 	free(rec->md5_hash);
 	rec->md5_hash = NULL;
+
+	free(rec->section);
+	rec->section = NULL;
 }
 
 /*

@@ -892,36 +892,43 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	 * ORDER BY rank DESC..."
 	 * NOTES: 1. The portion in square brackets is optional, it will be there 
 	 * only if the user has specified an option on the command line to search in 
-	 * one or more specific sections.
+	 * one or more specific sec_nums.
 	 * 2. I am using LIKE operator because '=' or IN operators do not seem to be
 	 * working with the compression option enabled.
 	 */
 
-	if (args->sec_nums) {
-		char *temp;
-		int i;
-
-		for (i = 0; i < SECMAX; i++) {
-			if (args->sec_nums[i] == 0)
-				continue;
-			easprintf(&temp, " OR section = \'%d\'", i + 1);
+	char *sections_str = args->sec_nums;
+    char *temp;
+	if (sections_str) {
+		while (*sections_str) {
+			size_t len = strcspn(sections_str, " ");
+			char *sec = sections_str;
+			if (sections_str[len] == 0) {
+				sections_str += len;
+			} else {
+				sections_str[len] = 0;
+				sections_str += len + 1;
+			}
+			easprintf(&temp, " OR section = \'%s\'", sec);
 			if (section_clause) {
 				concat(&section_clause, temp);
-				free(temp);
+                free(temp);
 			} else {
-				section_clause = temp;
+                section_clause = temp;
 			}
 		}
-		if (section_clause) {
-			/*
-			 * At least one section requested, add glue for query.
-			 */
-			temp = section_clause;
-			/* Skip " OR " before first term. */
-			easprintf(&section_clause, " AND (%s)", temp + 4);
-			free(temp);
-		}
+        if (section_clause) {
+            /*
+             * At least one section requested, add glue for query.
+             */
+            temp = section_clause;
+            /* Skip " OR " before first term. */
+            easprintf(&section_clause, " AND (%s)", temp + 4);
+            free(temp);
+        }
 	}
+
+
 	if (args->nrec >= 0) {
 		/* Use the provided number of records and offset */
 		easprintf(&limit_clause, " LIMIT %d OFFSET %d",

@@ -51,7 +51,7 @@
 #include "util.h"
 
 typedef struct apropos_flags {
-	int sec_nums[SECMAX];
+	char *sec_nums;
 	int nresults;
 	int pager;
 	int no_context;
@@ -73,6 +73,8 @@ static char *const html_table_start = "<html>\n<header>\n<title>apropos results 
 						"style=\"border: 1px solid #000000; border-collapse:"
 						"collapse;\" border=\"1\">\n";
 
+static const unsigned int sections_args_length = 16;
+
 static int query_callback(void *, const char *, const char * , const char *, const char *,
 						  const char *, size_t, unsigned int);
 __dead static void usage(void);
@@ -85,6 +87,8 @@ static void
 parseargs(int argc, char **argv, struct apropos_flags *aflags)
 {
 	int ch;
+	char sec[2] = {0};
+
 	while ((ch = getopt(argc, argv, "123456789Cchijln:PprS:s:")) != -1) {
 		switch (ch) {
 		case '1':
@@ -96,7 +100,12 @@ parseargs(int argc, char **argv, struct apropos_flags *aflags)
 		case '7':
 		case '8':
 		case '9':
-			aflags->sec_nums[ch - '1'] = 1;
+			sec[0] = (char) ch ;
+			if (aflags->sec_nums == NULL) {
+				aflags->sec_nums = emalloc(sections_args_length);
+				memcpy(aflags->sec_nums, sec, 2);
+			} else
+				concat2(&aflags->sec_nums, sec, 1);
 			break;
 		case 'C':
 			aflags->no_context = 1;
@@ -133,11 +142,13 @@ parseargs(int argc, char **argv, struct apropos_flags *aflags)
 		case 'S':
 			aflags->machine = optarg;
 			break;
-		case 's':
-			ch = atoi(optarg);
-			if (ch < 1 || ch > 9)
-				errx(EXIT_FAILURE, "Invalid section");
-			aflags->sec_nums[ch - 1] = 1;
+			case 's':
+			if (aflags->sec_nums == NULL) {
+				size_t arglen = strlen(optarg);
+				aflags->sec_nums = arglen > sections_args_length? emalloc(arglen + 1): emalloc(sections_args_length);
+				memcpy(aflags->sec_nums, optarg, arglen + 1);
+			} else
+				concat(&aflags->sec_nums, optarg);
 			break;
 		case '?':
 		default:
@@ -159,6 +170,7 @@ main(int argc, char *argv[])
 	cbdata.out = stdout;		// the default output stream
 	cbdata.count = 0;
 	apropos_flags aflags;
+	aflags.sec_nums = NULL;
 	cbdata.aflags = &aflags;
 	sqlite3 *db;
 	char * correct_query;
@@ -189,12 +201,6 @@ main(int argc, char *argv[])
 
 	parseargs(argc, argv, &aflags);
 
-	/*
-	 * If the user specifies a section number as an option, the
-	 * corresponding index element in sec_nums is set to the string
-	 * representing that section number.
-	 */
-	
 	argc -= optind;
 	argv += optind;
 	
@@ -257,6 +263,7 @@ main(int argc, char *argv[])
 				if (aflags.format == APROPOS_HTML) {
 					fprintf(cbdata.out,
 							"<tr><td> No relevant results obtained.<br/> Please try using better keywords</tr></td>");
+					fprintf(cbdata.out, "%s", end_table_tags);
 				} else if (aflags.format == APROPOS_JSON) {
 					fprintf(cbdata.out, "],\"error\": {\"message\": \"no results found\", \"category\": \"bad_query\"}}");
 				} else {
@@ -294,6 +301,7 @@ main(int argc, char *argv[])
 
 	error:
 	free(query);
+	free(aflags.sec_nums);
 	close_db(db);
 	if (errmsg) {
 		warnx("%s", errmsg);
