@@ -58,6 +58,7 @@ typedef struct apropos_flags {
 	query_format format;
 	int legacy;
 	const char *machine;
+	const char *db_path;
 } apropos_flags;
 
 typedef struct callback_data {
@@ -87,9 +88,9 @@ static void
 parseargs(int argc, char **argv, struct apropos_flags *aflags)
 {
 	int ch;
-	char sec[2] = {0};
+	char sec[2] = {0,0};
 
-	while ((ch = getopt(argc, argv, "123456789Cchijln:PprS:s:")) != -1) {
+	while ((ch = getopt(argc, argv, "123456789Ccd:hijln:PprS:s:")) != -1) {
 		switch (ch) {
 		case '1':
 		case '2':
@@ -112,6 +113,9 @@ parseargs(int argc, char **argv, struct apropos_flags *aflags)
 			break;
 		case 'c':
 			aflags->no_context = 0;
+			break;
+		case 'd':
+			aflags->db_path = optarg;
 			break;
 		case 'h':
 			aflags->format = APROPOS_HTML;
@@ -223,7 +227,9 @@ main(int argc, char *argv[])
 		free(str);
 
 	build_boolean_query(query);
-	if ((db = init_db(MANDB_READONLY, MANCONF)) == NULL)
+	if (aflags.db_path == NULL)
+		aflags.db_path = get_dbpath(MANCONF);
+	if ((db = init_db(MANDB_READONLY, aflags.db_path)) == NULL)
 		exit(EXIT_FAILURE);
 
 	/* If user wants to page the output, then set some settings */
@@ -387,7 +393,7 @@ query_callback(void *data, const char *query, const char *section, const char *n
 static void
 usage(void)
 {
-	fprintf(stderr, "Usage: %s [-123456789Ccilpr] [-n results] "
+	fprintf(stderr, "Usage: %s [-123456789Ccilpr] [-d man.db path] [-n results] "
 	    "[-S machine] [-s section] query\n",
 		getprogname());
 	exit(1);

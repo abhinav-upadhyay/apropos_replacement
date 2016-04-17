@@ -374,7 +374,7 @@ get_dbpath(const char *manconf)
  *  	In normal cases the function should return a handle to the db.
  */
 sqlite3 *
-init_db(mandb_access_mode db_flag, const char *manconf)
+init_db(mandb_access_mode db_flag, const char *dbpath)
 {
 	sqlite3 *db = NULL;
 	sqlite3_stmt *stmt;
@@ -383,9 +383,8 @@ init_db(mandb_access_mode db_flag, const char *manconf)
 	int create_db_flag = 0;
 	int access_mode;
 
-	char *dbpath = get_dbpath(manconf);
 	if (dbpath == NULL)
-		errx(EXIT_FAILURE, "_mandb entry not found in man.conf");
+		errx(EXIT_FAILURE, "No value passed for dbpath");
 	/* Check if the database exists or not */
 	if (!(stat(dbpath, &sb) == 0 && S_ISREG(sb.st_mode))) {
 		/* Database does not exist, check if DB_CREATE was specified, and set

@@ -381,7 +381,13 @@ main(int argc, char *argv[])
 			remove(dbp);
 	}
 
-	if ((db = init_db(MANDB_CREATE, manconf)) == NULL)
+	const char *db_path;
+	if (manconf)
+		db_path = get_dbpath(manconf);
+	else
+		db_path = get_dbpath(MANCONF);
+
+	if ((db = init_db(MANDB_CREATE, db_path)) == NULL)
 		exit(EXIT_FAILURE);
 
 	sqlite3_exec(db, "PRAGMA synchronous = 0", NULL, NULL, 	&errmsg);

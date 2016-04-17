@@ -96,7 +96,8 @@ main(int argc, char *argv[])
 	if (argc == 0)
 		usage();
 
-	if ((db = init_db(MANDB_READONLY, MANCONF)) == NULL)
+	const char *db_path = get_dbpath(MANCONF);
+	if ((db = init_db(MANDB_READONLY, db_path)) == NULL)
 		exit(EXIT_FAILURE);
 
 	retval = 0;

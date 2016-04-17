@@ -38,7 +38,7 @@
 .Sh SYNOPSIS
 .In apropos-utils.h
 .Ft sqlite3 *
-.Fn init_db "int db_flag" "char *manconf"
+.Fn init_db "int db_flag" "char *db_path"
 .Sh DESCRIPTION
 The
 .Fn init_db
@@ -65,10 +65,10 @@ the database schema if it does not exist already.
 .El
 .Pp
 The second argument
-.Fa manconf
-specifies the location of the man.conf configuration file.
+.Fa db_path
+specifies the location of the man.db database file.
 By default it is stored at
-.Pa /etc/man.conf .
+.Pa /var/db/man.db .
 The location of the man.db database is configured in the configuration file
 using the
 .Cd _mandb
