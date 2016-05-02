@@ -103,7 +103,6 @@ static const char *section_names[] = {
  *  Inverse document frequency of t = log(Total number of documents /
  *										Number of documents in which t occurs)
  */
-
 static void
 rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 {
@@ -116,7 +115,79 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	int ndoc;
 	int doclen = 0;
 	const double k = 3.75;
-	/* Check that the number of arguments passed to this function is correct. */
+
+	matchinfo = (const unsigned int *) sqlite3_value_blob(apval[0]);
+	nphrase = matchinfo[0];
+	ncol = matchinfo[1];
+	ndoc = matchinfo[2 + 3 * ncol * nphrase + ncol];
+	for (iphrase = 0; iphrase < nphrase; iphrase++) {
+		int icol;
+		const unsigned int *phraseinfo = &matchinfo[2 + ncol+ iphrase * ncol * 3];
+		for(icol = 1; icol < ncol; icol++) {
+
+			/* nhitcount: number of times the current phrase occurs in the current
+			 *            column in the current document.
+			 * nglobalhitcount: number of times current phrase occurs in the current
+			 *                  column in all documents.
+			 * ndocshitcount:   number of documents in which the current phrase
+			 *                  occurs in the current column at least once.
+			 */
+			int nhitcount = phraseinfo[3 * icol];
+			int nglobalhitcount = phraseinfo[3 * icol + 1];
+			int ndocshitcount = phraseinfo[3 * icol + 2];
+			doclen = matchinfo[2 + icol ];
+			double weight = col_weights[icol - 1];
+			if (idf->status == 0 && ndocshitcount)
+				idf->value += log(((double)ndoc / ndocshitcount))* weight;
+
+			/* Dividing the tf by document length to normalize the effect of
+			 * longer documents.
+			 */
+			if (nglobalhitcount > 0 && nhitcount)
+				tf += (((double)nhitcount  * weight) / (nglobalhitcount * doclen));
+		}
+	}
+	idf->status = 1;
+
+	/* Final score = (tf * idf)/ ( k + tf)
+	 *	Dividing by k+ tf further normalizes the weight leading to better
+	 *  results.
+	 *  The value of k is experimental
+	 */
+	double score = (tf * idf->value/ ( k + tf)) ;
+	sqlite3_result_double(pctx, score);
+	return;
+}
+
+
+/*
+ * score_func --
+ *  Sqlite user defined function for calculating section wise tf-idf score of the documents.
+ *  For each phrase of the query, it computes the tf and idf and adds them over.
+ *  It computes the final rank, by multiplying tf and idf together.
+ *  Weight of term t for document d = (term frequency of t in d *
+ *                                      inverse document frequency of t)
+ *
+ *  Term Frequency of term t in document d = Number of times t occurs in d /
+ *	                                        Number of times t appears in all
+ *											documents
+ *
+ *  Inverse document frequency of t = log(Total number of documents /
+ *										Number of documents in which t occurs)
+ */
+
+static void
+score_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
+{
+	inverse_document_frequency *idf = sqlite3_user_data(pctx);
+	double tf = 0.0;
+	const unsigned int *matchinfo;
+	int ncol;
+	int nphrase;
+	int iphrase;
+	int ndoc;
+	int doclen = 0;
+	const double k = 3.75;
 	double tf_values[12] = {0.0};
 
 	matchinfo = (const unsigned int *) sqlite3_value_blob(apval[0]);
@@ -161,7 +232,7 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 	 */
 	char *score_json = NULL;
 	easprintf(&score_json, "{\"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f,"
-					  "\"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f}",
+					  "\"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f, \"%s\": %f}",
 			  section_names[0], get_tfidf_score(tf_values[0]),
 			  section_names[1], get_tfidf_score(tf_values[1]),
 			  section_names[2], get_tfidf_score(tf_values[2]),
@@ -173,7 +244,14 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 			  section_names[8], get_tfidf_score(tf_values[8]),
 			  section_names[9], get_tfidf_score(tf_values[9]),
 			  section_names[10], get_tfidf_score(tf_values[10]),
-			  section_names[11], get_tfidf_score(tf_values[11])
+			  section_names[11], get_tfidf_score(tf_values[11]),
+			  "total", get_tfidf_score(tf_values[0]) + get_tfidf_score(tf_values[1])
+			  + get_tfidf_score(tf_values[2]) + get_tfidf_score(tf_values[3]) +
+					  get_tfidf_score(tf_values[4]) + get_tfidf_score(tf_values[5]) +
+					  get_tfidf_score(tf_values[6]) + get_tfidf_score(tf_values[7]) +
+					  get_tfidf_score(tf_values[8]) + get_tfidf_score(tf_values[9]) +
+					  get_tfidf_score(tf_values[10]) + get_tfidf_score(tf_values[11])
+
 	);
 	sqlite3_result_text(pctx, score_json, strlen(score_json), free);
 	return;
@@ -187,8 +265,10 @@ main(int argc, char **argv)
 	char *query = argv[1];
 	inverse_document_frequency idf = {0, 0};
 	sqlite3 *db = init_db(MANDB_READONLY, get_dbpath(MANCONF));
-	int rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_UTF8, (void *)&idf,
-								 rank_func, NULL, NULL);
+	int rc = sqlite3_create_function(db, "score_func", 1, SQLITE_UTF8, (void *)&idf,
+								 score_func, NULL, NULL);
+	sqlite3_create_function(db, "rank_func", 1, SQLITE_UTF8, (void *)&idf,
+									 rank_func, NULL, NULL);
 	char *str = argv[1];
 	/* Eliminate any stopwords from the query */
 	query = remove_stopwords(lower(str));
@@ -196,9 +276,9 @@ main(int argc, char **argv)
 	if (query == NULL)
 		query = estrdup(str);
 	build_boolean_query(query);
-	char *sqlquery = sqlite3_mprintf("SELECT name, section, rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
+	char *sqlquery = sqlite3_mprintf("SELECT name, section, score_func(matchinfo(mandb, \"pclxn\")) AS score, rank_func(matchinfo(mandb, \"pclxn\")) as rank"
 									" FROM mandb"
-									" WHERE mandb MATCH %Q"
+									" WHERE mandb MATCH %Q order by rank desc"
 									,query);
 	sqlite3_stmt *stmt;
 	rc = sqlite3_prepare_v2(db, sqlquery, -1, &stmt, NULL);
