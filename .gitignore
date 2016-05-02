@@ -8,6 +8,7 @@
 makemandb
 apropos
 stopwords.c
+apropos_scores
 whatis
 *.swp
 *.diff

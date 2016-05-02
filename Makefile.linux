@@ -2,7 +2,7 @@ CFLAGS=-Wall -c -I/usr/local/include/mandoc -g -std=gnu99 -O2
 LFLAGS=-L/usr/local/lib/mandoc -lm -lmandoc -lz -lpthread -larchive -lbsd -ldl
 TOOL_NBPERF=gperf
 TOOL_SED=sed
-all:	makemandb apropos whatis
+all:	makemandb apropos whatis apropos_scores
 
 makemandb:	makemandb.o util.o apropos-utils.o sqlite3.o 
 	${CC} -o makemandb makemandb.o util.o apropos-utils.o sqlite3.o ${LFLAGS}
@@ -12,6 +12,9 @@ apropos:	apropos.o util.o apropos-utils.o sqlite3.o
 
 whatis:	whatis.o apropos-utils.o sqlite3.o util.o
 	${CC} -o whatis whatis.o util.o apropos-utils.o sqlite3.o ${LFLAGS}
+
+apropos_scores: apropos_scores.o apropos-utils.o sqlite3.o util.o
+	${CC} -o apropos_scores apropos_scores.o apropos-utils.o sqlite3.o util.o ${LFLAGS}
 
 #apropos.cgi:	apropos_cgi.o apropos-utils.o cgi-utils.o util.o sqlite3.o
 #	${CC} -o apropos.cgi apropos_cgi.o util.o apropos-utils.o cgi-utils.o sqlite3.o ${LFLAGS}
@@ -41,7 +44,10 @@ makemandb.o:	makemandb.c apropos-utils.c util.c
 	${CC} ${CFLAGS} makemandb.c  
 
 apropos.o:	apropos.c apropos-utils.c util.c
-	${CC} ${CFLAGS} apropos.c  
+	${CC} ${CFLAGS} apropos.c
+
+apropos_scores.o: apropos_scores.c apropos-utils.c util.c
+	${CC} ${CFLAGS} apropos_scores.c
 
 whatis.o:	whatis.c apropos-utils.c util.c
 	${CC} ${CFLAGS} whatis.c 
