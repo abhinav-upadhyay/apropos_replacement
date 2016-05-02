@@ -822,7 +822,7 @@ rank_func(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 			doclen = matchinfo[2 + icol ];
 			double weight = col_weights[icol - 1];
 			if (idf->status == 0 && ndocshitcount)
-				idf->value += log(((double)ndoc / ndocshitcount));
+				idf->value += log(((double)ndoc / ndocshitcount))* weight;
 
 			/* Dividing the tf by document length to normalize the effect of 
 			 * longer documents.
