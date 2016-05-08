@@ -74,18 +74,31 @@ typedef struct set {
 
 /* weights for individual columns */
 static const double col_weights[] = {
-	2.0,	// NAME
-	2.00,	// Name-description
-	0.55,	// DESCRIPTION
-	0.10,	// LIBRARY
-	0.001,	//RETURN VALUES
-	0.20,	//ENVIRONMENT
-	0.01,	//FILES
-	0.001,	//EXIT STATUS
-	2.00,	//DIAGNOSTICS
-	0.05,	//ERRORS
-	0.00,	//md5_hash
-	1.00	//machine
+	/*0.443071898317,
+	0.178932929836,
+	0.262571333118,
+	0.00441664505383,
+	0.0183718963827,
+	0.0145578875988,
+	0.0254842389045,
+	0.000554415729557,
+	0.0166829975955,
+	0.0324855298792,
+	0.0,
+	0.00287022758498 */ //Obtained by random forest on data.csv
+    0.59104587689, //obtained by random forest 15,300 on data2.csv
+    0.11724895332,
+    0.219824148589,
+    0.00291541950947,
+    0.00622822136478,
+    0.00661976189148,
+    0.0145063796903,
+    0.000223590525925,
+    0.0107496100264,
+    0.0304011695254,
+    0.0,
+    0.000236868666647
+
 };
 
 #include "stopwords.c"
