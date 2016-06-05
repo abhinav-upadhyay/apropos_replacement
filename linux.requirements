@@ -2,3 +2,4 @@ gperf
 libarchive-dev
 libbsd-dev
 zlib1g-dev
+mandoc (download, and install manually from mdocml.bsd.lv)
