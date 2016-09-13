@@ -249,14 +249,16 @@ create_db(sqlite3 *db)
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 			    "name_desc, desc, lib, return_vals, env, files, "
-			    "exit_status, diagnostics, errors, md5_hash UNIQUE, machine, "
-			    "compress=zip, uncompress=unzip, tokenize=porter); "	//mandb
+			    "exit_status, diagnostics, errors,special_keywords, xr_context, md5_hash UNIQUE, machine, "
+			    "tokenize=porter); "	//mandb
 			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, "
 			    "file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
 				//mandb_meta
 			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
 			    "machine, md5_hash); "	//mandb_links
-			"CREATE TABLE mandb_dict(word UNIQUE, frequency);";	//mandb_dict;
+			"CREATE TABLE mandb_dict(word UNIQUE, frequency); "	//mandb_dict;
+            " CREATE TABLE mandb_xrs(src_name, sec_section, target_name, "
+                "target_section);";
 
 
 	sqlite3_exec(db, sqlstr, NULL, NULL, &errmsg);

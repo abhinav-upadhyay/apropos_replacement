@@ -80,6 +80,7 @@ typedef struct mandb_rec {
 	secbuff exit_status; // EXIT STATUS
 	secbuff diagnostics; // DIAGNOSTICS
 	secbuff errors; // ERRORS
+    secbuff special_keywords;
 	char *section;
 
 	int xr_found; // To track whether a .Xr was seen when parsing a section
@@ -108,15 +109,16 @@ static void set_section(const struct mdoc *, const struct man *, mandb_rec *);
 static void set_machine(const struct mdoc *, mandb_rec *);
 static int insert_into_db(sqlite3 *, mandb_rec *);
 static	void begin_parse(const char *, struct mparse *, mandb_rec *,
-			 void *, size_t len);
-static void pmdoc_node(const struct mdoc_node *, mandb_rec *);
-static void pmdoc_Nm(const struct mdoc_node *, mandb_rec *);
-static void pmdoc_Nd(const struct mdoc_node *, mandb_rec *);
-static void pmdoc_Sh(const struct mdoc_node *, mandb_rec *);
-static void pmdoc_Xr(const struct mdoc_node *, mandb_rec *);
-static void pmdoc_Pp(const struct mdoc_node *, mandb_rec *);
+			 void *, size_t len, sqlite3 *);
+static void pmdoc_node(const struct mdoc_node *, mandb_rec *, sqlite3 *);
+static void pmdoc_Nm(const struct mdoc_node *, mandb_rec *, sqlite3 *);
+static void pmdoc_Nd(const struct mdoc_node *, mandb_rec *, sqlite3 *);
+static void pmdoc_Sh(const struct mdoc_node *, mandb_rec *, sqlite3 *);
+static void pmdoc_Xr(const struct mdoc_node *, mandb_rec *, sqlite3 *);
+static void pmdoc_Pp(const struct mdoc_node *, mandb_rec *, sqlite3 *);
+static void special_keywords(const struct mdoc_node *, mandb_rec *, sqlite3 *);
 static void pmdoc_macro_handler(const struct mdoc_node *, mandb_rec *, 
-				enum mdoct);
+				enum mdoct, sqlite3 *);
 static void pman_node(const struct man_node *n, mandb_rec *);
 static void pman_parse_node(const struct man_node *, secbuff *);
 static void pman_parse_name(const struct man_node *, mandb_rec *);
@@ -130,12 +132,13 @@ static void build_file_cache(sqlite3 *, const char *, const char *,
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
+static void update_xr_context(sqlite3 *); 
 static char *parse_escape(const char *);
 static void replace_hyph(char *);
 static makemandb_flags mflags = { .verbosity = 1 };
 
 typedef	void (*pman_nf)(const struct man_node *n, mandb_rec *);
-typedef	void (*pmdoc_nf)(const struct mdoc_node *n, mandb_rec *);
+typedef	void (*pmdoc_nf)(const struct mdoc_node *n, mandb_rec *, sqlite3 *);
 static	const pmdoc_nf mdocs[MDOC_MAX + 1] = {
 	NULL, /* Ap */
 	NULL, /* Dd */
@@ -150,20 +153,20 @@ static	const pmdoc_nf mdocs[MDOC_MAX + 1] = {
 	NULL, /* Ed */
 	NULL, /* Bl */
 	NULL, /* El */
-	NULL, /* It */
+	special_keywords, /* It */
 	NULL, /* Ad */
 	NULL, /* An */
 	NULL, /* Ar */
 	NULL, /* Cd */
 	NULL, /* Cm */
-	NULL, /* Dv */
-	NULL, /* Er */
-	NULL, /* Ev */
+	special_keywords, /* Dv */
+	special_keywords, /* Er */
+	special_keywords, /* Ev */
 	NULL, /* Ex */
 	NULL, /* Fa */
 	NULL, /* Fd */
 	NULL, /* Fl */
-	NULL, /* Fn */
+	special_keywords, /* Fn */
 	NULL, /* Ft */
 	NULL, /* Ic */
 	NULL, /* In */
@@ -172,7 +175,7 @@ static	const pmdoc_nf mdocs[MDOC_MAX + 1] = {
 	pmdoc_Nm, /* Nm */
 	NULL, /* Op */
 	NULL, /* Ot */
-	NULL, /* Pa */
+	special_keywords, /* Pa */
 	NULL, /* Rv */
 	NULL, /* St */
 	NULL, /* Va */
@@ -427,6 +430,7 @@ main(int argc, char *argv[])
 		 " file PRIMARY KEY);"
 		 "CREATE UNIQUE INDEX metadb.index_file_cache_dev"
 		 " ON file_cache (device, inode); "
+         "CREATE TABLE metadb.xr_context(target_name, target_section, context); "
 		 "CREATE VIRTUAL TABLE metadb.mandb_dup USING fts4(section, name, "
 		   "name_desc, desc, lib, return_vals, env, files, "
 		   "exit_status, diagnostics, errors, machine "
@@ -470,6 +474,7 @@ main(int argc, char *argv[])
 	mparse_free(mp);
 	mchars_free(mchars);
 	free_secbuffs(&rec);
+    update_xr_context(db);
 
 	/* Commit the transaction */
 	sqlite3_exec(db, "COMMIT", NULL, NULL, &errmsg);
@@ -858,7 +863,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
 			rec->file_path = estrdup(file);
 			// file_path is freed by insert_into_db itself.
 
-			begin_parse(file, mp, rec, buf, buflen);
+			begin_parse(file, mp, rec, buf, buflen, db);
 			if (insert_into_db(db, rec) < 0) {
 				if (mflags.verbosity)
 					warnx("Error in indexing %s", file);
@@ -908,7 +913,7 @@ update_db(sqlite3 *db, struct mparse *mp, mandb_rec *rec)
  */
 static void
 begin_parse(const char *file, struct mparse *mp, mandb_rec *rec,
-    void *buf, size_t len)
+    void *buf, size_t len, sqlite3 *db)
 {
 	struct mdoc *mdoc;
 	struct man *man;
@@ -937,7 +942,7 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec,
 	set_section(mdoc, man, rec);
 	if (mdoc) {
 		rec->page_type = MDOC;
-		pmdoc_node(mdoc_node(mdoc), rec);
+		pmdoc_node(mdoc_node(mdoc), rec, db);
 	} else {
 		rec->page_type = MAN;
 		pman_node(man_node(man), rec);
@@ -986,7 +991,7 @@ set_machine(const struct mdoc *md, mandb_rec *rec)
 }
 
 static void
-pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
+pmdoc_node(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
 {
 
 	if (n == NULL)
@@ -1000,14 +1005,14 @@ pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
 	case (MDOC_ELEM):
 		if (mdocs[n->tok] == NULL)
 			break;
-		(*mdocs[n->tok])(n, rec);
+		(*mdocs[n->tok])(n, rec, db);
 		break;
 	default:
 		break;
 	}
 
-	pmdoc_node(n->child, rec);
-	pmdoc_node(n->next, rec);
+	pmdoc_node(n->child, rec, db);
+	pmdoc_node(n->next, rec, db);
 }
 
 /*
@@ -1015,7 +1020,7 @@ pmdoc_node(const struct mdoc_node *n, mandb_rec *rec)
  *  Extracts the Name of the manual page from the .Nm macro
  */
 static void
-pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
+pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
 {
 	if (n->sec != SEC_NAME)
 		return;
@@ -1034,7 +1039,7 @@ pmdoc_Nm(const struct mdoc_node *n, mandb_rec *rec)
  *  Extracts the one line description of the man page from the .Nd macro
  */
 static void
-pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
+pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
 {
 	char *buf = NULL;
 	char *name;
@@ -1069,10 +1074,10 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
 	}
 
 	if (n->child)
-		pmdoc_Nd(n->child, rec);
+		pmdoc_Nd(n->child, rec, db);
 
 	if(n->next)
-		pmdoc_Nd(n->next, rec);
+		pmdoc_Nd(n->next, rec, db);
 }
 
 /*
@@ -1083,7 +1088,7 @@ pmdoc_Nd(const struct mdoc_node *n, mandb_rec *rec)
  *  for adding a new line whenever we encounter it.
  */
 static void
-pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
+pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct, sqlite3 *db)
 {
 	const struct mdoc_node *sn;
 	assert(n);
@@ -1131,6 +1136,52 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
 
 }
 
+static void
+inmem_insert_xr_context(sqlite3 *db, const char *context, const char *target_name, const char * target_section)
+{
+    sqlite3_stmt *stmt = NULL;
+
+	const char *sqlstr = "insert into metadb.xr_context (context, target_name, target_section) values(:context, :target_name, :target_section)";
+	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		goto Out;
+
+	int idx = sqlite3_bind_parameter_index(stmt, ":context");
+	rc = sqlite3_bind_text(stmt, idx, context, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":target_name");
+	rc = sqlite3_bind_text(stmt, idx, target_name, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":target_section");
+	rc = sqlite3_bind_text(stmt, idx, target_section, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+    sqlite3_finalize(stmt);
+    return;
+
+Out:
+    if (mflags.verbosity)
+        warnx("%s", sqlite3_errmsg(db));
+
+}
+
 /*
  * pmdoc_Xr, pmdoc_Pp--
  *  Empty stubs.
@@ -1140,12 +1191,178 @@ pmdoc_macro_handler(const struct mdoc_node *n, mandb_rec *rec, enum mdoct doct)
  *  (See if else blocks in pmdoc_Sh.)
  */
 static void
-pmdoc_Xr(const struct mdoc_node *n, mandb_rec *rec)
+pmdoc_Xr(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
 {
+    char *context = NULL;
+    if (n->prev) {
+        mdoc_deroff(&context, n->prev);
+    }
+    n = n->child;
+
+    while(n && n->type != MDOC_TEXT)
+        n = n->next;;
+
+    if (!n)
+        return;
+
+    sqlite3_stmt *stmt = NULL;
+
+	const char *sqlstr = "INSERT INTO mandb_xrs VALUES (:src_name, :src_section, :target_name, :target_section)";
+
+	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		goto Out;
+
+	int idx = sqlite3_bind_parameter_index(stmt, ":src_name");
+	rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":src_section");
+	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+	goto Out;
+	}
+
+    char *target_name = n->string;
+	idx = sqlite3_bind_parameter_index(stmt, ":target_name");
+	rc = sqlite3_bind_text(stmt, idx, target_name, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":target_section");
+    n = n->next;
+    while (n && n->type != MDOC_TEXT)
+        n = n->next;
+
+    if (!n) {
+        warnx("no section number for man page %s, %s", rec->name, rec->section);
+        return;
+    }
+    char *target_section = n->string;
+	rc = sqlite3_bind_text(stmt, idx, target_section, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+    sqlite3_finalize(stmt);
+    inmem_insert_xr_context(db, context, target_name, target_section);
+    return;
+
+Out:
+    if (mflags.verbosity)
+        warnx("%s", sqlite3_errmsg(db));
+
+}
+
+
+static void
+insert_xr_context(sqlite3 *db, const char *context, const char *target_name, const char *target_section)
+{
+    sqlite3_stmt *stmt = NULL;
+
+	const char *sqlstr = "update mandb set xr_context=:context where name=:target_name and section=:target_section";
+	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		goto Out;
+
+	int idx = sqlite3_bind_parameter_index(stmt, ":context");
+	rc = sqlite3_bind_text(stmt, idx, context, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":target_name");
+	rc = sqlite3_bind_text(stmt, idx, target_name, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":target_section");
+	rc = sqlite3_bind_text(stmt, idx, target_section, -1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+    sqlite3_finalize(stmt);
+    return;
+
+Out:
+    if (mflags.verbosity)
+        warnx("%s", sqlite3_errmsg(db));
+
 }
 
 static void
-pmdoc_Pp(const struct mdoc_node *n, mandb_rec *rec)
+update_xr_context(sqlite3 *db) 
+{
+    sqlite3_stmt *stmt = NULL;
+
+	const char *sqlstr = "select target_name, target_section, group_concat(context) from metadb.xr_context group by target_name, target_section";
+	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		goto Out;
+
+	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		goto Out;
+
+
+	while (sqlite3_step(stmt) == SQLITE_ROW) {
+        char *target_name = sqlite3_column_text(stmt, 0);
+        char *target_section = sqlite3_column_text(stmt, 1);
+		char *context = sqlite3_column_text(stmt, 2);
+        insert_xr_context(db, context, target_name, target_section);
+	}
+
+    sqlite3_finalize(stmt);
+    return;
+
+Out:
+    if (mflags.verbosity)
+        warnx("%s", sqlite3_errmsg(db));
+
+}
+
+
+static void
+special_keywords(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
+{
+    char *s=NULL;
+    if (n == NULL)
+        return;
+    n = n->child;
+    if (!n)
+        return;
+    mdoc_deroff(&s, n);
+    if (s != NULL) 
+        append(&rec->special_keywords.data, s);
+    free(s);
+}
+
+static void
+pmdoc_Pp(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
 {
 }
 
@@ -1157,11 +1374,12 @@ pmdoc_Pp(const struct mdoc_node *n, mandb_rec *rec)
  *  they need special handling, thus the separate if branches for them.
  */
 static void
-pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
+pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
 {
 	if (n == NULL || (n->type != MDOC_TEXT && n->tok == MDOC_MAX))
 		return;
 	int xr_found = 0;
+
 
 	if (n->type == MDOC_TEXT) {
 		mdoc_parse_section(n->sec, n->string, rec);
@@ -1176,19 +1394,22 @@ pmdoc_Sh(const struct mdoc_node *n, mandb_rec *rec)
 		 * When encountering other inline macros,
 		 * call pmdoc_macro_handler.
 		 */
-		pmdoc_macro_handler(n, rec, MDOC_Xr);
+		pmdoc_macro_handler(n, rec, MDOC_Xr, db);
 		xr_found = 1;
 	} else if (mdocs[n->tok] == pmdoc_Pp) {
-		pmdoc_macro_handler(n, rec, MDOC_Pp);
-	}
+		pmdoc_macro_handler(n, rec, MDOC_Pp, db);
+	}/* else if (mdocs[n->tok] == special_keywords) {
+        special_keywords(n, rec, db);
+    }*/
+
 
 	/*
 	 * If an Xr macro was encountered then the child node has
 	 * already been explored by pmdoc_macro_handler.
 	 */
 	if (xr_found == 0)
-		pmdoc_Sh(n->child, rec);
-	pmdoc_Sh(n->next, rec);
+		pmdoc_Sh(n->child, rec, db);
+	pmdoc_Sh(n->next, rec, db);
 }
 
 /*
@@ -1583,6 +1804,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	rec->files.data[rec->files.offset] = 0;
 	rec->diagnostics.data[rec->diagnostics.offset] = 0;
 	rec->errors.data[rec->errors.offset] = 0;
+    rec->special_keywords.data[rec->special_keywords.offset] = 0;
 
 	/*
 	 * In case of a mdoc page: (sorry, no better place to put this code)
@@ -1721,7 +1943,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 /*------------------------ Populate the mandb table---------------------------*/
 	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc,"
 		 " :lib, :return_vals, :env, :files, :exit_status,"
-		 " :diagnostics, :errors, :md5_hash, :machine)";
+		 " :diagnostics, :errors, :special_keywords, :xr_context, :md5_hash, :machine)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
@@ -1809,6 +2031,21 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":special_keywords");
+	rc = sqlite3_bind_text(stmt, idx, rec->special_keywords.data,
+	                       rec->special_keywords.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":xr_context");
+    rc = sqlite3_bind_null(stmt, idx);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
 	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
@@ -1826,6 +2063,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		sqlite3_finalize(stmt);
 		goto Out;
 	}
+
 
 	rc = sqlite3_step(stmt);
 	if (rc != SQLITE_DONE) {
@@ -2092,6 +2330,7 @@ cleanup(mandb_rec *rec)
 	rec->diagnostics.offset = 0;
 	rec->errors.offset = 0;
 	rec->files.offset = 0;
+    rec->special_keywords.offset = 0;
 
 	free(rec->machine);
 	rec->machine = NULL;
@@ -2113,6 +2352,7 @@ cleanup(mandb_rec *rec)
 
 	free(rec->section);
 	rec->section = NULL;
+
 }
 
 /*
@@ -2161,6 +2401,10 @@ init_secbuffs(mandb_rec *rec)
 	rec->errors.buflen = BUFLEN;
 	rec->errors.data = emalloc(rec->errors.buflen);
 	rec->errors.offset = 0;
+
+    rec->special_keywords.buflen = BUFLEN;
+    rec->special_keywords.data = emalloc(rec->special_keywords.buflen);
+    rec->special_keywords.offset = 0;
 }
 
 /*
@@ -2180,6 +2424,7 @@ free_secbuffs(mandb_rec *rec)
 	free(rec->files.data);
 	free(rec->diagnostics.data);
 	free(rec->errors.data);
+    free(rec->special_keywords.data);
 }
 
 static void
