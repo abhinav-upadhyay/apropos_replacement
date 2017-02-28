@@ -112,8 +112,8 @@ int
 is_stopword(const char *w, size_t len)
 {
 #ifndef __linux__
-	unsigned int idx = stopwords_hash(query, len);
-	if (memcmp(stopwords[idx], query, len) == 0 &&
+	unsigned int idx = stopwords_hash(w, len);
+	if (memcmp(stopwords[idx], w, len) == 0 &&
 		stopwords[idx][len] == '\0')
 		return 1;
 	return 0;
@@ -1276,7 +1276,7 @@ ul_term(const char *s, const struct term_args *ta)
  *  more or less.
  */
 static int
-callback_term(void *data, const char *section, const char *name,
+callback_term(void *data, const char * query, const char *section, const char *name,
 	const char *name_desc, const char *snippet, size_t snippet_length, unsigned int result_index)
 {
 	struct term_args *ta = data;
@@ -1285,8 +1285,8 @@ callback_term(void *data, const char *section, const char *name,
 	char *ul_section = ul_term(section, ta);
 	char *ul_name = ul_term(name, ta);
 	char *ul_name_desc = ul_term(name_desc, ta);
-	(orig_data->callback)(orig_data->data, ul_section, ul_name,
-	    ul_name_desc, snippet, snippet_length);
+	(orig_data->callback)(orig_data->data, query, ul_section, ul_name,
+	    ul_name_desc, snippet, strlen(snippet), result_index);
 	free(ul_section);
 	free(ul_name);
 	free(ul_name_desc);

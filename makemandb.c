@@ -23,7 +23,7 @@
 #include <sys/types.h>
 
 #ifdef __linux__
-#include <bsd/stdlib.h>
+	#include <bsd/stdlib.h>
 #endif
 
 #include <assert.h>
@@ -33,10 +33,8 @@
 #include <libgen.h>
 #ifdef __linux__
     #include <bsd/md5.h>
-    #include "util.h"
 #else
     #include <md5.h>
-    #include <util.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,6 +45,7 @@
 #include "man.h"
 #include "mandoc.h"
 #include "mdoc.h"
+#include "_util.h"
 
 #define BUFLEN 1024
 #define MDOC 0	//If the page is of mdoc(7) type
@@ -80,7 +79,7 @@ typedef struct mandb_rec {
 	secbuff exit_status; // EXIT STATUS
 	secbuff diagnostics; // DIAGNOSTICS
 	secbuff errors; // ERRORS
-    secbuff special_keywords;
+	secbuff special_keywords;
 	char *section;
 
 	int xr_found; // To track whether a .Xr was seen when parsing a section
@@ -1315,9 +1314,9 @@ Out:
 }
 
 static void
-update_xr_context(sqlite3 *db) 
+update_xr_context(sqlite3 * db)
 {
-    sqlite3_stmt *stmt = NULL;
+	sqlite3_stmt *stmt = NULL;
 
 	const char *sqlstr = "select target_name, target_section, group_concat(context) from metadb.xr_context group by target_name, target_section";
 	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -1330,26 +1329,25 @@ update_xr_context(sqlite3 *db)
 
 
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
-        char *target_name = sqlite3_column_text(stmt, 0);
-        char *target_section = sqlite3_column_text(stmt, 1);
-		char *context = sqlite3_column_text(stmt, 2);
-        insert_xr_context(db, context, target_name, target_section);
+		const char *target_name = sqlite3_column_text(stmt, 0);
+		const char *target_section = sqlite3_column_text(stmt, 1);
+		const char *context = sqlite3_column_text(stmt, 2);
+		insert_xr_context(db, context, target_name, target_section);
 	}
 
-    sqlite3_finalize(stmt);
-    return;
+	sqlite3_finalize(stmt);
+	return;
 
 Out:
-    if (mflags.verbosity)
-        warnx("%s", sqlite3_errmsg(db));
+	if (mflags.verbosity)
+		warnx("%s", sqlite3_errmsg(db));
 
 }
-
 
 static void
 special_keywords(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
 {
-    char *s=NULL;
+    char *s = NULL;
     if (n == NULL)
         return;
     n = n->child;
@@ -1357,7 +1355,7 @@ special_keywords(const struct mdoc_node *n, mandb_rec *rec, sqlite3 *db)
         return;
     mdoc_deroff(&s, n);
     if (s != NULL) 
-        append(&rec->special_keywords.data, s);
+        append(&rec->special_keywords, s);
     free(s);
 }
 

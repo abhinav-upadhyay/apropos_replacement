@@ -2,16 +2,16 @@
 
 .include <bsd.own.mk>
 
-MDIST=	${NETBSDSRCDIR}/external/bsd/mdocml/dist
-MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
-MANCONFDIR=${NETBSDSRCDIR}/usr.bin/man
+MDIST=/usr/local/include/mandoc
+#MDOCDIR=${NETBSDSRCDIR}/external/bsd/mdocml
+MANCONFDIR=./man
 
-PROGS=			makemandb apropos whatis apropos.cgi suggest.cgi
+PROGS=			makemandb apropos whatis #apropos.cgi suggest.cgi
 SRCS.makemandb=		makemandb.c apropos-utils.c manconf.c
 SRCS.apropos=	apropos.c apropos-utils.c manconf.c
 SRCS.whatis=	whatis.c apropos-utils.c manconf.c
-SRCS.apropos.cgi=	apropos_cgi.c apropos-utils.c cgi-utils.c manconf.c
-SRCS.suggest.cgi=	suggest_cgi.c cgi-utils.c apropos-utils.c manconf.c
+#SRCS.apropos.cgi=	apropos_cgi.c apropos-utils.c cgi-utils.c manconf.c
+#SRCS.suggest.cgi=	suggest_cgi.c cgi-utils.c apropos-utils.c manconf.c
 MAN.makemandb=	makemandb.8
 MAN.apropos=	apropos.1
 MAN.whatis=	whatis.1
@@ -24,13 +24,13 @@ BINDIR.whatis=		/usr/bin
 
 CPPFLAGS+=-I${MDIST} -I${MANCONFDIR} -I${.OBJDIR}
 
-MDOCMLOBJDIR!=	cd ${MDOCDIR}/lib/libmandoc && ${PRINTOBJDIR}
+MDOCMLOBJDIR=/usr/local/lib/mandoc
 MDOCMLLIB=	${MDOCMLOBJDIR}/libmandoc.a
 
 DPADD.makemandb+= 	${MDOCMLLIB} ${LIBARCHIVE} ${LIBBZ2} ${LIBLZMA}
 LDADD.makemandb+= 	-L${MDOCMLOBJDIR} -lmandoc -larchive -lbz2 -llzma
 DPADD+=		${LIBSQLITE3} ${LIBM} ${LIBZ} ${LIBUTIL}
-LDADD+=		-lsqlite3 -lm -lz -lutil
+LDADD+=		-lsqlite3 -lm -lz -lutil -lterminfo
 
 stopwords.c: stopwords.txt
 	( set -e; ${TOOL_NBPERF} -n stopwords_hash -s -p ${.ALLSRC};	\
