@@ -53,7 +53,7 @@
 #undef tab	// XXX: manconf.h
 #include "manconf.h"
 #endif
-#include "util.h"
+#include "_util.h"
 
 
 typedef struct orig_callback_data {
@@ -254,7 +254,7 @@ create_db(sqlite3 *db)
 			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, "
 			    "file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
 				//mandb_meta
-			"CREATE TABLE IF NOT EXISTS mandb_links(link, target, section, "
+			"CREATE TABLE IF NOT EXISTS mandb_links(link COLLATE NOCASE, target, section, "
 			    "machine, md5_hash); "	//mandb_links
 			"CREATE TABLE mandb_dict(word UNIQUE, frequency); "	//mandb_dict;
             " CREATE TABLE mandb_xrs(src_name, sec_section, target_name, "
@@ -888,7 +888,7 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 	sqlite3_stmt *stmt;
 
 	if (args->machine)
-		easprintf(&machine_clause, "AND machine = \'%s\' ", args->machine);
+		easprintf(&machine_clause, "AND mandb.machine = \'%s\' ", args->machine);
 
 	/* Register the rank function */
 	rc = sqlite3_create_function(db, "rank_func", 1, SQLITE_ANY, (void *)&idf, 
@@ -939,7 +939,7 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 			if (section_clause[section_clause_len - 1] == ',')
 				section_clause[section_clause_len - 1] = 0;
             temp = section_clause;
-            easprintf(&section_clause, " AND section in (%s)", temp);
+            easprintf(&section_clause, " AND mandb.section in (%s)", temp);
             free(temp);
         }
 	}
@@ -958,32 +958,62 @@ run_query_internal(sqlite3 *db, const char *snippet_args[3], query_args *args)
 		snippet_args = default_snippet_args;
 	}
 	if (args->legacy) {
-	    char *wild;
-	    easprintf(&wild, "%%%s%%", args->search_str);
-	    query = sqlite3_mprintf("SELECT section, name, name_desc, machine,"
-		" snippet(mandb, %Q, %Q, %Q, -1, 40 )"
-		" FROM mandb"
-		" WHERE name LIKE %Q OR name_desc LIKE %Q "
-		"%s"
-		"%s",
-		snippet_args[0], snippet_args[1], snippet_args[2],
-		wild, wild,
-		section_clause ? section_clause : "",
-		limit_clause ? limit_clause : "");
+		char *wild;
+		easprintf(&wild, "%%%s%%", args->search_str);
+		query = sqlite3_mprintf("SELECT section, name, name_desc, machine,"
+				" snippet(mandb, %Q, %Q, %Q, -1, 40 )"
+				" FROM mandb"
+				" WHERE name LIKE %Q OR name_desc LIKE %Q "
+				"%s"
+				"%s",
+				snippet_args[0], snippet_args[1], snippet_args[2],
+				wild, wild,
+				section_clause ? section_clause : "",
+				limit_clause ? limit_clause : "");
 		free(wild);
+	} else if (strchr(args->search_str, ' ') == NULL) {
+		/*
+		 * If it's a single word query, we want to search in the
+		 * links table as well. If the link table contains an entry
+		 * for the queried keyword, we want to use that as the name of
+		 * the man page.
+		 * For example, for `apropos realloc` the output should be
+		 * realloc(3) and not malloc(3).
+		 */
+		query = sqlite3_mprintf(
+				"SELECT section, name, name_desc, machine,"
+				" snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
+				" rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
+				" FROM mandb WHERE name NOT IN ("
+				" SELECT target FROM mandb_links WHERE link=%Q AND"
+				" mandb_links.section=mandb.section) AND mandb MATCH %Q %s %s"
+				" UNION"
+				" SELECT mandb.section, mandb_links.link AS name, mandb.name_desc,"
+				" mandb.machine, '' AS snippet, 100.00 AS rank"
+				" FROM mandb JOIN mandb_links ON mandb.name=mandb_links.target and"
+				" mandb.section=mandb_links.section WHERE mandb_links.link=%Q"
+				" %s %s"
+				" ORDER BY rank DESC %s",
+				snippet_args[0], snippet_args[1], snippet_args[2],
+				args->search_str, args->search_str, section_clause ? section_clause : "",
+				machine_clause ? machine_clause : "", args->search_str,
+				machine_clause ? machine_clause : "",
+				section_clause ? section_clause : "",
+				limit_clause ? limit_clause : "");
+
 	} else {
-	query = sqlite3_mprintf("SELECT section, name, name_desc, machine,"
-	    " snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
-	    " rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
-	    " FROM mandb"
-	    " WHERE mandb MATCH %Q %s "
-	    "%s"
-	    " ORDER BY rank DESC"
-	    "%s",
-		snippet_args[0], snippet_args[1], snippet_args[2],
-		args->search_str, machine_clause ? machine_clause : "",
-	    section_clause ? section_clause : "",
-	    limit_clause ? limit_clause : "");
+		query = sqlite3_mprintf("SELECT section, name, name_desc, machine,"
+				" snippet(mandb, %Q, %Q, %Q, -1, 40 ),"
+				" rank_func(matchinfo(mandb, \"pclxn\")) AS rank"
+				" FROM mandb"
+				" WHERE mandb MATCH %Q %s "
+				"%s"
+				" ORDER BY rank DESC"
+				"%s",
+				snippet_args[0], snippet_args[1], snippet_args[2],
+				args->search_str, machine_clause ? machine_clause : "",
+				section_clause ? section_clause : "",
+				limit_clause ? limit_clause : "");
 	}
 
 	free(machine_clause);
