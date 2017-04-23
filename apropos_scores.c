@@ -50,7 +50,7 @@
 #endif
 
 #include "apropos-utils.h"
-#include "util.h"
+#include "_util.h"
 
 typedef struct inverse_document_frequency {
 	double value;

@@ -41,7 +41,7 @@
 #include <unistd.h>
 
 #include "apropos-utils.h"
-#include "util.h"
+#include "_util.h"
 
 __dead static void
 usage(void)

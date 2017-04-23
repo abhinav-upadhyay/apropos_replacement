@@ -48,7 +48,7 @@
 #endif
 
 #include "apropos-utils.h"
-#include "util.h"
+#include "_util.h"
 
 typedef struct apropos_flags {
 	char *sec_nums;
