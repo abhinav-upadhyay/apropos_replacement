@@ -6,6 +6,7 @@ WARNS?=	6
 PROG=	man
 SRCS=	man.c manconf.c
 MAN=	man.1 man.conf.5
+BINDIR=/usr/bin
 
 DPADD+=	${LIBUTIL}
 LDADD+=	-lutil
