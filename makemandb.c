@@ -471,7 +471,7 @@ main(int argc, char *argv[])
 	mparse_free(mp);
 	mchars_free();
 	free_secbuffs(&rec);
-    update_xr_context(db);
+    //update_xr_context(db);
 
 	/* Commit the transaction */
 	sqlite3_exec(db, "COMMIT", NULL, NULL, &errmsg);
@@ -1137,6 +1137,16 @@ pmdoc_Xr(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
 
     if (!n)
         return;
+    char *target_name = n->string;
+    n = n->next;
+    while (n && n->type != ROFFT_TEXT)
+        n = n->next;
+
+    if (!n) {
+        warnx("no section number for man page %s, %s", rec->name, rec->section);
+        return;
+    }
+    char *target_section = n->string;
 
     sqlite3_stmt *stmt = NULL;
 
@@ -1160,7 +1170,6 @@ pmdoc_Xr(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
 	goto Out;
 	}
 
-    char *target_name = n->string;
 	idx = sqlite3_bind_parameter_index(stmt, ":target_name");
 	rc = sqlite3_bind_text(stmt, idx, target_name, -1, NULL);
 	if (rc != SQLITE_OK) {
@@ -1169,15 +1178,6 @@ pmdoc_Xr(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
 	}
 
 	idx = sqlite3_bind_parameter_index(stmt, ":target_section");
-    n = n->next;
-    while (n && n->type != ROFFT_TEXT)
-        n = n->next;
-
-    if (!n) {
-        warnx("no section number for man page %s, %s", rec->name, rec->section);
-        return;
-    }
-    char *target_section = n->string;
 	rc = sqlite3_bind_text(stmt, idx, target_section, -1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
