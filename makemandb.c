@@ -1126,7 +1126,7 @@ Out:
 static void
 pmdoc_Xr(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
 {
-    char *context = NULL;
+/*    char *context = NULL;
     if (n->prev) {
         deroff(&context, n->prev);
     }
@@ -1196,7 +1196,7 @@ pmdoc_Xr(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
 
 Out:
     if (mflags.verbosity)
-        warnx("%s", sqlite3_errmsg(db));
+        warnx("%s", sqlite3_errmsg(db));*/
 
 }
 
