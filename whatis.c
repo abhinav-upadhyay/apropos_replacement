@@ -83,20 +83,25 @@ main(int argc, char *argv[])
 {
 	sqlite3 *db;
 	int ch, retval;
+	const char *db_path = NULL;
 
-	while ((ch = getopt(argc, argv, "")) != -1) {
+	while ((ch = getopt(argc, argv, "d:")) != -1) {
 		switch (ch) {
+		case 'd':	
+			db_path = optarg;
+			break;
 		default:
 			usage();
 		}
 	}
 	argc -= optind;
 	argv += optind;
+	if (db_path == NULL)
+		db_path = get_dbpath(MANCONF);
 
 	if (argc == 0)
 		usage();
 
-	const char *db_path = get_dbpath(MANCONF);
 	if ((db = init_db(MANDB_READONLY, db_path)) == NULL)
 		exit(EXIT_FAILURE);
 
