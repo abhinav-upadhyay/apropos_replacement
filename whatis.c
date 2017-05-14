@@ -87,7 +87,7 @@ main(int argc, char *argv[])
 
 	while ((ch = getopt(argc, argv, "d:")) != -1) {
 		switch (ch) {
-		case 'd':	
+		case 'd':
 			db_path = optarg;
 			break;
 		default:
