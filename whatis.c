@@ -54,8 +54,12 @@ static int
 whatis(sqlite3 *db, const char *cmd)
 {
 	static const char sqlstr[] = "SELECT name, section, name_desc"
-				     " FROM mandb WHERE name MATCH ? AND name=?"
-				     " ORDER BY section, name";
+		" FROM mandb WHERE name MATCH ? AND name=?"
+		" UNION"
+		" SELECT b.link AS name, b.section, a.name_desc FROM mandb a"
+		" JOIN"
+		" mandb_links b ON a.name=b.target AND a.section=b.section WHERE b.link=?"
+		" GROUP BY a.name, a.section, a.name_desc ORDER BY section, name";
 	sqlite3_stmt *stmt = NULL;
 	int retval;
 
@@ -64,6 +68,8 @@ whatis(sqlite3 *db, const char *cmd)
 	if (sqlite3_bind_text(stmt, 1, cmd, -1, NULL) != SQLITE_OK)
 		errx(EXIT_FAILURE, "Unable to query database");
 	if (sqlite3_bind_text(stmt, 2, cmd, -1, NULL) != SQLITE_OK)
+		errx(EXIT_FAILURE, "Unable to query database");
+	if (sqlite3_bind_text(stmt, 3, cmd, -1, NULL) != SQLITE_OK)
 		errx(EXIT_FAILURE, "Unable to query database");
 	retval = 1;
 	while (sqlite3_step(stmt) == SQLITE_ROW) {
