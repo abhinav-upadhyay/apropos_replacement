@@ -14,3 +14,4 @@ whatis
 *.diff
 apropos.cgi
 suggest.cgi
+man/man
