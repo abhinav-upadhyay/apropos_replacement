@@ -77,10 +77,12 @@ typedef struct roff_mandb_rec {
 	secbuff return_vals; // RETURN VALUES
 	secbuff env; // ENVIRONMENT
 	secbuff files; // FILES
-	secbuff exit_status; // EXIT STATUS
 	secbuff diagnostics; // DIAGNOSTICS
 	secbuff errors; // ERRORS
 	secbuff special_keywords;
+	secbuff authors;
+	secbuff history;
+
 	char *section;
 
 	int xr_found; // To track whether a .Xr was seen when parsing a section
@@ -429,8 +431,8 @@ main(int argc, char *argv[])
 		 " ON file_cache (device, inode); "
          "CREATE TABLE metadb.xr_context(target_name, target_section, context); "
 		 "CREATE VIRTUAL TABLE metadb.mandb_dup USING fts4(section, name, "
-		   "name_desc, desc, lib, return_vals, env, files, "
-		   "exit_status, diagnostics, errors, machine "
+		   "name_desc, desc, lib, return_vals, env, files, authors, "
+		   "history, diagnostics, errors, machine "
 		    "); "	//mandb_dup
 		"CREATE VIRTUAL TABLE metadb.mandb_dupaux USING fts4aux(mandb_dup); ";	// mandb_dict
 
@@ -1379,8 +1381,11 @@ mdoc_parse_section(enum roff_sec sec, const char *string, mandb_rec *rec)
 	case SEC_FILES:
 		append(&rec->files, string);
 		break;
-	case SEC_EXIT_STATUS:
-		append(&rec->exit_status, string);
+	case SEC_HISTORY:
+		append(&rec->history, string);
+		break;
+	case SEC_AUTHORS:
+		append(&rec->authors, string);
 		break;
 	case SEC_DIAGNOSTICS:
 		append(&rec->diagnostics, string);
@@ -1392,9 +1397,8 @@ mdoc_parse_section(enum roff_sec sec, const char *string, mandb_rec *rec)
 	case SEC_SYNOPSIS:
 	case SEC_EXAMPLES:
 	case SEC_STANDARDS:
-	case SEC_HISTORY:
-	case SEC_AUTHORS:
 	case SEC_BUGS:
+	case SEC_EXIT_STATUS:
 		break;
 	default:
 		append(&rec->desc, string);
@@ -1616,10 +1620,12 @@ pman_sh(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
 	 * EXIT STATUS section can also be specified all on one line or on two
 	 * separate lines.
 	 */
-	if (strcmp(head->string, "EXIT") == 0 &&
-	    head->next != NULL && head->next->type == ROFFT_TEXT &&
-	    strcmp(head->next->string, "STATUS") == 0) {
-		man_parse_section(MANSEC_EXIT_STATUS, n, rec);
+	if (strncmp(head->string, "AUTHOR", 6) == 0) {
+		man_parse_section(MANSEC_AUTHORS, n, rec);
+		return;
+	}
+	if (strncmp(head->string, "HISTORY", 7) == 0) {
+		man_parse_section(MANSEC_HISTORY, n, rec);
 		return;
 	}
 
@@ -1676,8 +1682,11 @@ man_parse_section(enum man_sec sec, const struct roff_node *n, mandb_rec *rec)
 	case MANSEC_FILES:
 		pman_parse_node(n, &rec->files);
 		break;
-	case MANSEC_EXIT_STATUS:
-		pman_parse_node(n, &rec->exit_status);
+	case MANSEC_AUTHORS:
+		pman_parse_node(n, &rec->authors);
+		break;
+	case MANSEC_HISTORY:
+		pman_parse_node(n, &rec->history);
 		break;
 	case MANSEC_DIAGNOSTICS:
 		pman_parse_node(n, &rec->diagnostics);
@@ -1689,9 +1698,8 @@ man_parse_section(enum man_sec sec, const struct roff_node *n, mandb_rec *rec)
 	case MANSEC_SYNOPSIS:
 	case MANSEC_EXAMPLES:
 	case MANSEC_STANDARDS:
-	case MANSEC_HISTORY:
 	case MANSEC_BUGS:
-	case MANSEC_AUTHORS:
+	case MANSEC_EXIT_STATUS:
 	case MANSEC_COPYRIGHT:
 		break;
 	default:
@@ -1735,7 +1743,8 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 	rec->lib.data[rec->lib.offset] = 0;
 	rec->env.data[rec->env.offset] = 0;
 	rec->return_vals.data[rec->return_vals.offset] = 0;
-	rec->exit_status.data[rec->exit_status.offset] = 0;
+	rec->authors.data[rec->authors.offset] = 0;
+	rec->history.data[rec->history.offset] = 0;
 	rec->files.data[rec->files.offset] = 0;
 	rec->diagnostics.data[rec->diagnostics.offset] = 0;
 	rec->errors.data[rec->errors.offset] = 0;
@@ -1767,7 +1776,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 
 /*------------------------ Populate the mandb_dup table---------------------------*/
 	sqlstr = "INSERT INTO metadb.mandb_dup VALUES (:section, :name, :name_desc, :desc,"
-		 " :lib, :return_vals, :env, :files, :exit_status,"
+		 " :lib, :return_vals, :env, :files, :authors, :history,"
 		 " :diagnostics, :errors, :machine)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -1833,9 +1842,17 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		goto Out;
 	}
 
-	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
-	rc = sqlite3_bind_text(stmt, idx, rec->exit_status.data,
-	                       rec->exit_status.offset + 1, NULL);
+	idx = sqlite3_bind_parameter_index(stmt, ":authors");
+	rc = sqlite3_bind_text(stmt, idx, rec->authors.data,
+	                       rec->authors.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":history");
+	rc = sqlite3_bind_text(stmt, idx, rec->history.data,
+	                       rec->history.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
@@ -1877,7 +1894,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 
 /*------------------------ Populate the mandb table---------------------------*/
 	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc,"
-		 " :lib, :return_vals, :env, :files, :exit_status,"
+		 " :lib, :return_vals, :env, :files, :authors, :history,"
 		 " :diagnostics, :errors, :special_keywords, :xr_context, :md5_hash, :machine)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
@@ -1943,9 +1960,17 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		goto Out;
 	}
 
-	idx = sqlite3_bind_parameter_index(stmt, ":exit_status");
-	rc = sqlite3_bind_text(stmt, idx, rec->exit_status.data,
-	                       rec->exit_status.offset + 1, NULL);
+	idx = sqlite3_bind_parameter_index(stmt, ":history");
+	rc = sqlite3_bind_text(stmt, idx, rec->history.data,
+	                       rec->history.offset + 1, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_finalize(stmt);
+		goto Out;
+	}
+
+	idx = sqlite3_bind_parameter_index(stmt, ":authors");
+	rc = sqlite3_bind_text(stmt, idx, rec->authors.data,
+	                       rec->authors.offset + 1, NULL);
 	if (rc != SQLITE_OK) {
 		sqlite3_finalize(stmt);
 		goto Out;
@@ -2261,7 +2286,8 @@ cleanup(mandb_rec *rec)
 	rec->lib.offset = 0;
 	rec->return_vals.offset = 0;
 	rec->env.offset = 0;
-	rec->exit_status.offset = 0;
+	rec->authors.offset = 0;
+	rec->history.offset = 0;
 	rec->diagnostics.offset = 0;
 	rec->errors.offset = 0;
 	rec->files.offset = 0;
@@ -2317,9 +2343,13 @@ init_secbuffs(mandb_rec *rec)
 	rec->return_vals.data = emalloc(rec->return_vals.buflen);
 	rec->return_vals.offset = 0;
 
-	rec->exit_status.buflen = BUFLEN;
-	rec->exit_status.data = emalloc(rec->exit_status.buflen);
-	rec->exit_status.offset = 0;
+	rec->authors.buflen = BUFLEN;
+	rec->authors.data = emalloc(rec->authors.buflen);
+	rec->authors.offset = 0;
+
+	rec->history.buflen = BUFLEN;
+	rec->history.data = emalloc(rec->history.buflen);
+	rec->history.offset = 0;
 
 	rec->env.buflen = BUFLEN;
 	rec->env.data = emalloc(rec->env.buflen);
@@ -2354,7 +2384,8 @@ free_secbuffs(mandb_rec *rec)
 	free(rec->desc.data);
 	free(rec->lib.data);
 	free(rec->return_vals.data);
-	free(rec->exit_status.data);
+	free(rec->authors.data);
+	free(rec->history.data);
 	free(rec->env.data);
 	free(rec->files.data);
 	free(rec->diagnostics.data);
