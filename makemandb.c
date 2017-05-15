@@ -136,7 +136,6 @@ static void build_file_cache(sqlite3 *, const char *, const char *,
 static void update_db(sqlite3 *, struct mparse *, mandb_rec *);
 __dead static void usage(void);
 static void optimize(sqlite3 *);
-static void update_xr_context(sqlite3 *); 
 static char *parse_escape(const char *);
 static void replace_hyph(char *);
 static makemandb_flags mflags = { .verbosity = 1 };
@@ -429,7 +428,6 @@ main(int argc, char *argv[])
 		 " file PRIMARY KEY);"
 		 "CREATE UNIQUE INDEX metadb.index_file_cache_dev"
 		 " ON file_cache (device, inode); "
-         "CREATE TABLE metadb.xr_context(target_name, target_section, context); "
 		 "CREATE VIRTUAL TABLE metadb.mandb_dup USING fts4(section, name, "
 		   "name_desc, desc, lib, return_vals, env, files, authors, "
 		   "history, diagnostics, errors, machine "
@@ -473,7 +471,6 @@ main(int argc, char *argv[])
 	mparse_free(mp);
 	mchars_free();
 	free_secbuffs(&rec);
-    //update_xr_context(db);
 
 	/* Commit the transaction */
 	sqlite3_exec(db, "COMMIT", NULL, NULL, &errmsg);
@@ -1071,52 +1068,6 @@ pmdoc_macro_handler(const struct roff_node *n, mandb_rec *rec, int doct, sqlite3
 
 }
 
-static void
-inmem_insert_xr_context(sqlite3 *db, const char *context, const char *target_name, const char * target_section)
-{
-    sqlite3_stmt *stmt = NULL;
-
-	const char *sqlstr = "insert into metadb.xr_context (context, target_name, target_section) values(:context, :target_name, :target_section)";
-	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		goto Out;
-
-	int idx = sqlite3_bind_parameter_index(stmt, ":context");
-	rc = sqlite3_bind_text(stmt, idx, context, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":target_name");
-	rc = sqlite3_bind_text(stmt, idx, target_name, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":target_section");
-	rc = sqlite3_bind_text(stmt, idx, target_section, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-    sqlite3_finalize(stmt);
-    return;
-
-Out:
-    if (mflags.verbosity)
-        warnx("%s", sqlite3_errmsg(db));
-
-}
-
 /*
  * pmdoc_Xr, pmdoc_Pp--
  *  Empty stubs.
@@ -1128,157 +1079,8 @@ Out:
 static void
 pmdoc_Xr(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
 {
-/*    char *context = NULL;
-    if (n->prev) {
-        deroff(&context, n->prev);
-    }
-    n = n->child;
-
-    while(n && n->type != ROFFT_TEXT)
-        n = n->next;;
-
-    if (!n)
-        return;
-    char *target_name = n->string;
-    n = n->next;
-    while (n && n->type != ROFFT_TEXT)
-        n = n->next;
-
-    if (!n) {
-        warnx("no section number for man page %s, %s", rec->name, rec->section);
-        return;
-    }
-    char *target_section = n->string;
-
-    sqlite3_stmt *stmt = NULL;
-
-	const char *sqlstr = "INSERT INTO mandb_xrs VALUES (:src_name, :src_section, :target_name, :target_section)";
-
-	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		goto Out;
-
-	int idx = sqlite3_bind_parameter_index(stmt, ":src_name");
-	rc = sqlite3_bind_text(stmt, idx, rec->name, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":src_section");
-	rc = sqlite3_bind_text(stmt, idx, rec->section, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-	goto Out;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":target_name");
-	rc = sqlite3_bind_text(stmt, idx, target_name, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":target_section");
-	rc = sqlite3_bind_text(stmt, idx, target_section, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-    sqlite3_finalize(stmt);
-    inmem_insert_xr_context(db, context, target_name, target_section);
-    return;
-
-Out:
-    if (mflags.verbosity)
-        warnx("%s", sqlite3_errmsg(db));*/
-
 }
 
-
-static void
-insert_xr_context(sqlite3 *db, const char *context, const char *target_name, const char *target_section)
-{
-    sqlite3_stmt *stmt = NULL;
-
-	const char *sqlstr = "update mandb set xr_context=:context where name=:target_name and section=:target_section";
-	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		goto Out;
-
-	int idx = sqlite3_bind_parameter_index(stmt, ":context");
-	rc = sqlite3_bind_text(stmt, idx, context, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":target_name");
-	rc = sqlite3_bind_text(stmt, idx, target_name, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	idx = sqlite3_bind_parameter_index(stmt, ":target_section");
-	rc = sqlite3_bind_text(stmt, idx, target_section, -1, NULL);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-
-    sqlite3_finalize(stmt);
-    return;
-
-Out:
-    if (mflags.verbosity)
-        warnx("%s", sqlite3_errmsg(db));
-
-}
-
-static void
-update_xr_context(sqlite3 * db)
-{
-	sqlite3_stmt *stmt = NULL;
-
-	const char *sqlstr = "select target_name, target_section, group_concat(context) from metadb.xr_context group by target_name, target_section";
-	int rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		goto Out;
-
-	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		goto Out;
-
-
-	while (sqlite3_step(stmt) == SQLITE_ROW) {
-		const char *target_name = sqlite3_column_text(stmt, 0);
-		const char *target_section = sqlite3_column_text(stmt, 1);
-		const char *context = sqlite3_column_text(stmt, 2);
-		insert_xr_context(db, context, target_name, target_section);
-	}
-
-	sqlite3_finalize(stmt);
-	return;
-
-Out:
-	if (mflags.verbosity)
-		warnx("%s", sqlite3_errmsg(db));
-
-}
 
 static void
 special_keywords(const struct roff_node *n, mandb_rec *rec, sqlite3 *db)
@@ -1895,7 +1697,7 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 /*------------------------ Populate the mandb table---------------------------*/
 	sqlstr = "INSERT INTO mandb VALUES (:section, :name, :name_desc, :desc,"
 		 " :lib, :return_vals, :env, :files, :authors, :history,"
-		 " :diagnostics, :errors, :special_keywords, :xr_context, :md5_hash, :machine)";
+		 " :diagnostics, :errors, :special_keywords, :md5_hash, :machine)";
 
 	rc = sqlite3_prepare_v2(db, sqlstr, -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
@@ -2000,13 +1802,6 @@ insert_into_db(sqlite3 *db, mandb_rec *rec)
 		goto Out;
 	}
 
-	idx = sqlite3_bind_parameter_index(stmt, ":xr_context");
-    rc = sqlite3_bind_null(stmt, idx);
-	if (rc != SQLITE_OK) {
-		sqlite3_finalize(stmt);
-		goto Out;
-	}
-	
 	idx = sqlite3_bind_parameter_index(stmt, ":md5_hash");
 	rc = sqlite3_bind_text(stmt, idx, rec->md5_hash, -1, NULL);
 	if (rc != SQLITE_OK) {

@@ -86,18 +86,20 @@ static const double col_weights[] = {
 	0.0324855298792,
 	0.0,
 	0.00287022758498 */ //Obtained by random forest on data.csv
-    0.59104587689, //obtained by random forest 15,300 on data2.csv
-    0.11724895332,
-    0.219824148589,
-    0.00291541950947,
-    0.00622822136478,
-    0.00661976189148,
-    0.0145063796903,
-    0.000223590525925,
-    0.0107496100264,
-    0.0304011695254,
-    0.0,
-    0.000236868666647
+    0.59104587689, // Name, obtained by random forest 15,300 on data2.csv
+    0.11724895332, // name_desc
+    0.219824148589, // desc
+    0.00291541950947, //lib
+    0.00622822136478, //return_vals
+    0.00661976189148, //env
+    0.0145063796903, //files
+    0.000223590525925, //authors
+    0.000223590525925, //history
+    0.0107496100264, //diagnostics
+    0.0304011695254, //errors
+    0.0304011695254, //special_keywords
+    0.0, //md5_hash
+    0.000236868666647 //machine
 
 };
 
@@ -249,7 +251,7 @@ create_db(sqlite3 *db)
 
 	sqlstr = "CREATE VIRTUAL TABLE mandb USING fts4(section, name, "
 			    "name_desc, desc, lib, return_vals, env, files, "
-			    "authors, history, diagnostics, errors,special_keywords, xr_context, md5_hash UNIQUE, machine, "
+			    "authors, history, diagnostics, errors,special_keywords, md5_hash UNIQUE, machine, "
 			    "tokenize=porter, compress=zip, uncompress=unzip); "	//mandb
 			"CREATE TABLE IF NOT EXISTS mandb_meta(device, inode, mtime, "
 			    "file UNIQUE, md5_hash UNIQUE, id  INTEGER PRIMARY KEY); "
