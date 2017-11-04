@@ -356,9 +356,9 @@ unzip(sqlite3_context *pctx, int nval, sqlite3_value **apval)
 char *
 get_dbpath(const char *manconf)
 {
+	char *dbpath;
 #ifndef __linux__
 	TAG *tp;
-	char *dbpath;
 
 	config(manconf);
 	tp = gettag("_mandb", 1);
@@ -371,7 +371,11 @@ get_dbpath(const char *manconf)
 	dbpath = TAILQ_LAST(&tp->entrylist, tqh)->s;
 	return dbpath;
 #else
-    return "/var/man.db";
+	dbpath = getenv("MAKEMANDB_DBPATH");
+	if (dbpath == NULL)
+		return "/var/man.db";
+	else
+		return dbpath;
 #endif
 }
 
