@@ -63,3 +63,6 @@ cgi-utils.o: cgi-utils.c util.c
 
 clean:
 	rm -f *.o makemandb apropos whatis suggest.cgi apropos.cgi stopwords.c
+
+install:
+	cp apropos makemandb whatis /usr/local/bin/
