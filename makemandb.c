@@ -114,7 +114,8 @@ static void set_machine(const struct roff_man *, mandb_rec *);
 static int insert_into_db(sqlite3 *, mandb_rec *);
 static	void begin_parse(const char *, struct mparse *, mandb_rec *,
 			 void *, size_t len, sqlite3 *);
-static void proff_node(const struct roff_node *, mandb_rec *, sqlite3 *, const proff_nf *);
+static void proff_node(const struct roff_node *, mandb_rec *, sqlite3 *,
+			    struct roff_man *, const proff_nf *);
 static void pmdoc_Nm(const struct roff_node *, mandb_rec *, sqlite3 *);
 static void pmdoc_Nd(const struct roff_node *, mandb_rec *, sqlite3 *);
 static void pmdoc_Sh(const struct roff_node *, mandb_rec *, sqlite3 *);
@@ -140,8 +141,7 @@ static char *parse_escape(const char *);
 static void replace_hyph(char *);
 static makemandb_flags mflags = { .verbosity = 1 };
 
-static	const proff_nf mdocs[MDOC_MAX + 1] = {
-	NULL, /* Ap */
+static	const proff_nf mdocs[MDOC_MAX - MDOC_Dd] = {
 	NULL, /* Dd */
 	NULL, /* Dt */
 	NULL, /* Os */
@@ -157,6 +157,7 @@ static	const proff_nf mdocs[MDOC_MAX + 1] = {
 	special_keywords, /* It */
 	NULL, /* Ad */
 	NULL, /* An */
+	NULL, /* Ap */
 	NULL, /* Ar */
 	NULL, /* Cd */
 	NULL, /* Cm */
@@ -259,16 +260,11 @@ static	const proff_nf mdocs[MDOC_MAX + 1] = {
 	NULL, /* En */
 	NULL, /* Dx */
 	NULL, /* %Q */
-	NULL, /* br */
-	NULL, /* sp */
 	NULL, /* %U */
-	NULL, /* Ta */
-	NULL, /* ll */
-	NULL, /* text */
+	NULL  /* Ta */
 };
 
-static	const proff_nf mans[MAN_MAX] = {
-	NULL,	//br
+static	const proff_nf mans[MAN_MAX - MAN_TH] = {
 	NULL,	//TH
 	pman_sh, //SH
 	NULL,	//SS
@@ -289,7 +285,6 @@ static	const proff_nf mans[MAN_MAX] = {
 	NULL,	//I
 	NULL,	//IR
 	NULL,	//RI
-	NULL,	//sp
 	NULL,	//nf
 	NULL,	//fi
 	NULL,	//RE
@@ -299,13 +294,13 @@ static	const proff_nf mans[MAN_MAX] = {
 	NULL,	//PD
 	NULL,	//AT
 	NULL,	//in
-	NULL,	//ft
 	NULL,	//OP
 	NULL,	//EX
 	NULL,	//EE
 	NULL,	//UR
 	NULL,	//UE
-	NULL,	//ll
+	NULL,	//MT
+	NULL   //ME
 };
 
 
@@ -355,7 +350,7 @@ main(int argc, char *argv[])
 
 	init_secbuffs(&rec);
 	mchars_alloc();
-	mp = mparse_alloc(0, MANDOCLEVEL_BADARG, NULL, NULL);
+	mp = mparse_alloc(0, MANDOCERR_MAX, NULL, MANDOC_OS_OTHER, NULL);
 
 #ifndef __linux__
 	if (manconf) {
@@ -936,11 +931,11 @@ begin_parse(const char *file, struct mparse *mp, mandb_rec *rec,
 	if (roff->macroset == MACROSET_MDOC) {
 		mdoc_validate(roff);
 		rec->page_type = MDOC;
-		proff_node(roff->first->child, rec, db, mdocs);
+		proff_node(roff->first->child, rec, db, roff,  mdocs);
 	} else if (roff->macroset == MACROSET_MAN) {
 		man_validate(roff);
 		rec->page_type = MAN;
-		proff_node(roff->first->child, rec, db, mans);
+		proff_node(roff->first->child, rec, db, roff, mans);
 	} else
 		warnx("Unknown macroset %d", roff->macroset);
 	set_machine(roff, rec);
@@ -1209,10 +1204,13 @@ mdoc_parse_section(enum roff_sec sec, const char *string, mandb_rec *rec)
 }
 
 static void
-proff_node(const struct roff_node *n, mandb_rec *rec, sqlite3 *db, const proff_nf *func)
+proff_node(const struct roff_node *n, mandb_rec *rec, sqlite3 *db,
+		struct roff_man * roff, const proff_nf *func)
 {
 	if (n == NULL)
 		return;
+
+	int tok_idx;
 
 	switch (n->type) {
 	case (ROFFT_BODY):
@@ -1220,15 +1218,21 @@ proff_node(const struct roff_node *n, mandb_rec *rec, sqlite3 *db, const proff_n
 	case (ROFFT_BLOCK):
 		/* FALLTHROUGH */
 	case (ROFFT_ELEM):
-		if (func[n->tok] != NULL)
-			(*func[n->tok])(n, rec, db);
+		if (roff->macroset == MACROSET_MAN)
+			tok_idx = n->tok - MAN_TH;
+		else if (roff->macroset == MACROSET_MDOC)
+			tok_idx = n->tok - MDOC_Dd;
+		else
+			tok_idx = -1;
+		if (tok_idx >= 0 && func[tok_idx] != NULL)
+			(*func[tok_idx])(n, rec, db);
 		break;
 	default:
 		break;
 	}
 
-	proff_node(n->child, rec, db, func);
-	proff_node(n->next, rec, db, func);
+	proff_node(n->child, rec, db, roff,  func);
+	proff_node(n->next, rec, db, roff, func);
 }
 
 /* 

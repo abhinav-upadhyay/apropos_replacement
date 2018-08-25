@@ -36,6 +36,7 @@
  * (currently: apropos, catman, makewhatis, man, and whatis...)
  */
 
+#ifndef __linux__
 #if HAVE_NBTOOL_CONFIG_H
 #include "nbtool_config.h"
 #endif
@@ -48,6 +49,7 @@ static char sccsid[] = "@(#)config.c	8.8 (Berkeley) 1/31/95";
 __RCSID("$NetBSD: manconf.c,v 1.8 2014/02/17 02:53:48 uwe Exp $");
 #endif
 #endif /* not lint */
+#endif /* not linux */
 
 #include <sys/types.h>
 #include <sys/queue.h>

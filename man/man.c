@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#ifndef __linux__
 #include <sys/cdefs.h>
 
 #ifndef lint
@@ -43,6 +44,7 @@ static char sccsid[] = "@(#)man.c	8.17 (Berkeley) 1/31/95";
 __RCSID("$NetBSD: man.c,v 1.66 2017/05/02 14:19:23 abhinav Exp $");
 #endif
 #endif /* not lint */
+#endif /* not linux */
 
 #include <sys/param.h>
 #include <sys/queue.h>
@@ -59,8 +61,15 @@ __RCSID("$NetBSD: man.c,v 1.66 2017/05/02 14:19:23 abhinav Exp $");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <util.h>
 #include <locale.h>
+
+#ifdef __linux__
+#include <bsd/string.h>
+#include <bsd/stdlib.h>
+#include "util.h"
+#else
+#include <util.h>
+#endif 
 
 #include "manconf.h"
 #include "pathnames.h"
@@ -113,10 +122,10 @@ static void	 cat(const char *);
 static const char	*check_pager(const char *);
 static int	 cleanup(void);
 static void	 how(const char *);
-static void	 jump(char **, const char *, const char *) __dead;
+static void	 jump(char **, const char *, const char *) ;
 static int	 manual(char *, struct manstate *, glob_t *);
-static void	 onsig(int) __dead;
-static void	 usage(void) __dead;
+static void	 onsig(int) ;
+static void	 usage(void) ;
 static void	 addpath(struct manstate *, const char *, size_t, const char *);
 static const char *getclass(const char *);
 static void printmanpath(struct manstate *);
@@ -593,11 +602,19 @@ manual(char *page, struct manstate *mp, glob_t *pg)
 			}
 		}
 
+#ifndef __linux__
 		if (pg->gl_matchc == 0)
+#else
+		if(pg->gl_pathc == 0)
+#endif
 			goto notfound;
 
 		/* literal file only yields one match */
+#ifndef __linux__
 		cnt = pg->gl_pathc - pg->gl_matchc;
+#else
+		cnt = 0;
+#endif
  
 		if (manual_find_literalfile(mp, &pg->gl_pathv[cnt])) {
 			anyfound = 1;
@@ -636,7 +653,11 @@ manual(char *page, struct manstate *mp, glob_t *pg)
 				exit(EXIT_FAILURE);
 			}
 		}
+#ifndef __linux__
 		if (pg->gl_matchc == 0)
+#else
+		if (pg->gl_pathc == 0)
+#endif
 			continue;
 
 		/*
@@ -645,7 +666,11 @@ manual(char *page, struct manstate *mp, glob_t *pg)
 		 * don't want.  then verify the suffix is valid, and build
 		 * the page if we have a _build suffix.
 		 */
+#ifndef __linux__
 		for (cnt = pg->gl_pathc - pg->gl_matchc;
+#else
+		for (cnt = pg->gl_pathc - pg->gl_pathc;
+#endif
 		    cnt < pg->gl_pathc; ++cnt) {
 
 			/* filter on directory path name */
@@ -723,7 +748,7 @@ next:				anyfound = 1;
  * __format_arg marker.  Actual fmtcheck(3) call is done once in
  * config().
  */
-__always_inline __format_arg(2)
+//__always_inline __format_arg(2)
 static inline const char *
 fmtcheck_ok(const char *userfmt, const char *template)
 {
@@ -927,7 +952,7 @@ check_pager(const char *name)
 	/* make sure it's "more", not "morex" */
 	if (!strncmp(p, "more", 4) && (!p[4] || isspace((unsigned char)p[4]))){
 		char *newname;
-		(void)asprintf(&newname, "%s %s", p, "-s");
+		(void)easprintf(&newname, "%s %s", p, "-s");
 		name = newname;
 	}
 
@@ -943,7 +968,11 @@ jump(char **argv, const char *flag, const char *name)
 {
 	char **arg;
 
+#ifndef __linux__
 	argv[0] = __UNCONST(name);
+#else
+	argv[0] = name;
+#endif
 	for (arg = argv + 1; *arg; ++arg)
 		if (!strcmp(*arg, flag))
 			break;
@@ -963,7 +992,9 @@ onsig(int signo)
 
 	(void)cleanup();
 
+#ifndef __linux__
 	(void)raise_default_signal(signo);
+#endif
 
 	/* NOTREACHED */
 	exit(EXIT_FAILURE);
@@ -1060,7 +1091,11 @@ printmanpath(struct manstate *m)
 		if (glob(epath->s, GLOB_BRACE | GLOB_NOSORT, NULL, &pg) != 0)
 			err(EXIT_FAILURE, "glob failed");
 
+#ifndef __linux__
 		if (pg.gl_matchc == 0) {
+#else
+		if (pg.gl_pathc== 0) {
+#endif
 			globfree(&pg);
 			continue;
 		}
